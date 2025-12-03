@@ -5,7 +5,7 @@ import {
     useContext,
     useEffect,
     useMemo,
-    useRef,
+
     useState,
     type ReactNode,
 } from "react";
@@ -28,7 +28,7 @@ type QueueContextType = {
 
 const QueueContext = createContext<QueueContextType | null>(null);
 
-const CONCURRENCY_LIMIT = 2;
+const CONCURRENCY_LIMIT = 3;
 
 export function QueueProvider({ children }: { children: ReactNode }) {
     const [jobs, setJobs] = useState<QueueJob[]>([]);
@@ -95,12 +95,10 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     const toggleLog = useCallback(() => setIsLogOpen((v) => !v), []);
 
     // Queue Processor
-    const isProcessingRef = useRef(false);
+
 
     useEffect(() => {
-        const processQueue = async () => {
-            if (isProcessingRef.current) return;
-
+        const processQueue = () => {
             const processingCount = jobs.filter((j) => j.status === "processing").length;
             if (processingCount >= CONCURRENCY_LIMIT) return;
 
@@ -111,11 +109,8 @@ export function QueueProvider({ children }: { children: ReactNode }) {
 
             if (!nextJob) return;
 
-            isProcessingRef.current = true;
-
             const processor = processors[nextJob.id];
             if (!processor) {
-                // Should not happen, but fail if it does
                 setJobs((prev) =>
                     prev.map((j) =>
                         j.id === nextJob.id
@@ -123,93 +118,93 @@ export function QueueProvider({ children }: { children: ReactNode }) {
                             : j
                     )
                 );
-                isProcessingRef.current = false;
                 return;
             }
 
-            // Mark as processing
+            // Mark as processing immediately
             setJobs((prev) =>
                 prev.map((j) =>
                     j.id === nextJob.id ? { ...j, status: "processing" } : j
                 )
             );
 
-            const localLogs: string[] = [...nextJob.logs];
-            const log = (msg: string) => {
-                console.log(`[Queue] ${msg}`);
-                localLogs.push(msg);
-                setJobs((prev) =>
-                    prev.map((j) =>
-                        j.id === nextJob.id ? { ...j, logs: [...j.logs, msg] } : j
-                    )
-                );
-            };
+            // Execute asynchronously
+            (async () => {
+                const localLogs: string[] = [...nextJob.logs];
+                const log = (msg: string) => {
+                    console.log(`[Queue] ${msg}`);
+                    localLogs.push(msg);
+                    setJobs((prev) =>
+                        prev.map((j) =>
+                            j.id === nextJob.id ? { ...j, logs: [...j.logs, msg] } : j
+                        )
+                    );
+                };
 
-            try {
-                log("Starting processing...");
-                const result = await processor(nextJob.payload, log);
-                setJobs((prev) =>
-                    prev.map((j) =>
-                        j.id === nextJob.id
-                            ? {
-                                ...j,
-                                status: "completed",
-                                result,
-                                logs: [...j.logs, "Completed successfully."],
-                            }
-                            : j
-                    )
-                );
-                // Auto-fade after 10 seconds
-                setTimeout(() => {
-                    setJobs((prev) => prev.filter((j) => j.id !== nextJob.id));
-                    setProcessors((prev) => {
-                        const next = { ...prev };
-                        delete next[nextJob.id];
-                        return next;
-                    });
-                }, 10000);
-            } catch (error) {
-                const msg = error instanceof Error ? error.message : "Unknown error";
-                localLogs.push(`Failed: ${msg}`);
-
-                setJobs((prev) =>
-                    prev.map((j) =>
-                        j.id === nextJob.id
-                            ? {
-                                ...j,
-                                status: "failed",
-                                error: msg,
-                                logs: [...j.logs, `Failed: ${msg}`],
-                            }
-                            : j
-                    )
-                );
-
-                // Log to server
                 try {
-                    const payload = nextJob.payload as { connection?: { apiBase?: string } };
-                    const apiBase = payload?.connection?.apiBase || "http://localhost:8787";
-                    await fetch(new URL("/log", apiBase).toString(), {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                            level: "error",
-                            message: `Job ${nextJob.id} failed`,
-                            data: {
-                                jobId: nextJob.id,
-                                type: nextJob.type,
-                                error: msg,
-                                logs: localLogs
-                            }
-                        })
-                    });
-                } catch (e) {
-                    console.error("Failed to log error to server", e);
+                    log("Starting processing...");
+                    const result = await processor(nextJob.payload, log);
+                    setJobs((prev) =>
+                        prev.map((j) =>
+                            j.id === nextJob.id
+                                ? {
+                                    ...j,
+                                    status: "completed",
+                                    result,
+                                    logs: [...j.logs, "Completed successfully."],
+                                }
+                                : j
+                        )
+                    );
+                    // Auto-fade after 10 seconds
+                    setTimeout(() => {
+                        setJobs((prev) => prev.filter((j) => j.id !== nextJob.id));
+                        setProcessors((prev) => {
+                            const next = { ...prev };
+                            delete next[nextJob.id];
+                            return next;
+                        });
+                    }, 10000);
+                } catch (error) {
+                    const msg = error instanceof Error ? error.message : "Unknown error";
+                    localLogs.push(`Failed: ${msg}`);
+
+                    setJobs((prev) =>
+                        prev.map((j) =>
+                            j.id === nextJob.id
+                                ? {
+                                    ...j,
+                                    status: "failed",
+                                    error: msg,
+                                    logs: [...j.logs, `Failed: ${msg}`],
+                                }
+                                : j
+                        )
+                    );
+
+                    // Log to server
+                    try {
+                        const payload = nextJob.payload as { connection?: { apiBase?: string } };
+                        const apiBase = payload?.connection?.apiBase || "http://localhost:8787";
+                        await fetch(new URL("/log", apiBase).toString(), {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                level: "error",
+                                message: `Job ${nextJob.id} failed`,
+                                data: {
+                                    jobId: nextJob.id,
+                                    type: nextJob.type,
+                                    error: msg,
+                                    logs: localLogs
+                                }
+                            })
+                        });
+                    } catch (e) {
+                        console.error("Failed to log error to server", e);
+                    }
                 }
-            } finally {
-                isProcessingRef.current = false;
-            }
+            })();
         };
 
         processQueue();

@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
 import { useCatalog } from "../state/useCatalog";
+import { useQueue } from "../state/queue";
 import { type FileEntry, getFileUrl, publishFile, uploadFile } from "../lib/api/files";
 import { FILE_ENTRY_MIME } from "../lib/drag-constants";
 import { Spinner } from "./ui/Spinner";
@@ -13,6 +14,11 @@ export default function FileBrowser() {
     state: { entries, q, filterExt, selected, loading, connection },
     actions: { setQuery, setFilters, select, refreshTree, rename, remove },
   } = useCatalog();
+
+  const { jobs } = useQueue();
+  const activeJobs = useMemo(() =>
+    jobs.filter(j => j.status === "pending" || j.status === "processing"),
+    [jobs]);
 
   const [viewMode, setViewMode] = useState<"list" | "grid">("grid");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -364,6 +370,21 @@ export default function FileBrowser() {
           <div className="flex flex-col min-h-full">
             {viewMode === "grid" ? (
               <div className="grid grid-cols-2 gap-3 p-3 sm:grid-cols-3">
+                {activeJobs.map((job) => (
+                  <div
+                    key={job.id}
+                    className="relative flex aspect-square flex-col overflow-hidden rounded-lg border border-white/10 bg-black/40 animate-pulse"
+                  >
+                    <div className="flex h-full items-center justify-center">
+                      <Spinner size="lg" />
+                    </div>
+                    <div className="absolute inset-x-0 bottom-0 bg-black/60 p-2 backdrop-blur-sm">
+                      <div className="truncate text-xs text-slate-300 italic">
+                        {job.status === "processing" ? "Generating..." : "Queued..."}
+                      </div>
+                    </div>
+                  </div>
+                ))}
                 {visibleEntries.map((entry) => {
                   const url = getFileUrl(connection, entry.relPath, { includeToken: true });
                   const styles = getFileStyles(entry);
@@ -487,6 +508,18 @@ export default function FileBrowser() {
               </div>
             ) : (
               <ul>
+                {activeJobs.map((job) => (
+                  <li key={job.id} className="flex w-full items-center gap-3 border-l-4 border-l-transparent px-3 py-2 text-left text-sm opacity-70">
+                    <div className="flex h-5 w-5 items-center justify-center">
+                      <Spinner size="sm" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-slate-400 truncate italic">
+                        {job.status === "processing" ? "Generating..." : "Queued..."}
+                      </div>
+                    </div>
+                  </li>
+                ))}
                 {visibleEntries.map((entry) => {
                   const url = getFileUrl(connection, entry.relPath, { includeToken: true });
                   const styles = getFileStyles(entry);

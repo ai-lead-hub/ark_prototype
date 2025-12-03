@@ -109,7 +109,7 @@ export default function ControlsPane() {
 
   const [endFrame, setEndFrame] = useState<UploadSlot>({ uploading: false });
 
-  const [seed, setSeed] = usePersistentState("seed", "");
+
 
   const [referenceUploads, setReferenceUploads] = useState<ReferenceUpload[]>([]);
 
@@ -600,7 +600,8 @@ export default function ControlsPane() {
                     : event.target.value
               )
             }
-            className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
+            disabled={isSubmitting || isExpanding}
+            className={`w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
           >
             <option value="">
               {definition.required ? "Select..." : "Default"}
@@ -627,6 +628,7 @@ export default function ControlsPane() {
             onChange={(event) =>
               handleParamChange(uiKey as string, event.target.checked)
             }
+            disabled={isSubmitting || isExpanding}
           />
         </label>
       );
@@ -655,7 +657,8 @@ export default function ControlsPane() {
                   : event.target.value
             )
           }
-          className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
+          disabled={isSubmitting || isExpanding}
+          className={`w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
         />
       </div>
     );
@@ -696,6 +699,15 @@ export default function ControlsPane() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Sync activeTab with modelKey to ensure consistency
+  useEffect(() => {
+    if (modelKey.startsWith("video:") && activeTab !== "video") {
+      setActiveTab("video");
+    } else if (modelKey.startsWith("image:") && activeTab !== "image") {
+      setActiveTab("image");
+    }
+  }, [modelKey, activeTab, setActiveTab]);
 
   const handleExpandPrompt = async (type: "natural" | "yaml") => {
     if (!prompt.trim()) {
@@ -754,8 +766,6 @@ export default function ControlsPane() {
           if (result) validReferenceUrls.push(result);
         }
       }
-
-      console.log("Expanding prompt with refs (count):", validReferenceUrls.length);
 
       // Save current state before expansion
       addToHistory(prompt);
@@ -821,7 +831,7 @@ export default function ControlsPane() {
           start_frame_url: startFrame.url,
           end_frame_url: endFrame.url,
           reference_image_urls: referenceUploads.map(r => r.url).filter(Boolean) as string[],
-          seed: seed ? parseInt(seed, 10) : undefined,
+          seed: 1569,
           duration: paramValues.duration as string | number | undefined,
         };
 
@@ -841,7 +851,7 @@ export default function ControlsPane() {
           prompt: prompt.trim(),
           imageUrls: imageReferenceUrls,
           aspectRatio,
-          seed: seed ? parseInt(seed, 10) : undefined,
+          seed: 1569,
           imageResolution: imageModelSpec.ui?.resolutions ? imageResolution : undefined,
           maxImages: parsedMaxImages,
           numImages: parsedMaxImages,
@@ -872,7 +882,7 @@ export default function ControlsPane() {
           category,
           provider,
           callOptions: callOptions ?? {},
-          seed,
+          seed: "1569",
           prompt,
           connection,
           refreshTree,
@@ -983,6 +993,7 @@ export default function ControlsPane() {
               <button
                 key={tab}
                 type="button"
+                disabled={isSubmitting || isExpanding}
                 onClick={() => {
                   setActiveTab(tab);
                   if (tab === "image" && IMAGE_MODELS.length) {
@@ -994,7 +1005,7 @@ export default function ControlsPane() {
                 className={`flex-1 rounded-md py-1.5 text-xs font-semibold capitalize transition-all ${activeTab === tab
                   ? "bg-slate-600 text-white shadow-sm"
                   : "text-slate-400 hover:text-slate-200"
-                  }`}
+                  } ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
               >
                 {tab}
               </button>
@@ -1007,8 +1018,11 @@ export default function ControlsPane() {
             </label>
             <select
               value={modelKey}
-              onChange={(event) => setModelKey(event.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
+              disabled={isSubmitting || isExpanding}
+              onChange={(event) => {
+                setModelKey(event.target.value);
+              }}
+              className={`w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
             >
               {activeTab === "video" && (
                 <optgroup label="Video Pipelines">
@@ -1050,20 +1064,24 @@ export default function ControlsPane() {
                 className={`relative flex min-h-[60px] flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-gradient-to-br from-white/10 to-transparent p-2 transition ${isReferenceDragActive
                   ? "border-sky-400 shadow-lg shadow-sky-500/20"
                   : "hover:border-white/20"
-                  }`}
+                  } ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
                 onDragEnter={(event) => {
+                  if (isSubmitting || isExpanding) return;
                   event.preventDefault();
                   setIsReferenceDragActive(true);
                 }}
                 onDragLeave={(event) => {
+                  if (isSubmitting || isExpanding) return;
                   event.preventDefault();
                   setIsReferenceDragActive(false);
                 }}
                 onDragOver={(event) => {
+                  if (isSubmitting || isExpanding) return;
                   event.preventDefault();
                   setIsReferenceDragActive(true);
                 }}
                 onDrop={(event) => {
+                  if (isSubmitting || isExpanding) return;
                   event.preventDefault();
                   setIsReferenceDragActive(false);
                   void handleReferenceDrop(event.dataTransfer);
@@ -1075,6 +1093,7 @@ export default function ControlsPane() {
                   accept="image/*"
                   multiple
                   className="hidden"
+                  disabled={isSubmitting || isExpanding}
                   onChange={(event: ChangeEvent<HTMLInputElement>) => {
                     void handleReferenceFiles(event.target.files);
                     event.target.value = "";
@@ -1105,6 +1124,7 @@ export default function ControlsPane() {
                         e.stopPropagation();
                         removeReference(entry.id);
                       }}
+                      disabled={isSubmitting || isExpanding}
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -1132,6 +1152,7 @@ export default function ControlsPane() {
                     className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-dashed border-white/20 bg-white/5 text-slate-400 transition hover:border-sky-400 hover:text-sky-200"
                     onClick={() => referenceInputRef.current?.click()}
                     title="Add image"
+                    disabled={isSubmitting || isExpanding}
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -1170,13 +1191,14 @@ export default function ControlsPane() {
                   onChange={(event) => setPrompt(event.target.value)}
                   onBlur={() => addToHistory(prompt)}
                   rows={6}
-                  className="w-full rounded-2xl border border-white/10 bg-black/40 px-3 py-3 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 pb-10"
+                  disabled={isSubmitting || isExpanding}
+                  className={`w-full rounded-2xl border border-white/10 bg-black/40 px-3 py-3 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 pb-10 ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
                 />
                 <div className="absolute bottom-2 right-2 flex gap-1">
                   <button
                     type="button"
                     onClick={undo}
-                    disabled={historyIndex <= 0}
+                    disabled={historyIndex <= 0 || isSubmitting || isExpanding}
                     className="flex h-7 w-7 items-center justify-center rounded-md bg-white/10 text-slate-300 transition hover:bg-white/20 hover:text-white disabled:opacity-30"
                     title="Undo"
                   >
@@ -1185,7 +1207,7 @@ export default function ControlsPane() {
                   <button
                     type="button"
                     onClick={redo}
-                    disabled={historyIndex >= history.length - 1}
+                    disabled={historyIndex >= history.length - 1 || isSubmitting || isExpanding}
                     className="flex h-7 w-7 items-center justify-center rounded-md bg-white/10 text-slate-300 transition hover:bg-white/20 hover:text-white disabled:opacity-30"
                     title="Redo"
                   >
@@ -1195,7 +1217,7 @@ export default function ControlsPane() {
                   <button
                     type="button"
                     onClick={() => handleExpandPrompt("natural")}
-                    disabled={isExpanding || !prompt.trim()}
+                    disabled={isExpanding || isSubmitting || !prompt.trim()}
                     className="flex h-7 w-7 items-center justify-center rounded-md bg-white/10 text-slate-300 transition hover:bg-white/20 hover:text-white disabled:opacity-50"
                     title="Expand with Natural Language"
                   >
@@ -1208,7 +1230,7 @@ export default function ControlsPane() {
                   <button
                     type="button"
                     onClick={() => handleExpandPrompt("yaml")}
-                    disabled={isExpanding || !prompt.trim()}
+                    disabled={isExpanding || isSubmitting || !prompt.trim()}
                     className="flex h-7 w-7 items-center justify-center rounded-md bg-white/10 text-slate-300 transition hover:bg-white/20 hover:text-white disabled:opacity-50"
                     title="Expand to YAML"
                   >
@@ -1272,18 +1294,7 @@ export default function ControlsPane() {
             </div>
 
             {/* 4. Seed */}
-            <div className="space-y-1">
-              <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                Seed (optional)
-              </label>
-              <input
-                type="number"
-                value={seed}
-                onChange={(event) => setSeed(event.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
-                placeholder="-1 for random"
-              />
-            </div>
+
           </div>
         ) : null}
 

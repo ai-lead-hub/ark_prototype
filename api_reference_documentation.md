@@ -39,6 +39,33 @@ This document provides a comprehensive reference for all video generation and im
 
 ---
 
+### Kling V2.6 Pro (I2V)
+**Provider**: FAL
+**Endpoint**: `fal-ai/kling-video/v2.6/pro/image-to-video`
+**Pricing**: $0.07/sec (audio off), $0.14/sec (audio on)
+
+#### Parameters
+| Parameter | Type | Required | Description | Example |
+| :--- | :--- | :--- | :--- | :--- |
+| `prompt` | string | Yes | Text description for video generation. | `"A king walks slowly..."` |
+| `image_url` | string | Yes | URL of the start frame image. | `"https://..."` |
+| `duration` | string | No | Video duration. Options: `"5"`, `"10"`. Default: `"5"`. | `"5"` |
+| `generate_audio` | boolean | No | Generate native audio. Default: `false`. | `true` |
+| `negative_prompt` | string | No | Elements to avoid. | `"blur, distort"` |
+
+#### Request Example
+```json
+{
+  "prompt": "A king walks slowly and says \"My people, here I am!\"",
+  "image_url": "https://v3b.fal.media/files/...",
+  "duration": "5",
+  "generate_audio": true,
+  "negative_prompt": "blur, distort, and low quality"
+}
+```
+
+---
+
 ### Hailuo 2.3 Pro
 **Provider**: KIE
 **Endpoint**: `/api/v1/jobs/createTask`
@@ -399,6 +426,39 @@ This document provides a comprehensive reference for all video generation and im
 ```
 
 ---
+
+### Kling O1
+**Provider**: FAL
+**Endpoint**: `fal-ai/kling-image/o1`
+**Pricing**: $0.027/image
+
+#### Parameters
+| Parameter | Type | Required | Description | Example |
+| :--- | :--- | :--- | :--- | :--- |
+| `prompt` | string | Yes | Text prompt. Reference images using `@Image1`, `@Image2`, etc. | `"Put @Image1 to the back seat..."` |
+| `image_urls` | array | Yes | List of reference images (max 10). | `["https://..."]` |
+| `resolution` | string | No | Resolution. Options: `"1K"`, `"2K"`. Default: `"1K"`. | `"1K"` |
+| `num_images` | number | No | Number of images (1-9). Default: `1`. | `1` |
+| `aspect_ratio` | string | No | Aspect ratio. Options: `"auto"`, `"16:9"`, `"9:16"`, `"1:1"`, `"4:3"`, `"3:4"`, `"3:2"`, `"2:3"`, `"21:9"`. Default: `"auto"`. | `"auto"` |
+| `output_format` | string | No | Output format: `"png"`, `"jpeg"`, `"webp"`. Default: `"png"`. | `"png"` |
+
+#### Request Example
+```json
+{
+  "prompt": "Put @Image1 to the back seat of the car in @Image2",
+  "image_urls": [
+    "https://storage.googleapis.com/falserverless/example_inputs/nano-banana-edit-input.png",
+    "https://storage.googleapis.com/falserverless/example_inputs/nano-banana-edit-input-2.png"
+  ],
+  "resolution": "1K",
+  "num_images": 1,
+  "aspect_ratio": "auto",
+  "output_format": "png"
+}
+```
+
+---
+
 
 ### Fal VLM (Prompt Expansion)
 **Provider**: FAL

@@ -338,7 +338,8 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
           ...(aspectRatio ? { image_size: aspectRatio } : {}),
           ...(imageResolution ? { image_resolution: imageResolution } : {}),
           ...(clampedMax !== undefined ? { max_images: clampedMax } : {}),
-          ...(seed !== undefined ? { seed } : {}),
+
+          seed: seed ?? 1569,
         },
       };
     },
@@ -387,9 +388,51 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
         image_urls: imageUrls,
         image_size: aspectRatio ?? "square_hd",
         output_format: outputFormat ?? "png",
-        ...(seed !== undefined ? { seed } : {}),
+        seed: seed ?? 1569,
         enable_safety_checker: true,
         num_images: 1,
+      };
+    },
+    getUrls: (output) => {
+      const images = (output as { images?: Array<{ url: string }> })?.images;
+      return (images ?? []).map((img) => img.url).filter(Boolean);
+    },
+  },
+  {
+    id: "kling-o1",
+    label: "Kling O1",
+    endpoint: "fal-ai/kling-image/o1",
+    provider: "fal-client",
+    pricing: "$0.027/image",
+    mode: "edit",
+    maxRefs: 10,
+    ui: {
+      aspectRatios: [
+        { value: "auto", label: "Auto" },
+        { value: "16:9", label: "Landscape (16:9)" },
+        { value: "9:16", label: "Portrait (9:16)" },
+        { value: "1:1", label: "Square (1:1)" },
+        { value: "4:3", label: "Landscape (4:3)" },
+        { value: "3:4", label: "Portrait (3:4)" },
+        { value: "3:2", label: "Landscape (3:2)" },
+        { value: "2:3", label: "Portrait (2:3)" },
+        { value: "21:9", label: "Ultrawide (21:9)" },
+      ],
+      resolutions: [
+        { value: "2K", label: "2K" },
+        { value: "1K", label: "1K" },
+      ],
+      defaultResolution: "2K",
+      maxImages: { min: 1, max: 9, default: 1 },
+    },
+    mapInput: ({ prompt, imageUrls, aspectRatio, imageResolution, outputFormat, maxImages }) => {
+      return {
+        prompt,
+        image_urls: imageUrls.slice(0, 10),
+        resolution: imageResolution ?? "2K",
+        num_images: maxImages ?? 1,
+        aspect_ratio: aspectRatio ?? "auto",
+        output_format: outputFormat ?? "png",
       };
     },
     getUrls: (output) => {
