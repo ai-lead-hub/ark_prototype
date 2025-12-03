@@ -74,18 +74,69 @@ export default function ControlsPane() {
     actions: { refreshTree },
   } = useCatalog();
   const { addJob } = useQueue();
-  const [modelKey, setModelKey] = useState(DEFAULT_MODEL_KEY);
-  const [activeTab, setActiveTab] = useState<"image" | "video">(() => {
-    if (DEFAULT_MODEL_KEY.startsWith("image:")) return "image";
-    return "video";
+
+  // Persistence helpers
+  const getStored = <T,>(key: string, fallback: T): T => {
+    try {
+      const item = localStorage.getItem(`controls_${key}`);
+      return item ? (JSON.parse(item) as T) : fallback;
+    } catch {
+      return fallback;
+    }
+  };
+
+  const usePersistentState = <T,>(key: string, fallback: T) => {
+    const [value, setValue] = useState<T>(() => getStored(key, fallback));
+    useEffect(() => {
+      localStorage.setItem(`controls_${key}`, JSON.stringify(value));
+    }, [key, value]);
+    return [value, setValue] as const;
+  };
+  const [modelKey, setModelKey] = usePersistentState(
+    "modelKey",
+    DEFAULT_MODEL_KEY
+  );
+  const [activeTab, setActiveTab] = usePersistentState<"image" | "video">(
+    "activeTab",
+    DEFAULT_MODEL_KEY.startsWith("image:") ? "image" : "video"
+  );
+  const [prompt, setPrompt] = usePersistentState("prompt", "");
+
+  // For uploads, we can only persist the ones that have a remote URL.
+  // We cannot persist Blobs/Files in localStorage.
+  const [startFrame, setStartFrame] = useState<UploadSlot>(() => {
+    const stored = getStored<UploadSlot>("startFrame", { uploading: false });
+    return stored.url ? stored : { uploading: false };
   });
-  const [prompt, setPrompt] = useState("");
-  const [startFrame, setStartFrame] = useState<UploadSlot>({ uploading: false });
-  const [endFrame, setEndFrame] = useState<UploadSlot>({ uploading: false });
-  const [seed, setSeed] = useState("");
-  const [referenceUploads, setReferenceUploads] = useState<ReferenceUpload[]>([]);
-  const [aspectRatio, setAspectRatio] = useState("16:9");
-  const [imageResolution, setImageResolution] = useState("1K");
+  useEffect(() => {
+    if (startFrame.url) {
+      localStorage.setItem("controls_startFrame", JSON.stringify({ ...startFrame, preview: undefined }));
+    }
+  }, [startFrame]);
+
+  const [endFrame, setEndFrame] = useState<UploadSlot>(() => {
+    const stored = getStored<UploadSlot>("endFrame", { uploading: false });
+    return stored.url ? stored : { uploading: false };
+  });
+  useEffect(() => {
+    if (endFrame.url) {
+      localStorage.setItem("controls_endFrame", JSON.stringify({ ...endFrame, preview: undefined }));
+    }
+  }, [endFrame]);
+
+  const [seed, setSeed] = usePersistentState("seed", "");
+
+  const [referenceUploads, setReferenceUploads] = useState<ReferenceUpload[]>(() => {
+    const stored = getStored<ReferenceUpload[]>("referenceUploads", []);
+    return stored.filter(u => u.url); // Only keep ones with URLs
+  });
+  useEffect(() => {
+    const toStore = referenceUploads.filter(u => u.url).map(u => ({ ...u, preview: u.url })); // Use URL as preview for restored items
+    localStorage.setItem("controls_referenceUploads", JSON.stringify(toStore));
+  }, [referenceUploads]);
+
+  const [aspectRatio, setAspectRatio] = usePersistentState("aspectRatio", "16:9");
+  const [imageResolution, setImageResolution] = usePersistentState("imageResolution", "1K");
   const [status, setStatus] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isExpanding, setIsExpanding] = useState(false);
@@ -106,9 +157,9 @@ export default function ControlsPane() {
     };
   }, []);
 
-  const [paramValues, setParamValues] = useState<
+  const [paramValues, setParamValues] = usePersistentState<
     Record<string, string | number | boolean | undefined>
-  >({});
+  >("paramValues", {});
 
   const modelKind = activeTab;
 
@@ -177,17 +228,17 @@ export default function ControlsPane() {
             { value: "9:16", label: "9:16" },
           ];
 
-      // Prefer 16:9 if available, otherwise first option
-      const defaultAspectOption = aspectOptions.find(
-        (opt) => opt.value === "16:9" || opt.value === "landscape_16_9"
-      );
-      defaultAspect = defaultAspectOption
-        ? defaultAspectOption.value
-        : aspectOptions[0]?.value ?? "16:9";
-
-      if (ui?.resolutions?.length) {
-        defaultRes = ui.defaultResolution ?? ui.resolutions[0].value;
+      // Only override if current is invalid
+      const isCurrentAspectValid = aspectOptions.some(opt => opt.value === aspectRatio);
+      if (!isCurrentAspectValid) {
+        setAspectRatio(defaultAspect);
       }
+
+      const isCurrentResValid = ui?.resolutions?.some(opt => opt.value === imageResolution);
+      if (ui?.resolutions?.length && !isCurrentResValid) {
+        setImageResolution(defaultRes);
+      }
+
     } else if (modelKind === "video" && selectedVideo) {
       // Handle video defaults
       const aspectParam = selectedVideo.params.aspect_ratio ?? selectedVideo.params.aspectRatio;
@@ -207,11 +258,20 @@ export default function ControlsPane() {
       } else {
         defaultRes = "720p";
       }
-    }
 
-    setAspectRatio(defaultAspect);
-    setImageResolution(defaultRes);
-  }, [modelKind, selectedImage, selectedVideo, modelKey]);
+      // Only override if current is invalid
+      const isCurrentAspectValid = aspectParam?.values?.some(v => String(v) === aspectRatio);
+      if (aspectParam?.values?.length && !isCurrentAspectValid) {
+        setAspectRatio(defaultAspect);
+      }
+
+      const isCurrentResValid = resParam?.values?.some(v => String(v) === imageResolution);
+      if (resParam?.values?.length && !isCurrentResValid) {
+        setImageResolution(defaultRes);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modelKind, selectedImage, selectedVideo, modelKey]); // Removed aspectRatio/Resolution from deps to avoid loops
 
 
 
@@ -464,7 +524,18 @@ export default function ControlsPane() {
           definition.type === "boolean" ? false : undefined;
       }
     });
-    setParamValues(defaults);
+    // Merge defaults with persisted values
+    // We only want to apply defaults for keys that are missing in paramValues
+    setParamValues((prev) => {
+      const next = { ...prev };
+      Object.entries(defaults).forEach(([key, val]) => {
+        if (next[key] === undefined) {
+          next[key] = val;
+        }
+      });
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedVideo]);
 
   // Use a ref for releasePreview to avoid it being a dependency that could trigger re-runs
