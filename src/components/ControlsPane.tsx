@@ -20,6 +20,7 @@ import { getModelPricingLabel } from "../lib/pricing";
 import { uploadToFal } from "../lib/fal";
 import { extensionFromMime } from "../lib/mime";
 import { buildFilename } from "../lib/filename";
+import { compressImage } from "../lib/image-utils";
 import { useCatalog } from "../state/useCatalog";
 import { Spinner } from "./ui/Spinner";
 import { FILE_ENTRY_MIME } from "../lib/drag-constants";
@@ -101,6 +102,8 @@ export default function ControlsPane() {
     DEFAULT_MODEL_KEY.startsWith("image:") ? "image" : "video"
   );
   const [prompt, setPrompt] = usePersistentState("prompt", "");
+  const [history, setHistory] = useState<string[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
 
   const [startFrame, setStartFrame] = useState<UploadSlot>({ uploading: false });
 
@@ -294,14 +297,18 @@ export default function ControlsPane() {
         return { uploading: false };
       });
       if (!file) return;
+
+      // Register preview immediately with original file for responsiveness
       const preview = registerPreview(URL.createObjectURL(file));
       setStartFrame({
         uploading: true,
         preview,
         name: file.name,
       });
+
       try {
-        const url = await uploadToFal(file);
+        const compressed = await compressImage(file);
+        const url = await uploadToFal(compressed);
         setStartFrame((prev) => ({
           ...prev,
           uploading: false,
@@ -328,14 +335,17 @@ export default function ControlsPane() {
         return { uploading: false };
       });
       if (!file) return;
+
       const preview = registerPreview(URL.createObjectURL(file));
       setEndFrame({
         uploading: true,
         preview,
         name: file.name,
       });
+
       try {
-        const url = await uploadToFal(file);
+        const compressed = await compressImage(file);
+        const url = await uploadToFal(compressed);
         setEndFrame((prev) => ({
           ...prev,
           uploading: false,
@@ -393,7 +403,8 @@ export default function ControlsPane() {
         const file = filesToUpload[i];
         const entry = newEntries[i];
         try {
-          const url = await uploadToFal(file);
+          const compressed = await compressImage(file);
+          const url = await uploadToFal(compressed);
           setReferenceUploads((prev) =>
             prev.map((item) =>
               item.id === entry.id
@@ -650,6 +661,42 @@ export default function ControlsPane() {
     );
   };
 
+  const addToHistory = useCallback((newPrompt: string) => {
+    if (history[historyIndex] === newPrompt) return;
+
+    const nextHistory = history.slice(0, historyIndex + 1);
+    nextHistory.push(newPrompt);
+    if (nextHistory.length > 50) nextHistory.shift();
+
+    setHistory(nextHistory);
+    setHistoryIndex(nextHistory.length - 1);
+  }, [history, historyIndex]);
+
+  const undo = useCallback(() => {
+    if (historyIndex > 0) {
+      const newIndex = historyIndex - 1;
+      setHistoryIndex(newIndex);
+      setPrompt(history[newIndex]);
+    }
+  }, [historyIndex, history, setPrompt]);
+
+  const redo = useCallback(() => {
+    if (historyIndex < history.length - 1) {
+      const newIndex = historyIndex + 1;
+      setHistoryIndex(newIndex);
+      setPrompt(history[newIndex]);
+    }
+  }, [historyIndex, history, setPrompt]);
+
+  // Initialize history
+  useEffect(() => {
+    if (history.length === 0 && prompt) {
+      setHistory([prompt]);
+      setHistoryIndex(0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleExpandPrompt = async (type: "natural" | "yaml") => {
     if (!prompt.trim()) {
       setStatus("Please enter a prompt first.");
@@ -709,8 +756,15 @@ export default function ControlsPane() {
       }
 
       console.log("Expanding prompt with refs (count):", validReferenceUrls.length);
+
+      // Save current state before expansion
+      addToHistory(prompt);
+
       const expanded = await expandPrompt(prompt, type, mode, validReferenceUrls);
       setPrompt(expanded);
+
+      // Save new state after expansion
+      addToHistory(expanded);
     } catch (error) {
       console.error("Expand prompt failed:", error);
       setStatus(`Failed to expand prompt: ${error instanceof Error ? error.message : String(error)}`);
@@ -1107,10 +1161,30 @@ export default function ControlsPane() {
                 <textarea
                   value={prompt}
                   onChange={(event) => setPrompt(event.target.value)}
+                  onBlur={() => addToHistory(prompt)}
                   rows={6}
                   className="w-full rounded-2xl border border-white/10 bg-black/40 px-3 py-3 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 pb-10"
                 />
                 <div className="absolute bottom-2 right-2 flex gap-1">
+                  <button
+                    type="button"
+                    onClick={undo}
+                    disabled={historyIndex <= 0}
+                    className="flex h-7 w-7 items-center justify-center rounded-md bg-white/10 text-slate-300 transition hover:bg-white/20 hover:text-white disabled:opacity-30"
+                    title="Undo"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6" /><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" /></svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={redo}
+                    disabled={historyIndex >= history.length - 1}
+                    className="flex h-7 w-7 items-center justify-center rounded-md bg-white/10 text-slate-300 transition hover:bg-white/20 hover:text-white disabled:opacity-30"
+                    title="Redo"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 7v6h-6" /><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13" /></svg>
+                  </button>
+                  <div className="w-px bg-white/10 mx-1" />
                   <button
                     type="button"
                     onClick={() => handleExpandPrompt("natural")}
@@ -1245,10 +1319,30 @@ export default function ControlsPane() {
                 <textarea
                   value={prompt}
                   onChange={(event) => setPrompt(event.target.value)}
+                  onBlur={() => addToHistory(prompt)}
                   rows={6}
                   className="w-full rounded-2xl border border-white/10 bg-black/40 px-3 py-3 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 pb-10"
                 />
                 <div className="absolute bottom-2 right-2 flex gap-1">
+                  <button
+                    type="button"
+                    onClick={undo}
+                    disabled={historyIndex <= 0}
+                    className="flex h-7 w-7 items-center justify-center rounded-md bg-white/10 text-slate-300 transition hover:bg-white/20 hover:text-white disabled:opacity-30"
+                    title="Undo"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6" /><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" /></svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={redo}
+                    disabled={historyIndex >= history.length - 1}
+                    className="flex h-7 w-7 items-center justify-center rounded-md bg-white/10 text-slate-300 transition hover:bg-white/20 hover:text-white disabled:opacity-30"
+                    title="Redo"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 7v6h-6" /><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13" /></svg>
+                  </button>
+                  <div className="w-px bg-white/10 mx-1" />
                   <button
                     type="button"
                     onClick={() => handleExpandPrompt("natural")}

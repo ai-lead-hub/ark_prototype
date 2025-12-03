@@ -101,10 +101,15 @@ export async function callKie(
   const directUrl =
     extractUrl(data) ?? extractUrl((data.data as Record<string, unknown>) ?? {});
   if (directUrl) {
-    return {
-      url: directUrl,
-      blob: await downloadBlob(directUrl),
-    };
+    try {
+      return {
+        url: directUrl,
+        blob: await downloadBlob(directUrl),
+      };
+    } catch (error) {
+      console.warn("Failed to download blob from KIE direct URL:", error);
+      return { url: directUrl };
+    }
   }
 
   const bytesBlob = blobFromBytes(
@@ -132,18 +137,28 @@ export async function callKie(
       );
 
     if (taskUrl) {
-      return {
-        url: taskUrl,
-        blob: await downloadBlob(taskUrl),
-      };
+      try {
+        return {
+          url: taskUrl,
+          blob: await downloadBlob(taskUrl),
+        };
+      } catch (error) {
+        console.warn("Failed to download blob from KIE task URL:", error);
+        return { url: taskUrl };
+      }
     }
 
     const resultJsonUrl = extractUrlFromResultJson(finalData);
     if (resultJsonUrl) {
-      return {
-        url: resultJsonUrl,
-        blob: await downloadBlob(resultJsonUrl),
-      };
+      try {
+        return {
+          url: resultJsonUrl,
+          blob: await downloadBlob(resultJsonUrl),
+        };
+      } catch (error) {
+        console.warn("Failed to download blob from KIE result URL:", error);
+        return { url: resultJsonUrl };
+      }
     }
 
     const taskBytes = blobFromBytes(

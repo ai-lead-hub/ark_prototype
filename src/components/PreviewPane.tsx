@@ -9,6 +9,8 @@ import { downloadBlob } from "../lib/providers/shared";
 import { callModelEndpoint, getProviderEnvVar, getProviderKey, type ModelProvider, type ProviderCallOptions } from "../lib/providers";
 import { buildFilename } from "../lib/filename";
 import { uploadToFal } from "../lib/fal";
+import { compressImage } from "../lib/image-utils";
+
 
 
 
@@ -390,8 +392,9 @@ export default function PreviewPane({
       const blob = await response.blob();
       const file = new File([blob], selected.name, { type: selected.mime });
 
-      setUpscaleStatus("Uploading image...");
-      const url = await uploadToFal(file);
+      setUpscaleStatus("Compressing & Uploading image...");
+      const compressed = await compressImage(file);
+      const url = await uploadToFal(compressed);
 
       const payload = modelSpec.mapInput({
         sourceUrl: url,
@@ -447,7 +450,7 @@ export default function PreviewPane({
             { ...callOptions, log }
           );
 
-          let downloadedBlob: Blob;
+          let downloadedBlob: Blob | undefined;
           let resultUrlStr: string | undefined;
 
           if (result.blob) {
@@ -455,7 +458,12 @@ export default function PreviewPane({
           } else if (result.url) {
             resultUrlStr = result.url;
             log("Downloading result...");
-            downloadedBlob = await downloadBlob(result.url);
+            try {
+              downloadedBlob = await downloadBlob(result.url);
+            } catch (e) {
+              log(`Failed to download result: ${e instanceof Error ? e.message : String(e)}`);
+              // Continue without blob, just return URL
+            }
           } else {
             throw new Error("No result from model");
           }
@@ -467,11 +475,14 @@ export default function PreviewPane({
           const baseDir = directoryParts.join("/");
           const relPath = baseDir ? `${baseDir}/${filename}` : filename;
 
-          log("Saving to workspace...");
-          if (connection) {
+          if (downloadedBlob && connection) {
+            log("Saving to workspace...");
             await uploadFile(connection, relPath, downloadedBlob);
             await refreshTree(relPath);
+          } else if (!downloadedBlob) {
+            log("Result available at URL (could not save to workspace).");
           }
+
           return resultUrlStr || "Blob saved";
         }
       );
