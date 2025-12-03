@@ -910,7 +910,7 @@ export default function ControlsPane() {
             { ...callOptions, log }
           );
 
-          let downloadedBlob: Blob;
+          let downloadedBlob: Blob | undefined;
           let resultUrlStr: string | undefined;
 
           if (result.blob) {
@@ -918,7 +918,12 @@ export default function ControlsPane() {
           } else if (result.url) {
             resultUrlStr = result.url;
             log("Downloading result...");
-            downloadedBlob = await downloadBlob(result.url);
+            try {
+              downloadedBlob = await downloadBlob(result.url);
+            } catch (e) {
+              log(`Failed to download result: ${e instanceof Error ? e.message : String(e)}`);
+              // Continue without blob
+            }
           } else {
             throw new Error("No result from model");
           }
@@ -932,7 +937,7 @@ export default function ControlsPane() {
               const ext = pathname.split(".").pop();
               if (ext && ext.length >= 3 && ext.length <= 4) {
                 extension = ext;
-              } else {
+              } else if (downloadedBlob) {
                 const type = downloadedBlob.type;
                 const mimeExt = extensionFromMime(type);
                 if (mimeExt) {
@@ -948,10 +953,12 @@ export default function ControlsPane() {
           const filename = buildFilename(modelId, prompt, extension, seed);
           const relPath = `${dateFolder}/${filename}`;
 
-          log("Saving to workspace...");
-          if (connection) {
+          if (downloadedBlob && connection) {
+            log("Saving to workspace...");
             await uploadFile(connection, relPath, downloadedBlob);
             await refreshTree(relPath);
+          } else if (!downloadedBlob) {
+            log("Result available at URL (could not save to workspace).");
           }
 
           return resultUrlStr || "Blob saved";
