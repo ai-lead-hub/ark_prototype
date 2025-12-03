@@ -102,38 +102,13 @@ export default function ControlsPane() {
   );
   const [prompt, setPrompt] = usePersistentState("prompt", "");
 
-  // For uploads, we can only persist the ones that have a remote URL.
-  // We cannot persist Blobs/Files in localStorage.
-  const [startFrame, setStartFrame] = useState<UploadSlot>(() => {
-    const stored = getStored<UploadSlot>("startFrame", { uploading: false });
-    return stored.url ? stored : { uploading: false };
-  });
-  useEffect(() => {
-    if (startFrame.url) {
-      localStorage.setItem("controls_startFrame", JSON.stringify({ ...startFrame, preview: undefined }));
-    }
-  }, [startFrame]);
+  const [startFrame, setStartFrame] = useState<UploadSlot>({ uploading: false });
 
-  const [endFrame, setEndFrame] = useState<UploadSlot>(() => {
-    const stored = getStored<UploadSlot>("endFrame", { uploading: false });
-    return stored.url ? stored : { uploading: false };
-  });
-  useEffect(() => {
-    if (endFrame.url) {
-      localStorage.setItem("controls_endFrame", JSON.stringify({ ...endFrame, preview: undefined }));
-    }
-  }, [endFrame]);
+  const [endFrame, setEndFrame] = useState<UploadSlot>({ uploading: false });
 
   const [seed, setSeed] = usePersistentState("seed", "");
 
-  const [referenceUploads, setReferenceUploads] = useState<ReferenceUpload[]>(() => {
-    const stored = getStored<ReferenceUpload[]>("referenceUploads", []);
-    return stored.filter(u => u.url); // Only keep ones with URLs
-  });
-  useEffect(() => {
-    const toStore = referenceUploads.filter(u => u.url).map(u => ({ ...u, preview: u.url })); // Use URL as preview for restored items
-    localStorage.setItem("controls_referenceUploads", JSON.stringify(toStore));
-  }, [referenceUploads]);
+  const [referenceUploads, setReferenceUploads] = useState<ReferenceUpload[]>([]);
 
   const [aspectRatio, setAspectRatio] = usePersistentState("aspectRatio", "16:9");
   const [imageResolution, setImageResolution] = usePersistentState("imageResolution", "1K");
