@@ -287,11 +287,11 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
     },
   },
   {
-    id: "seedream-v4-edit",
-    label: "Seedream V4 — Edit",
+    id: "seedream-v4-5",
+    label: "Seedream 4.5",
     endpoint: "/api/v1/jobs/createTask",
     provider: "kie",
-    pricing: "$0.0175/image",
+    pricing: "$0.032/image",
     taskConfig: {
       statusEndpoint: "/api/v1/jobs/recordInfo",
       statePath: "data.state",
@@ -301,45 +301,33 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
       pollIntervalMs: 4000,
     },
     mode: "edit",
-    maxRefs: 10,
+    maxRefs: 1,
     ui: {
       aspectRatios: [
-        { value: "landscape_16_9", label: "Landscape (16:9)" },
-        { value: "square_hd", label: "Square HD (1:1)" },
-        { value: "square", label: "Square (1:1)" },
-        { value: "portrait_4_3", label: "Portrait (3:4)" },
-        { value: "portrait_3_2", label: "Portrait (2:3)" },
-        { value: "portrait_16_9", label: "Portrait (9:16)" },
-        { value: "landscape_4_3", label: "Landscape (4:3)" },
-        { value: "landscape_3_2", label: "Landscape (3:2)" },
-        { value: "landscape_21_9", label: "Landscape (21:9)" },
+        { value: "1:1", label: "Square (1:1)" },
+        { value: "4:3", label: "Landscape (4:3)" },
+        { value: "3:4", label: "Portrait (3:4)" },
+        { value: "16:9", label: "Landscape (16:9)" },
+        { value: "9:16", label: "Portrait (9:16)" },
+        { value: "2:3", label: "Portrait (2:3)" },
+        { value: "3:2", label: "Landscape (3:2)" },
+        { value: "21:9", label: "Landscape (21:9)" },
       ],
       resolutions: [
-        { value: "2K", label: "2K" },
-        { value: "1K", label: "1K" },
-        { value: "4K", label: "4K" },
+        { value: "basic", label: "Basic (2K)" },
+        { value: "high", label: "High (4K)" },
       ],
-      maxImages: { min: 1, max: 6, default: 1 },
+      defaultResolution: "basic",
     },
-    mapInput: ({ prompt, imageUrls, aspectRatio, seed, imageResolution, maxImages }) => {
-      const clampedMax =
-        typeof maxImages === "number"
-          ? Math.min(6, Math.max(1, Math.round(maxImages)))
-          : undefined;
-
+    mapInput: ({ prompt, imageUrls, aspectRatio, imageResolution }) => {
+      const isEdit = imageUrls.length > 0;
       return {
-        model:
-          imageUrls.length > 0
-            ? "bytedance/seedream-v4-edit"
-            : "bytedance/seedream-v4-text-to-image",
+        model: isEdit ? "seedream/4.5-edit" : "seedream/4.5-text-to-image",
         input: {
           prompt,
-          ...(imageUrls.length > 0 ? { image_urls: imageUrls.slice(0, 10) } : {}),
-          ...(aspectRatio ? { image_size: aspectRatio } : {}),
-          ...(imageResolution ? { image_resolution: imageResolution } : {}),
-          ...(clampedMax !== undefined ? { max_images: clampedMax } : {}),
-
-          seed: seed ?? 1569,
+          ...(isEdit ? { image_urls: imageUrls } : {}),
+          aspect_ratio: aspectRatio ?? "1:1",
+          quality: imageResolution ?? "basic",
         },
       };
     },
@@ -353,11 +341,7 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
           // fall through
         }
       }
-      return (
-        ((output as { images?: Array<{ url?: string }> })?.images ?? [])
-          .map((image) => image?.url)
-          .filter(Boolean) as string[]
-      );
+      return [];
     },
   },
   {

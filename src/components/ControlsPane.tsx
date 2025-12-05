@@ -114,7 +114,7 @@ export default function ControlsPane() {
   const [referenceUploads, setReferenceUploads] = useState<ReferenceUpload[]>([]);
 
   const [aspectRatio, setAspectRatio] = usePersistentState("aspectRatio", "16:9");
-  const [imageResolution, setImageResolution] = usePersistentState("imageResolution", "1K");
+  const [imageResolution, setImageResolution] = useState("1K");
   const [status, setStatus] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isExpanding, setIsExpanding] = useState(false);
@@ -213,8 +213,10 @@ export default function ControlsPane() {
       }
 
       const isCurrentResValid = ui?.resolutions?.some(opt => opt.value === imageResolution);
-      if (ui?.resolutions?.length && !isCurrentResValid) {
-        setImageResolution(defaultRes);
+      // Always enforce default resolution when switching models, or if current is invalid
+      const newDefault = ui?.defaultResolution ?? ui?.resolutions?.[0]?.value ?? defaultRes;
+      if (ui?.resolutions?.length && (!isCurrentResValid || imageResolution !== newDefault)) {
+        setImageResolution(newDefault);
       }
 
     } else if (modelKind === "video" && selectedVideo) {

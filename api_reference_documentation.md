@@ -363,34 +363,60 @@ This document provides a comprehensive reference for all video generation and im
 
 ---
 
-### Seedream V4 — Edit
+### Seedream 4.5
 **Provider**: KIE
 **Endpoint**: `/api/v1/jobs/createTask`
-**Pricing**: $0.0175/image
+**Pricing**: $0.032/image
 
 #### Parameters
 | Parameter | Type | Required | Description | Example |
 | :--- | :--- | :--- | :--- | :--- |
-| `model` | string | Yes | Model ID | `"bytedance/seedream-v4-edit"` |
-| `input.prompt` | string | Yes | Edit prompt. | `"create a showcase..."` |
-| `input.image_urls` | array | Yes | List of input image URLs. | `["https://..."]` |
-| `input.image_size` | string | No | Size preset (e.g., `"square_hd"`). | `"square_hd"` |
-| `input.image_resolution` | string | No | Resolution (e.g., `"1K"`, `"2K"`). | `"1K"` |
-| `input.max_images` | number | No | Max images (1-6). Default: `1`. | `1` |
-| `input.seed` | number | No | Random seed. | `12345` |
+| `model` | string | Yes | Model ID | `"seedream/4.5-text-to-image"` |
+| `input.prompt` | string | Yes | Text description. Max 1000 chars. | `"A full-process cafe..."` |
+| `input.aspect_ratio` | string | Yes | Aspect ratio. Options: `"1:1"`, `"4:3"`, `"3:4"`, `"16:9"`, `"9:16"`, `"2:3"`, `"3:2"`, `"21:9"`. | `"1:1"` |
+| `input.quality` | string | Yes | Quality. Options: `"basic"` (2K), `"high"` (4K). | `"basic"` |
 | `callBackUrl` | string | No | Callback URL for notifications. | `"https://..."` |
 
 #### Request Example
 ```json
 {
-  "model": "bytedance/seedream-v4-edit",
+  "model": "seedream/4.5-text-to-image",
   "callBackUrl": "https://your-domain.com/api/callback",
   "input": {
-    "prompt": "create a showcase...",
+    "prompt": "A full-process cafe design tool...",
+    "aspect_ratio": "1:1",
+    "quality": "basic"
+  }
+}
+```
+
+---
+
+### Seedream 4.5 — Edit
+**Provider**: KIE
+**Endpoint**: `/api/v1/jobs/createTask`
+**Pricing**: $0.032/image
+
+#### Parameters
+| Parameter | Type | Required | Description | Example |
+| :--- | :--- | :--- | :--- | :--- |
+| `model` | string | Yes | Model ID | `"seedream/4.5-edit"` |
+| `input.prompt` | string | Yes | Edit prompt. Max 1000 chars. | `"Change material to glass..."` |
+| `input.image_urls` | array | Yes | Input image URL. | `["https://..."]` |
+| `input.aspect_ratio` | string | Yes | Aspect ratio. | `"1:1"` |
+| `input.quality` | string | Yes | Quality. Options: `"basic"`, `"high"`. | `"basic"` |
+| `callBackUrl` | string | No | Callback URL for notifications. | `"https://..."` |
+
+#### Request Example
+```json
+{
+  "model": "seedream/4.5-edit",
+  "callBackUrl": "https://your-domain.com/api/callback",
+  "input": {
+    "prompt": "Change material to glass...",
     "image_urls": ["https://file.aiquickdraw.com/..."],
-    "image_size": "square_hd",
-    "image_resolution": "1K",
-    "max_images": 1
+    "aspect_ratio": "1:1",
+    "quality": "basic"
   }
 }
 ```
