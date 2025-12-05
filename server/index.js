@@ -44,7 +44,8 @@ await server.register(multipart, {
 });
 
 server.addHook("onRequest", async (request, reply) => {
-  if (request.url.startsWith("/log")) return;
+  // Health endpoint is public
+  if (request.url === "/health") return;
   if (!API_TOKEN) return;
   const auth = request.headers.authorization;
   const expected = `Bearer ${API_TOKEN}`;
@@ -330,14 +331,31 @@ server.patch("/files", async (request, reply) => {
   }
 });
 
+// Sanitize publish metadata fields to prevent path traversal
+function sanitizeMetadataField(value, fieldName) {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error(`Missing or invalid ${fieldName}`);
+  }
+  const clean = value.trim();
+  if (!/^[a-zA-Z0-9_-]+$/.test(clean)) {
+    throw new Error(`Invalid ${fieldName}: only alphanumeric, underscore, and hyphen allowed`);
+  }
+  if (clean.length > 50) {
+    throw new Error(`${fieldName} too long (max 50 characters)`);
+  }
+  return clean;
+}
+
 server.post("/publish", async (request, reply) => {
   let { workspace, path: relPath, project, sequence, shot, version } = request.body ?? {};
 
   try {
     workspace = sanitizeWorkspaceId(workspace);
     relPath = sanitizeRelPath(relPath);
-    project = sanitizeWorkspaceId(project); // Reuse workspace ID sanitization for project name safety
-    if (!sequence || !shot || !version) throw new Error("Missing metadata");
+    project = sanitizeMetadataField(project, "project");
+    sequence = sanitizeMetadataField(sequence, "sequence");
+    shot = sanitizeMetadataField(shot, "shot");
+    version = sanitizeMetadataField(version, "version");
   } catch (error) {
     reply.code(400).send({ error: error.message ?? "Invalid input" });
     return;
@@ -382,7 +400,41 @@ server.post("/log", async (request, reply) => {
   }
 });
 
-server.listen({ port: PORT, host: "0.0.0.0" }).catch((error) => {
-  server.log.error(error);
-  process.exit(1);
-});
+// Startup validation and logging
+const startServer = async () => {
+  try {
+    await server.listen({ port: PORT, host: "0.0.0.0" });
+
+    // Log startup info
+    console.log(`\n${"=".repeat(50)}`);
+    console.log("  AI Asset Studio - File API Server");
+    console.log(`${"=".repeat(50)}`);
+    console.log(`  ✓ Port:          ${PORT}`);
+    console.log(`  ✓ Storage:       ${STORAGE_ROOT}`);
+    console.log(`  ✓ Auth:          ${API_TOKEN ? "enabled" : "disabled (no token set)"}`);
+    console.log(`  ✓ CORS:          ${CORS_ORIGIN}`);
+    console.log(`  ✓ Max file size: ${MAX_SIZE_MB}MB`);
+    console.log(`${"=".repeat(50)}\n`);
+  } catch (error) {
+    server.log.error(error);
+    process.exit(1);
+  }
+};
+
+// Graceful shutdown
+const shutdown = async (signal) => {
+  console.log(`\n${signal} received, shutting down gracefully...`);
+  try {
+    await server.close();
+    console.log("Server closed successfully.");
+    process.exit(0);
+  } catch (error) {
+    console.error("Error during shutdown:", error);
+    process.exit(1);
+  }
+};
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
+
+startServer();

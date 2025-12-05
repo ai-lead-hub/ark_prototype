@@ -27,6 +27,7 @@ export default function FileBrowser() {
   const [isDragging, setIsDragging] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [fileDims, setFileDims] = useState<Record<string, { w: number; h: number }>>({});
+  const [operationLoading, setOperationLoading] = useState<string | null>(null);
 
   const getFileStyles = (entry: FileEntry) => {
     if (entry.mime.startsWith("image/")) {
@@ -64,24 +65,45 @@ export default function FileBrowser() {
       setEditingId(null);
       return;
     }
+    setOperationLoading(entry.id);
     try {
       await rename(entry, editName.trim());
     } catch (error) {
       console.error(error);
-      alert("Failed to rename file");
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      alert(`Failed to rename "${entry.name}": ${msg}`);
     } finally {
       setEditingId(null);
+      setOperationLoading(null);
     }
   };
 
-  const handleDelete = async (entry: FileEntry, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleDelete = async (entry: FileEntry, e?: React.MouseEvent | React.KeyboardEvent) => {
+    e?.stopPropagation();
     if (!confirm(`Are you sure you want to delete "${entry.name}"?`)) return;
+    setOperationLoading(entry.id);
     try {
       await remove(entry);
     } catch (error) {
       console.error(error);
-      alert("Failed to delete file");
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      alert(`Failed to delete "${entry.name}": ${msg}`);
+    } finally {
+      setOperationLoading(null);
+    }
+  };
+
+  // Keyboard shortcuts
+  const handleKeyDown = (e: React.KeyboardEvent, entry: FileEntry) => {
+    if (editingId) return; // Don't handle shortcuts while editing
+
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      e.preventDefault();
+      handleDelete(entry, e);
+    } else if (e.key === 'F2') {
+      e.preventDefault();
+      setEditingId(entry.id);
+      setEditName(entry.name);
     }
   };
 
@@ -111,14 +133,30 @@ export default function FileBrowser() {
     setUploadStatus(`Uploading ${files.length} file(s)...`);
 
     try {
-      // const { uploadFile } = await import("../lib/api/files");
-
       let successCount = 0;
       let failCount = 0;
+      let renamedCount = 0;
+
+      // Get existing file names for collision detection
+      const existingNames = new Set(entries.map((entry) => entry.name.toLowerCase()));
 
       for (const file of files) {
         try {
-          await uploadFile(connection, file.name, file);
+          let targetName = file.name;
+
+          // Check for collision and auto-rename if needed
+          if (existingNames.has(targetName.toLowerCase())) {
+            const ext = targetName.includes('.') ? '.' + targetName.split('.').pop() : '';
+            const baseName = ext ? targetName.slice(0, -ext.length) : targetName;
+            const timestamp = Date.now();
+            targetName = `${baseName}_${timestamp}${ext}`;
+            renamedCount++;
+          }
+
+          // Add to existing names to prevent intra-batch collisions
+          existingNames.add(targetName.toLowerCase());
+
+          await uploadFile(connection, targetName, file);
           successCount++;
         } catch (err) {
           console.error(`Failed to upload ${file.name}:`, err);
@@ -130,6 +168,8 @@ export default function FileBrowser() {
 
       if (failCount > 0) {
         setUploadStatus(`Uploaded ${successCount} files. ${failCount} failed.`);
+      } else if (renamedCount > 0) {
+        setUploadStatus(`Uploaded ${successCount} files. ${renamedCount} renamed to avoid conflicts.`);
       } else {
         setUploadStatus(`Uploaded ${successCount} files successfully.`);
       }
@@ -410,7 +450,8 @@ export default function FileBrowser() {
                         }
                       }}
                       onClick={() => select(entry)}
-                      className={`group relative flex aspect-square flex-col overflow-hidden rounded-lg border transition ${selected?.id === entry.id ? "ring-2 ring-yellow-500" : ""
+                      onKeyDown={(e) => handleKeyDown(e, entry)}
+                      className={`group relative flex aspect-square flex-col overflow-hidden rounded-lg border transition focus:outline-none focus:ring-2 focus:ring-sky-500 ${selected?.id === entry.id ? "ring-2 ring-yellow-500" : ""
                         } ${styles.grid}`}
                     >
                       <div className="flex-1 w-full overflow-hidden bg-white/5">
@@ -483,6 +524,11 @@ export default function FileBrowser() {
                           </div>
                         )}
                       </div>
+                      {operationLoading === entry.id && (
+                        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                          <Spinner size="md" />
+                        </div>
+                      )}
                       <button
                         type="button"
                         onClick={(e) => {
@@ -498,7 +544,7 @@ export default function FileBrowser() {
                         type="button"
                         onClick={(e) => handleDelete(entry, e)}
                         className="absolute top-1 right-1 rounded bg-black/60 p-1 text-xs opacity-0 transition-opacity hover:bg-red-500 hover:text-white group-hover:opacity-100"
-                        title="Delete"
+                        title="Delete (Del)"
                       >
                         🗑️
                       </button>

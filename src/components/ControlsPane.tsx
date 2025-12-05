@@ -181,6 +181,12 @@ export default function ControlsPane() {
     }
   }, []);
 
+  // Use a ref for releasePreview to avoid dependency issues in callbacks
+  const releasePreviewRef = useRef(releasePreview);
+  useEffect(() => {
+    releasePreviewRef.current = releasePreview;
+  }, [releasePreview]);
+
   useEffect(() => {
     const registry = previewRegistry.current;
     return () => {
@@ -439,12 +445,12 @@ export default function ControlsPane() {
       setReferenceUploads((prev) => {
         const target = prev.find((entry) => entry.id === id);
         if (target) {
-          releasePreview(target.preview);
+          releasePreviewRef.current(target.preview);
         }
         return prev.filter((entry) => entry.id !== id);
       });
     },
-    [releasePreview]
+    []
   );
 
   const uploadedReferenceUrls = referenceUploads
@@ -526,12 +532,6 @@ export default function ControlsPane() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedVideo]);
-
-  // Use a ref for releasePreview to avoid it being a dependency that could trigger re-runs
-  const releasePreviewRef = useRef(releasePreview);
-  useEffect(() => {
-    releasePreviewRef.current = releasePreview;
-  }, [releasePreview]);
 
   useEffect(() => {
     const limit =

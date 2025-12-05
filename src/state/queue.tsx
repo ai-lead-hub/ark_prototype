@@ -5,7 +5,7 @@ import {
     useContext,
     useEffect,
     useMemo,
-
+    useRef,
     useState,
     type ReactNode,
 } from "react";
@@ -94,13 +94,26 @@ export function QueueProvider({ children }: { children: ReactNode }) {
 
     const toggleLog = useCallback(() => setIsLogOpen((v) => !v), []);
 
-    // Queue Processor
+    // Track pending job count to avoid wasteful effect runs
+    const pendingJobCount = useMemo(
+        () => jobs.filter((j) => j.status === "pending").length,
+        [jobs]
+    );
+    const processingCount = useMemo(
+        () => jobs.filter((j) => j.status === "processing").length,
+        [jobs]
+    );
 
+    // Ref to prevent concurrent processor starts
+    const isProcessingRef = useRef(false);
 
+    // Queue Processor - only runs when pending count or processing count changes
     useEffect(() => {
         const processQueue = () => {
-            const processingCount = jobs.filter((j) => j.status === "processing").length;
+            // Early exit if already processing or at limit
+            if (isProcessingRef.current) return;
             if (processingCount >= CONCURRENCY_LIMIT) return;
+            if (pendingJobCount === 0) return;
 
             const nextJob = jobs
                 .slice()
@@ -120,6 +133,8 @@ export function QueueProvider({ children }: { children: ReactNode }) {
                 );
                 return;
             }
+
+            isProcessingRef.current = true;
 
             // Mark as processing immediately
             setJobs((prev) =>
@@ -203,12 +218,14 @@ export function QueueProvider({ children }: { children: ReactNode }) {
                     } catch (e) {
                         console.error("Failed to log error to server", e);
                     }
+                } finally {
+                    isProcessingRef.current = false;
                 }
             })();
         };
 
         processQueue();
-    }, [jobs, processors]);
+    }, [pendingJobCount, processingCount, jobs, processors]);
 
     const value = useMemo(
         () => ({
