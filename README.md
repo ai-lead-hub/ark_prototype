@@ -110,7 +110,6 @@ Monitor your usage limits with the credit tracker in the top bar. Click the refr
 ### Video Generation
 - **Kling 2.5 Pro** - High-quality video generation
 - **Veo 3.1 Fast** - Google's latest video model (Text & I2V)
-- **Hailuo 2.3 Pro** - Minimax's creative video generator
 - **Wan 2.5** - Alibaba's advanced video model
 - **Kling 2.1 Pro** - Cost-effective video generation
 - **Seedance V1 Pro** - Bytedance's video generation model

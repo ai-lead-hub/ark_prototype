@@ -341,16 +341,26 @@ export default function PreviewPane({
   }, [cropAspect, previewUrl, selected, connection, refreshTree]);
 
   const handleUpscale = useCallback(async () => {
-    if (!connection || !selected || selected.kind !== "file" || !selected.mime.startsWith("image")) {
-      setUpscaleStatus("Upscaling is only available for images.");
+    if (!connection || !selected || selected.kind !== "file") {
+      setUpscaleStatus("No file selected.");
       return;
     }
-    if (!previewUrl) {
-      setUpscaleStatus("No image available to upscale.");
+    const isImage = selected.mime.startsWith("image");
+    const isVideo = selected.mime.startsWith("video");
+
+    if (!isImage && !isVideo) {
+      setUpscaleStatus("Upscaling is only available for images and videos.");
       return;
     }
 
-    const modelSpec = UPSCALE_MODELS.find((m) => m.id === "topaz-image-upscale");
+    if (!previewUrl) {
+      setUpscaleStatus("No file available to upscale.");
+      return;
+    }
+
+    const modelId = isImage ? "seedvr-image-upscale" : "topaz-video-upscale";
+    const modelSpec = UPSCALE_MODELS.find((m) => m.id === modelId);
+
     if (!modelSpec) {
       setUpscaleStatus("Upscale model not found.");
       return;
@@ -360,41 +370,25 @@ export default function PreviewPane({
     setUpscaleStatus("Starting upscale...");
 
     try {
-      const provider = modelSpec.provider ?? "kie";
+      const provider = modelSpec.provider ?? "fal";
       if (!getProviderKey(provider)) {
         throw new Error(`Missing ${getProviderEnvVar(provider)} in environment.`);
       }
 
-      // We need the public URL or we upload the file again to get a URL if needed
-      // For now, let's assume we can use the file we have.
-      // Actually, for KIE/Topaz we need a public URL.
-      // But wait, `uploadToFal` returns a URL.
-      // Let's check if we can get a URL for the current file.
-      // If it's a local file server, `previewUrl` is local.
-      // We might need to upload it to a storage that the model can access, OR send as base64 if supported.
-      // Topaz on KIE usually expects a URL.
-      // Let's try to use the `previewUrl` if it's public, otherwise we might need to upload.
-      // Actually, `ControlsPane` was uploading to Fal/KIE before.
-      // Let's re-use `uploadToFal` logic or similar?
-      // Wait, `ControlsPane` imported `uploadToFal`.
-      // I should import `uploadToFal` here too.
-
-      // Re-reading the plan: "Call addJob with the upscale payload."
-      // The payload needs `image_url`.
-      // If I use `previewUrl`, it's `http://localhost...`. KIE won't reach it.
-      // I need to upload the file to KIE/Fal first.
-
-      // Let's import uploadToFal.
-      // const { uploadToFal } = await import("../lib/fal");
-
-      // Fetch the blob from the preview URL (which is local)
+      // Upload file to get a public URL
+      setUpscaleStatus("Uploading file...");
       const response = await fetch(previewUrl);
       const blob = await response.blob();
       const file = new File([blob], selected.name, { type: selected.mime });
 
-      setUpscaleStatus("Compressing & Uploading image...");
-      const compressed = await compressImage(file);
-      const url = await uploadToFal(compressed);
+      // Compress if it's an image, otherwise just upload
+      let fileToUpload = file;
+      if (isImage) {
+        setUpscaleStatus("Compressing & Uploading...");
+        fileToUpload = await compressImage(file);
+      }
+
+      const url = await uploadToFal(fileToUpload);
 
       const payload = modelSpec.mapInput({
         sourceUrl: url,
@@ -408,7 +402,7 @@ export default function PreviewPane({
           endpoint: modelSpec.endpoint,
           payload,
           modelId: modelSpec.id,
-          category: "image", // Upscale is kind of image
+          category: isImage ? "image" : "video",
           provider,
           callOptions: modelSpec.taskConfig ? { taskConfig: modelSpec.taskConfig } : undefined,
           seed: "",
@@ -417,15 +411,6 @@ export default function PreviewPane({
           refreshTree,
         },
         async (data: unknown, log) => {
-          // This callback is for when the job finishes in the queue
-          // But the queue handles the execution.
-          // Wait, `addJob` takes a callback?
-          // Looking at `ControlsPane`, `addJob` takes `onSuccess` callback.
-          // I should copy the `onSuccess` logic from `ControlsPane` or simplify it.
-          // The queue executes the job. The callback is called when the job is picked up?
-          // No, `useQueue` `addJob` signature: (type, description, data, executor)
-          // The executor is what runs.
-
           const {
             endpoint,
             payload,
@@ -462,16 +447,15 @@ export default function PreviewPane({
               downloadedBlob = await downloadBlob(result.url);
             } catch (e) {
               log(`Failed to download result: ${e instanceof Error ? e.message : String(e)}`);
-              // Continue without blob, just return URL
             }
           } else {
             throw new Error("No result from model");
           }
 
-          const filename = buildFilename(modelSpec.id, "upscale", "png", "");
-          // We want to save it in the same folder as the original
+          const ext = isImage ? "png" : "mp4";
+          const filename = buildFilename(modelSpec.id, "upscale", ext, "");
           const directoryParts = selected.relPath.split("/");
-          directoryParts.pop(); // remove filename
+          directoryParts.pop();
           const baseDir = directoryParts.join("/");
           const relPath = baseDir ? `${baseDir}/${filename}` : filename;
 
@@ -488,7 +472,7 @@ export default function PreviewPane({
       );
 
       setUpscaleStatus("Upscale job queued.");
-      setTimeout(() => setUpscaleStatus(null));
+      setTimeout(() => setUpscaleStatus(null), 3000);
 
     } catch (error) {
       console.error("Upscale failed:", error);

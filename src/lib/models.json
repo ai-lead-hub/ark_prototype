@@ -491,9 +491,9 @@
     {
       "id": "kling-v2-6-pro",
       "label": "Kling V2.6 Pro (I2V)",
-      "endpoint": "fal-ai/kling-video/v2.6/pro/image-to-video",
-      "provider": "fal",
-      "pricing": "$0.07/sec (audio off), $0.14/sec (audio on)",
+      "endpoint": "/api/v1/jobs/createTask",
+      "provider": "kie",
+      "pricing": "$0.28 (5s), $0.55 (10s), $0.55 (5s+audio), $1.10 (10s+audio)",
       "supports": {
         "startFrame": true,
         "endFrame": false,
@@ -501,6 +501,18 @@
         "resolution": false,
         "aspectRatio": false,
         "fps": false
+      },
+      "taskConfig": {
+        "statusEndpoint": "/api/v1/jobs/recordInfo",
+        "statePath": "data.state",
+        "successStates": [
+          "success"
+        ],
+        "failureStates": [
+          "fail"
+        ],
+        "responseDataPath": "data",
+        "pollIntervalMs": 4000
       },
       "params": {
         "prompt": {
@@ -525,9 +537,10 @@
           "default": "blur, distort, and low quality",
           "hidden": true
         },
-        "generate_audio": {
+        "sound": {
           "type": "boolean",
-          "default": false
+          "default": false,
+          "uiKey": "generate_audio"
         }
       },
       "output": {

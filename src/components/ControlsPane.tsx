@@ -363,6 +363,7 @@ export default function ControlsPane() {
     [registerPreview, releasePreview]
   );
 
+  // Note: The order of reference images is preserved and significant for some models (e.g. Flux).
   const handleReferenceFiles = useCallback(
     async (files: FileList | null) => {
       if (!files) return;

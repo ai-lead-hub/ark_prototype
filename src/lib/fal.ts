@@ -4,6 +4,9 @@ import {
   blobFromBytes,
   downloadBlob,
   extractUrl,
+  fetchWithTimeout,
+  withRetry,
+  readErrorDetails,
 } from "./providers/shared";
 import type { ProviderCallOptions, ProviderCallResult } from "./providers/types";
 
@@ -36,17 +39,21 @@ export async function callFal(
   }
 
   const target = buildProviderUrl(FAL_BASE_URL, endpoint);
-  const response = await fetch(target, {
-    method: "POST",
-    headers: {
-      Authorization: `Key ${key}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
+  const response = await withRetry(() =>
+    fetchWithTimeout(target, {
+      method: "POST",
+      headers: {
+        Authorization: `Key ${key}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+      timeoutMs: 600000, // 10m timeout for generation requests
+    })
+  );
 
   if (!response.ok) {
-    throw new Error(`FAL request failed (${response.status})`);
+    const errorDetails = await readErrorDetails(response);
+    throw new Error(`FAL request failed (${response.status}): ${errorDetails}`);
   }
 
   const contentType = response.headers.get("content-type") ?? "";

@@ -219,6 +219,7 @@ const jsonSpecs =
               "kling-2.1-pro": "kling/v2-1-pro",
               "wan-2.2-turbo": "wan/2-2-a14b-image-to-video-turbo",
               "seedance-pro": "bytedance/v1-pro-image-to-video",
+              "kling-v2-6-pro": "kling-2.6/image-to-video",
             };
 
             const kieModel = kieModelMap[model.id];

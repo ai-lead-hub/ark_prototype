@@ -46,7 +46,29 @@ Models are defined in `src/lib/models.json` (Video) and `src/lib/image-models.ts
 -   **API Client:** `src/lib/api/files.ts` provides methods to list files, upload assets, and manage workspaces.
 -   **Streaming:** The server supports HTTP Range requests for efficient video playback.
 
+## ✨ Recommended Models
+
+### For Images:
+-   **flux-2-pro** - Professional quality, detailed
+-   **nano-banana-edit** - Creative and artistic
+-   **kling-o1** - High-quality image generation
+
 ## 🛠️ Development Workflows
+
+### Upscaling Images
+
+Make your images higher quality:
+
+1.  **Select the upscale model** ("seedvr-image-upscale")
+2.  **Upload your image** - Drag and drop the file you want to enhance
+3.  **Choose settings:**
+    -   Upscale factor (2x, 4x)
+4.  **Click Generate** ⬆️
+
+### Upscaling Videos
+1.  **Select a video** in the file browser
+2.  **Click Upscale** in the preview pane controls
+3.  The video will be upscaled (2x default) and saved to the same folder
 
 ### Adding a New Video Model
 1.  Open `src/lib/models.json`.

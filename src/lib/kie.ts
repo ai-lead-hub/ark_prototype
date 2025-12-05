@@ -8,6 +8,9 @@ import {
   getValueAtPath,
   isRecord,
   resolveTaskConfig,
+  fetchWithTimeout,
+  withRetry,
+  readErrorDetails,
 } from "./providers/shared";
 import type {
   ProviderCallOptions,
@@ -31,13 +34,16 @@ export async function getKieCredits(): Promise<number> {
 
   const target = buildProviderUrl(KIE_BASE_URL, "/api/v1/chat/credit");
   try {
-    const response = await fetch(target, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${key}`,
-        "Content-Type": "application/json",
-      },
-    });
+    const response = await withRetry(() =>
+      fetchWithTimeout(target, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${key}`,
+          "Content-Type": "application/json",
+        },
+        timeoutMs: 10000, // Short timeout for credits check
+      })
+    );
 
     if (!response.ok) {
       console.warn(`Failed to fetch credits: ${response.status}`);
@@ -66,17 +72,21 @@ export async function callKie(
   }
 
   const target = buildProviderUrl(KIE_BASE_URL, endpoint);
-  const response = await fetch(target, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
+  const response = await withRetry(() =>
+    fetchWithTimeout(target, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+      timeoutMs: 600000, // 10m timeout for generation requests
+    })
+  );
 
   if (!response.ok) {
-    throw new Error(`KIE request failed (${response.status})`);
+    const errorDetails = await readErrorDetails(response);
+    throw new Error(`KIE request failed (${response.status}): ${errorDetails}`);
   }
 
   const contentType = response.headers.get("content-type") ?? "";
@@ -268,17 +278,21 @@ async function fetchTaskStatus(
     target = `${target}${separator}${queryString.replace(/^\?/, "")}`;
   }
 
-  const response = await fetch(target, {
-    method,
-    headers: {
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-    },
-    body: method === "POST" ? JSON.stringify(body) : undefined,
-  });
+  const response = await withRetry(() =>
+    fetchWithTimeout(target, {
+      method,
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+      },
+      body: method === "POST" ? JSON.stringify(body) : undefined,
+      timeoutMs: 15000, // 15s timeout for status checks
+    })
+  );
 
   if (!response.ok) {
-    throw new Error(`KIE task status request failed (${response.status}).`);
+    const errorDetails = await readErrorDetails(response);
+    throw new Error(`KIE task status request failed (${response.status}): ${errorDetails}`);
   }
 
   const data = (await response.json()) as Record<string, unknown>;

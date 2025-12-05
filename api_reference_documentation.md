@@ -459,6 +459,31 @@ This document provides a comprehensive reference for all video generation and im
 
 ---
 
+### Topaz Video Upscale
+**Provider**: FAL
+**Endpoint**: `fal-ai/topaz/upscale/video`
+**Pricing**: Varies (FAL)
+
+#### Parameters
+| Parameter | Type | Required | Description | Example |
+| :--- | :--- | :--- | :--- | :--- |
+| `video_url` | string | Yes | Input video URL. | `"https://..."` |
+| `upscale_factor` | number | No | Upscale factor (e.g., `2`). Default: `2`. | `2` |
+| `target_fps` | number | No | Target FPS (e.g., `60`). | `60` |
+| `output_format` | string | No | Output format: `"mp4"`, `"mov"`. Default: `"mp4"`. | `"mp4"` |
+
+#### Request Example
+```json
+{
+  "video_url": "https://storage.googleapis.com/falserverless/example_inputs/video.mp4",
+  "upscale_factor": 2,
+  "target_fps": 60,
+  "output_format": "mp4"
+}
+```
+
+---
+
 
 ### Fal VLM (Prompt Expansion)
 **Provider**: FAL

@@ -90,20 +90,20 @@ Images are simpler - just describe what you want!
 -   "A minimalist logo for a tech startup, modern and clean"
 -   "An oil painting of a Victorian mansion in autumn"
 
-### Upscaling Videos
+### Upscaling Images
 
-Make your videos higher quality:
+Make your images higher quality:
 
-1.  **Select an upscale model** (e.g., "flashvsr-video-upscaler")
-2.  **Upload your video** - Drag and drop the file you want to enhance
+1.  **Select the upscale model** ("seedvr-image-upscale")
+2.  **Upload your image** - Drag and drop the file you want to enhance
 3.  **Choose settings:**
-    -   Upscale factor (2x or 4x)
-    -   Target resolution (1080p, 2K, or 4K)
-    -   Output format (MP4, WebM, etc.)
+    -   Upscale factor (2x, 4x)
 4.  **Click Generate** ⬆️
 
-**Note about ByteDance Upscaler:**
-This model requires input videos to be 1080p or smaller. If you upload a larger video (e.g., 4K), the app will automatically resize it for you before upscaling. You'll see a "Resizing..." status message during this process.
+### Upscaling Videos
+1.  **Select a video** in the file browser
+2.  **Click Upscale** in the preview pane controls
+3.  The video will be upscaled (2x default) and saved to the same folder
 
 ## 💡 Tips & Tricks
 
@@ -128,9 +128,9 @@ This model requires input videos to be 1080p or smaller. If you upload a larger 
 -   **ltx-2-fast** - Fast, good for testing ideas
 
 **For Images:**
--   **flux-kontext-pro** - Professional quality, detailed
--   **imagen-4-fast** - Quick iterations
--   **nano-banana** - Creative and artistic
+-   **flux-2-pro** - Professional quality, detailed
+-   **nano-banana-edit** - Creative and artistic
+-   **kling-o1** - High-quality image generation
 
 ### Organizing Your Files
 

@@ -208,4 +208,74 @@ export function resolveTaskConfig(
   };
 }
 
+export async function fetchWithTimeout(
+  url: string,
+  options: RequestInit & { timeoutMs?: number } = {}
+): Promise<Response> {
+  const { timeoutMs = 30000, ...fetchOptions } = options;
+
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      ...fetchOptions,
+      signal: controller.signal,
+    });
+    return response;
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error(`Request timed out after ${timeoutMs}ms`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(id);
+  }
+}
+
+export async function withRetry<T>(
+  fn: () => Promise<T>,
+  retries = 3,
+  delayMs = 1000,
+  backoffFactor = 2
+): Promise<T> {
+  let lastError: unknown;
+  let currentDelay = delayMs;
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (attempt < retries) {
+        await delay(currentDelay);
+        currentDelay *= backoffFactor;
+      }
+    }
+  }
+
+  throw lastError;
+}
+
+export async function readErrorDetails(response: Response): Promise<string> {
+  try {
+    const text = await response.text();
+    try {
+      const json = JSON.parse(text);
+      return (
+        json.message ||
+        json.msg ||
+        json.error ||
+        json.detail ||
+        (json.data && json.data.message) ||
+        text.slice(0, 200)
+      );
+    } catch {
+      return text.slice(0, 200) || response.statusText;
+    }
+  } catch {
+    return response.statusText;
+  }
+}
+
 export type { ProviderCallResult, TaskPollingConfig };

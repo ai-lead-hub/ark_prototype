@@ -18,7 +18,7 @@ export type UiOption = { value: string; label: string };
 
 export type ImageJob = {
   prompt: string;
-  imageUrls: string[];
+  imageUrls: string[]; // Order matters for some models (e.g. Flux uses the first image as primary reference)
   size?: ImageSizePreset | { width: number; height: number };
   seed?: number;
   temporal?: boolean;

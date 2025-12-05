@@ -20,29 +20,33 @@ export type UpscaleModelSpec = {
 
 export const UPSCALE_MODELS: UpscaleModelSpec[] = [
   {
-    id: "topaz-image-upscale",
-    label: "Topaz Image Upscale",
-    endpoint: "/api/v1/jobs/createTask",
-    provider: "kie",
-    pricing: "$0.05/image",
+    id: "seedvr-image-upscale",
+    label: "SeedVR Image Upscaler",
+    endpoint: "fal-ai/seedvr/upscale/image",
+    provider: "fal",
+    pricing: "Varies",
     kind: "image",
-    taskConfig: {
-      statusEndpoint: "/api/v1/jobs/recordInfo",
-      statePath: "data.state",
-      successStates: ["success"],
-      failureStates: ["fail"],
-      responseDataPath: "data",
-      pollIntervalMs: 4000,
-    },
     mapInput: ({ sourceUrl, upscaleFactor }) => ({
-      model: "topaz/image-upscale",
-      input: {
-        image_url: sourceUrl,
-        upscale_factor:
-          upscaleFactor && ["1", "2", "4", "8"].includes(upscaleFactor)
-            ? upscaleFactor
-            : "2",
-      },
+      image_url: sourceUrl,
+      upscale_mode: "factor",
+      upscale_factor: Number(upscaleFactor || "2"),
+      target_resolution: "1080p",
+      noise_scale: 0.1,
+      output_format: "png",
+    }),
+  },
+  {
+    id: "topaz-video-upscale",
+    label: "Topaz Video Upscale",
+    endpoint: "fal-ai/topaz/upscale/video",
+    provider: "fal",
+    pricing: "Varies",
+    kind: "video",
+    mapInput: ({ sourceUrl, upscaleFactor }) => ({
+      video_url: sourceUrl,
+      upscale_factor: Number(upscaleFactor || "2"),
+      target_fps: 60,
+      output_format: "mp4",
     }),
   },
 ];
