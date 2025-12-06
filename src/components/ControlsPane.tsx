@@ -933,9 +933,17 @@ export default function ControlsPane() {
             log("Downloading result...");
             try {
               downloadedBlob = await downloadBlob(result.url);
-            } catch (e) {
-              log(`Failed to download result: ${e instanceof Error ? e.message : String(e)}`);
-              // Continue without blob
+            } catch {
+              log(`Download failed, retrying in 2s...`);
+              // Retry once after 2 seconds
+              try {
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                downloadedBlob = await downloadBlob(result.url);
+                log("Retry successful!");
+              } catch (retryError) {
+                log(`Failed to download result: ${retryError instanceof Error ? retryError.message : String(retryError)}`);
+                // Continue without blob
+              }
             }
           } else {
             throw new Error("No result from model");
@@ -971,7 +979,7 @@ export default function ControlsPane() {
             await uploadFile(connection, relPath, downloadedBlob);
             await refreshTree(relPath);
           } else if (!downloadedBlob) {
-            log("Result available at URL (could not save to workspace).");
+            log(`Result available at URL (could not save to workspace): ${resultUrlStr}`);
           }
 
           return resultUrlStr || "Blob saved";

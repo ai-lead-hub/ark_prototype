@@ -43,9 +43,44 @@ await server.register(multipart, {
   limits: { fileSize: MAX_SIZE_BYTES },
 });
 
+// Serve static frontend files in production
+const distPath = path.resolve(process.cwd(), "dist");
+try {
+  await fs.access(distPath);
+  const fastifyStatic = (await import("@fastify/static")).default;
+  await server.register(fastifyStatic, {
+    root: distPath,
+    prefix: "/",
+    decorateReply: false,
+  });
+  // SPA fallback - serve index.html for non-API routes
+  server.setNotFoundHandler(async (request, reply) => {
+    if (request.url.startsWith("/files") || request.url.startsWith("/health") ||
+      request.url.startsWith("/workspaces") || request.url.startsWith("/publish") ||
+      request.url.startsWith("/log")) {
+      return reply.code(404).send({ error: "Not found" });
+    }
+    return reply.sendFile("index.html");
+  });
+  console.log("✓ Serving frontend from dist/");
+} catch {
+  console.log("ℹ No dist/ folder found, API-only mode");
+}
+
+// API routes that require auth
+const API_ROUTES = ["/files", "/workspaces", "/publish", "/log"];
+
 server.addHook("onRequest", async (request, reply) => {
+  // Get just the pathname (without query string)
+  const pathname = request.url.split("?")[0];
+
   // Health endpoint is public
-  if (request.url === "/health") return;
+  if (pathname === "/health") return;
+
+  // Skip auth for static files (non-API routes)  
+  const isApiRoute = API_ROUTES.some(route => pathname.startsWith(route));
+  if (!isApiRoute) return;
+
   if (!API_TOKEN) return;
   const auth = request.headers.authorization;
   const expected = `Bearer ${API_TOKEN}`;
