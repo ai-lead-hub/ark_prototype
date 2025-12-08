@@ -227,6 +227,14 @@ const jsonSpecs =
               throw new Error(`Unknown KIE model: ${model.id}`);
             }
 
+            // Special handling for Kling 2.6 - image_urls must be an array
+            if (model.id === "kling-v2-6-pro") {
+              const imageUrl = input.image_urls;
+              if (typeof imageUrl === "string") {
+                input.image_urls = [imageUrl];
+              }
+            }
+
             return {
               model: kieModel,
               input,

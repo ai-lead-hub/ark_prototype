@@ -387,7 +387,7 @@
         },
         "seeds": {
           "type": "number",
-          "default": 1569,
+          "default": 15690,
           "hidden": true
         },
         "enableTranslation": {
@@ -472,7 +472,7 @@
         },
         "seeds": {
           "type": "number",
-          "default": 1569,
+          "default": 15690,
           "hidden": true
         },
         "enableTranslation": {
@@ -519,7 +519,7 @@
           "type": "string",
           "required": true
         },
-        "image_url": {
+        "image_urls": {
           "type": "string",
           "required": true,
           "uiKey": "start_frame_url"
@@ -531,11 +531,6 @@
             "10"
           ],
           "default": "5"
-        },
-        "negative_prompt": {
-          "type": "string",
-          "default": "blur, distort, and low quality",
-          "hidden": true
         },
         "sound": {
           "type": "boolean",
