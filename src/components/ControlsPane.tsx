@@ -836,6 +836,7 @@ export default function ControlsPane() {
           reference_image_urls: referenceUploads.map(r => r.url).filter(Boolean) as string[],
           seed: 1569,
           duration: paramValues.duration as string | number | undefined,
+          generate_audio: paramValues.generate_audio as boolean | undefined,
         };
 
         payload = buildModelInput(modelSpec, unifiedPayload);
