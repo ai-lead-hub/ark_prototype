@@ -457,13 +457,28 @@ const startServer = async () => {
 };
 
 // Graceful shutdown
+let isShuttingDown = false;
 const shutdown = async (signal) => {
+  if (isShuttingDown) {
+    console.log("Force exiting...");
+    process.exit(1);
+  }
+  isShuttingDown = true;
   console.log(`\n${signal} received, shutting down gracefully...`);
+
+  // Force exit after 5 seconds if close hangs
+  const forceExitTimeout = setTimeout(() => {
+    console.log("Server close timed out, forcing exit...");
+    process.exit(1);
+  }, 5000);
+
   try {
     await server.close();
+    clearTimeout(forceExitTimeout);
     console.log("Server closed successfully.");
     process.exit(0);
   } catch (error) {
+    clearTimeout(forceExitTimeout);
     console.error("Error during shutdown:", error);
     process.exit(1);
   }

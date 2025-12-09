@@ -466,7 +466,9 @@ export default function FileBrowser() {
                             preload="metadata"
                             muted
                             loop
-                            onMouseEnter={(e) => e.currentTarget.play()}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.play();
+                            }}
                             onMouseLeave={(e) => {
                               e.currentTarget.pause();
                               e.currentTarget.currentTime = 0;
