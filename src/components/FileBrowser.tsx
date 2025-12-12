@@ -1,10 +1,17 @@
-import { useMemo, useState, useEffect, useRef } from "react";
+import { useCallback, useMemo, useState, useEffect, useRef } from "react";
 import { useCatalog } from "../state/useCatalog";
 import { useQueue } from "../state/queue";
 import { type FileEntry, getFileUrl, publishFile, uploadFile } from "../lib/api/files";
 import { FILE_ENTRY_MIME } from "../lib/drag-constants";
 import { Spinner } from "./ui/Spinner";
 import { PublishModal } from "./PublishModal";
+import {
+  listGenerations,
+  listPrompts,
+  recordFileMetadata,
+  type GenerationListEntry,
+  type PromptHistoryEntry,
+} from "../lib/api/meta";
 
 const IMAGE_EXTS = ["png", "jpg", "jpeg", "webp"];
 const VIDEO_EXTS = ["mp4", "webm", "mov", "mkv"];
@@ -21,6 +28,14 @@ export default function FileBrowser() {
     [jobs]);
 
   const [viewMode, setViewMode] = useState<"list" | "grid">("grid");
+  const [showRecent, setShowRecent] = useState(false);
+  const [recentTab, setRecentTab] = useState<"generations" | "prompts">("generations");
+  const [recentGenerations, setRecentGenerations] = useState<GenerationListEntry[]>([]);
+  const [recentBusy, setRecentBusy] = useState(false);
+  const [recentError, setRecentError] = useState<string | null>(null);
+  const [recentPrompts, setRecentPrompts] = useState<PromptHistoryEntry[]>([]);
+  const [promptBusy, setPromptBusy] = useState(false);
+  const [promptError, setPromptError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [publishingEntry, setPublishingEntry] = useState<FileEntry | null>(null);
   const [editName, setEditName] = useState("");
@@ -29,6 +44,7 @@ export default function FileBrowser() {
   const [fileDims, setFileDims] = useState<Record<string, { w: number; h: number }>>({});
   const [operationLoading, setOperationLoading] = useState<string | null>(null);
   const playingVideoRef = useRef<HTMLVideoElement | null>(null);
+  const sentFileMetaRef = useRef<Set<string>>(new Set());
 
   const getFileStyles = (entry: FileEntry) => {
     if (entry.mime.startsWith("image/")) {
@@ -203,6 +219,56 @@ export default function FileBrowser() {
 
   const [visibleCount, setVisibleCount] = useState(30);
 
+  const formatAgo = (timestamp: number) => {
+    const deltaMs = Date.now() - timestamp;
+    const s = Math.floor(deltaMs / 1000);
+    if (!Number.isFinite(s) || s < 0) return "";
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m}m`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h`;
+    const d = Math.floor(h / 24);
+    return `${d}d`;
+  };
+
+  const refreshRecent = useCallback(async () => {
+    if (!connection) return;
+    setRecentBusy(true);
+    setRecentError(null);
+    try {
+      const entries = await listGenerations(connection, { limit: 30 });
+      setRecentGenerations(entries);
+    } catch (error) {
+      setRecentError(error instanceof Error ? error.message : "Failed to load recent generations");
+    } finally {
+      setRecentBusy(false);
+    }
+  }, [connection]);
+
+  const refreshPrompts = useCallback(async () => {
+    if (!connection) return;
+    setPromptBusy(true);
+    setPromptError(null);
+    try {
+      const entries = await listPrompts(connection, { limit: 30 });
+      setRecentPrompts(entries);
+    } catch (error) {
+      setPromptError(error instanceof Error ? error.message : "Failed to load prompt history");
+    } finally {
+      setPromptBusy(false);
+    }
+  }, [connection]);
+
+  useEffect(() => {
+    if (!showRecent) return;
+    if (recentTab === "prompts") {
+      void refreshPrompts();
+    } else {
+      void refreshRecent();
+    }
+  }, [showRecent, recentTab, refreshRecent, refreshPrompts, connection?.workspaceId]);
+
   // Reset visible count when filters change
   useEffect(() => {
     setVisibleCount(30);
@@ -250,6 +316,29 @@ export default function FileBrowser() {
         if (!currentIds.has(id)) {
           delete next[id];
           changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [entries]);
+
+  // Seed fileDims from server-provided metadata when available
+  useEffect(() => {
+    setFileDims((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const entry of entries) {
+        if (
+          typeof entry.width === "number" &&
+          typeof entry.height === "number" &&
+          entry.width > 0 &&
+          entry.height > 0
+        ) {
+          const existing = next[entry.id];
+          if (!existing || existing.w !== entry.width || existing.h !== entry.height) {
+            next[entry.id] = { w: entry.width, h: entry.height };
+            changed = true;
+          }
         }
       }
       return changed ? next : prev;
@@ -322,6 +411,16 @@ export default function FileBrowser() {
         </div>
         <button
           type="button"
+          onClick={() => setShowRecent((v) => !v)}
+          className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${showRecent
+            ? "border-sky-400 text-sky-200"
+            : "border-white/10 text-slate-200 hover:border-sky-400 hover:text-sky-200"
+            }`}
+        >
+          Recent
+        </button>
+        <button
+          type="button"
           onClick={() => {
             refreshTree();
             setVisibleCount(30);
@@ -331,6 +430,138 @@ export default function FileBrowser() {
           Refresh
         </button>
       </div>
+
+      {showRecent ? (
+        <div className="rounded-lg border border-white/10 bg-black/20">
+          <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
+            <div className="flex items-center gap-2">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Recent
+              </div>
+              <div className="flex items-center rounded-md border border-white/10 bg-black/30 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setRecentTab("generations")}
+                  className={`rounded px-2 py-1 text-[11px] font-semibold transition ${recentTab === "generations"
+                    ? "bg-white/10 text-white"
+                    : "text-slate-400 hover:text-white"
+                    }`}
+                >
+                  Generations
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRecentTab("prompts")}
+                  className={`rounded px-2 py-1 text-[11px] font-semibold transition ${recentTab === "prompts"
+                    ? "bg-white/10 text-white"
+                    : "text-slate-400 hover:text-white"
+                    }`}
+                >
+                  Prompts
+                </button>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => void (recentTab === "prompts" ? refreshPrompts() : refreshRecent())}
+              disabled={recentTab === "prompts" ? promptBusy : recentBusy}
+              className="rounded-md border border-white/10 px-2 py-1 text-[11px] font-semibold text-slate-200 transition hover:border-sky-400 hover:text-sky-200 disabled:opacity-60"
+            >
+              {recentTab === "prompts"
+                ? promptBusy
+                  ? "..."
+                  : "Refresh"
+                : recentBusy
+                  ? "..."
+                  : "Refresh"}
+            </button>
+          </div>
+
+          {recentTab === "generations" ? (
+            recentError ? (
+              <div className="px-3 py-2 text-xs text-rose-300">
+                {recentError}
+              </div>
+            ) : recentGenerations.length === 0 ? (
+              <div className="px-3 py-3 text-xs text-slate-400">
+                No generation history yet for this workspace.
+              </div>
+            ) : (
+              <div className="max-h-[220px] overflow-auto">
+                {recentGenerations.map((gen) => {
+                  const fileName =
+                    gen.output_rel_path.split("/").filter(Boolean).pop() ?? gen.output_rel_path;
+                  const subtitle =
+                    gen.model_id || gen.category || "generation";
+                  const title = gen.prompt?.trim()
+                    ? gen.prompt.trim()
+                    : fileName;
+
+                  return (
+                    <button
+                      key={gen.id}
+                      type="button"
+                      onClick={() => {
+                        const match = entries.find((e) => e.relPath === gen.output_rel_path);
+                        if (match) {
+                          select(match);
+                        } else {
+                          void refreshTree(gen.output_rel_path);
+                        }
+                      }}
+                      className="flex w-full items-center gap-3 border-b border-white/5 px-3 py-2 text-left text-xs transition hover:bg-white/5"
+                    >
+                      <div className="w-10 shrink-0 text-[10px] font-semibold text-slate-400">
+                        {formatAgo(gen.created_at)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-semibold text-slate-100">
+                          {title}
+                        </div>
+                        <div className="truncate text-[10px] text-slate-400">
+                          {subtitle} · {gen.output_rel_path}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )
+          ) : promptError ? (
+            <div className="px-3 py-2 text-xs text-rose-300">
+              {promptError}
+            </div>
+          ) : recentPrompts.length === 0 ? (
+            <div className="px-3 py-3 text-xs text-slate-400">
+              No prompt history yet for this workspace.
+            </div>
+          ) : (
+            <div className="max-h-[220px] overflow-auto">
+              {recentPrompts.map((p) => (
+                <button
+                  key={String(p.id)}
+                  type="button"
+                  onClick={() => setQuery(p.prompt)}
+                  className="flex w-full items-center gap-3 border-b border-white/5 px-3 py-2 text-left text-xs transition hover:bg-white/5"
+                  title="Click to set search"
+                >
+                  <div className="w-10 shrink-0 text-[10px] font-semibold text-slate-400">
+                    {formatAgo(p.created_at)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-semibold text-slate-100">
+                      {p.prompt}
+                    </div>
+                    <div className="truncate text-[10px] text-slate-400">
+                      {p.model_id || "prompt"}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : null}
 
       <div className="flex flex-wrap gap-1 text-xs">
         <button
@@ -487,28 +718,79 @@ export default function FileBrowser() {
 	                            }}
 	                            onLoadedMetadata={(e) => {
 	                              const target = e.target as HTMLVideoElement;
+	                              const dims = { w: target.videoWidth, h: target.videoHeight };
 	                              setFileDims((prev) => ({
 	                                ...prev,
-	                                [entry.id]: { w: target.videoWidth, h: target.videoHeight },
+	                                [entry.id]: dims,
 	                              }));
+	                              if (
+	                                typeof entry.width === "number" &&
+	                                typeof entry.height === "number" &&
+	                                entry.width === dims.w &&
+	                                entry.height === dims.h &&
+	                                (Number.isFinite(target.duration) && target.duration > 0
+	                                  ? typeof entry.duration === "number" &&
+	                                  Number.isFinite(entry.duration) &&
+	                                  Math.abs(entry.duration - target.duration) < 0.25
+	                                  : true)
+	                              ) {
+	                                return;
+	                              }
+	                              const key = entry.id;
+	                              if (!sentFileMetaRef.current.has(key)) {
+	                                sentFileMetaRef.current.add(key);
+	                                void recordFileMetadata(connection, {
+	                                  workspaceId: connection.workspaceId,
+	                                  relPath: entry.relPath,
+	                                  width: dims.w,
+	                                  height: dims.h,
+	                                  duration:
+	                                    Number.isFinite(target.duration) && target.duration > 0
+	                                      ? target.duration
+	                                      : undefined,
+	                                }).catch(() => {
+	                                  sentFileMetaRef.current.delete(key);
+	                                });
+	                              }
 	                            }}
 	                          />
 	                        ) : (
 	                          <img
 	                            src={url}
 	                            alt={entry.name}
-                            className="h-full w-full object-cover"
-                            loading="lazy"
-                            onLoad={(e) => {
-                              const target = e.target as HTMLImageElement;
-                              setFileDims((prev) => ({
-                                ...prev,
-                                [entry.id]: { w: target.naturalWidth, h: target.naturalHeight },
-                              }));
-                            }}
-                          />
-                        )}
-                      </div>
+	                            className="h-full w-full object-cover"
+	                            loading="lazy"
+	                            onLoad={(e) => {
+	                              const target = e.target as HTMLImageElement;
+	                              const dims = { w: target.naturalWidth, h: target.naturalHeight };
+	                              setFileDims((prev) => ({
+	                                ...prev,
+	                                [entry.id]: dims,
+	                              }));
+	                              if (
+	                                typeof entry.width === "number" &&
+	                                typeof entry.height === "number" &&
+	                                entry.width === dims.w &&
+	                                entry.height === dims.h
+	                              ) {
+	                                return;
+	                              }
+	                              const key = entry.id;
+	                              if (!sentFileMetaRef.current.has(key)) {
+	                                sentFileMetaRef.current.add(key);
+	                                void recordFileMetadata(connection, {
+	                                  workspaceId: connection.workspaceId,
+	                                  relPath: entry.relPath,
+	                                  width: dims.w,
+	                                  height: dims.h,
+	                                }).catch(() => {
+	                                  sentFileMetaRef.current.delete(key);
+	                                });
+	                              }
+	                            }}
+	                          />
+	                        )}
+	                      </div>
                       <div className="absolute inset-x-0 bottom-0 bg-black/60 p-2 backdrop-blur-sm">
                         {editingId === entry.id ? (
                           <input

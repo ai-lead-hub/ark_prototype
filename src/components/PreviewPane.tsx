@@ -10,7 +10,7 @@ import { callModelEndpoint, getProviderEnvVar, getProviderKey, type ModelProvide
 import { buildFilename } from "../lib/filename";
 import { uploadToFal } from "../lib/fal";
 import { compressImage } from "../lib/image-utils";
-import { recordGeneration } from "../lib/api/meta";
+import { recordFileMetadata, recordGeneration } from "../lib/api/meta";
 
 
 
@@ -28,6 +28,7 @@ export default function PreviewPane({
   } = useCatalog();
   const { addJob } = useQueue();
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const sentFileMetaRef = useRef<Set<string>>(new Set());
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -253,7 +254,39 @@ export default function PreviewPane({
         ? video.duration
         : null
     );
-  }, []);
+
+    if (connection && selected?.kind === "file") {
+      const key = `${connection.workspaceId}:${selected.relPath}`;
+      if (!sentFileMetaRef.current.has(key)) {
+        sentFileMetaRef.current.add(key);
+        const duration =
+          Number.isFinite(video.duration) && video.duration > 0
+            ? video.duration
+            : undefined;
+        const hasSameDims =
+          typeof selected.width === "number" &&
+          typeof selected.height === "number" &&
+          selected.width === video.videoWidth &&
+          selected.height === video.videoHeight;
+        const hasSameDuration =
+          duration === undefined ||
+          (typeof selected.duration === "number" &&
+            Number.isFinite(selected.duration) &&
+            Math.abs(selected.duration - duration) < 0.25);
+
+        if (hasSameDims && hasSameDuration) return;
+        void recordFileMetadata(connection, {
+          workspaceId: connection.workspaceId,
+          relPath: selected.relPath,
+          width: video.videoWidth,
+          height: video.videoHeight,
+          duration,
+        }).catch(() => {
+          sentFileMetaRef.current.delete(key);
+        });
+      }
+    }
+  }, [connection, selected]);
 
   const handleCropSave = useCallback(async () => {
     if (!connection || !selected || selected.kind !== "file" || !selected.mime.startsWith("image")) {

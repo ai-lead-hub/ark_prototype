@@ -7,6 +7,9 @@ export type FileEntry = {
   size: number;
   mtime: number;
   mime: string;
+  width?: number;
+  height?: number;
+  duration?: number;
 };
 
 export type WorkspaceConnection = {

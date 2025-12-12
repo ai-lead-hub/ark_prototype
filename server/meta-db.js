@@ -46,6 +46,30 @@ export async function createMetaDb(dbPath) {
   `);
 
   db.exec(`
+    CREATE TABLE IF NOT EXISTS files (
+      workspace_id TEXT NOT NULL,
+      rel_path TEXT NOT NULL,
+      name TEXT NOT NULL,
+      ext TEXT,
+      size INTEGER,
+      mtime INTEGER,
+      mime TEXT,
+      width INTEGER,
+      height INTEGER,
+      duration REAL,
+      PRIMARY KEY (workspace_id, rel_path)
+    );
+  `);
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_files_workspace_mtime
+    ON files (workspace_id, mtime DESC);
+  `);
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_files_workspace_ext
+    ON files (workspace_id, ext);
+  `);
+
+  db.exec(`
     CREATE TABLE IF NOT EXISTS prompt_history (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       created_at INTEGER NOT NULL,
@@ -65,7 +89,7 @@ export async function createMetaDb(dbPath) {
   `);
 
   const insertGenerationStmt = db.prepare(`
-    INSERT INTO generations (
+    INSERT OR REPLACE INTO generations (
       id,
       created_at,
       workspace_id,
@@ -94,6 +118,80 @@ export async function createMetaDb(dbPath) {
       $seed,
       $payload_json
     );
+  `);
+
+  const upsertFileStmt = db.prepare(`
+    INSERT INTO files (
+      workspace_id,
+      rel_path,
+      name,
+      ext,
+      size,
+      mtime,
+      mime,
+      width,
+      height,
+      duration
+    ) VALUES (
+      $workspace_id,
+      $rel_path,
+      $name,
+      $ext,
+      $size,
+      $mtime,
+      $mime,
+      $width,
+      $height,
+      $duration
+    )
+    ON CONFLICT (workspace_id, rel_path) DO UPDATE SET
+      name = excluded.name,
+      ext = excluded.ext,
+      size = excluded.size,
+      mtime = excluded.mtime,
+      mime = excluded.mime,
+      width = COALESCE(excluded.width, files.width),
+      height = COALESCE(excluded.height, files.height),
+      duration = COALESCE(excluded.duration, files.duration);
+  `);
+
+  const updateFileDimsStmt = db.prepare(`
+    UPDATE files
+    SET
+      width = COALESCE($width, width),
+      height = COALESCE($height, height),
+      duration = COALESCE($duration, duration)
+    WHERE workspace_id = $workspace_id AND rel_path = $rel_path;
+  `);
+
+  const deleteFilePrefixStmt = db.prepare(`
+    DELETE FROM files
+    WHERE workspace_id = $workspace_id
+      AND (rel_path = $rel_path OR rel_path LIKE $prefix ESCAPE '\\');
+  `);
+
+  const deleteGenerationsPrefixStmt = db.prepare(`
+    DELETE FROM generations
+    WHERE workspace_id = $workspace_id
+      AND (output_rel_path = $rel_path OR output_rel_path LIKE $prefix ESCAPE '\\');
+  `);
+
+  const listFilesStmt = db.prepare(`
+    SELECT
+      rel_path,
+      name,
+      ext,
+      size,
+      mtime,
+      mime,
+      width,
+      height,
+      duration
+    FROM files
+    WHERE workspace_id = $workspace_id
+    ORDER BY mtime DESC
+    LIMIT $limit
+    OFFSET $offset;
   `);
 
   const insertPromptStmt = db.prepare(`
@@ -164,7 +262,7 @@ export async function createMetaDb(dbPath) {
         endpoint: input.endpoint ?? null,
         prompt: input.prompt ?? null,
         seed: input.seed ?? null,
-        payload_json: input.payloadJson ?? null,
+      payload_json: input.payloadJson ?? null,
       });
       return { id, createdAt };
     },
@@ -176,6 +274,61 @@ export async function createMetaDb(dbPath) {
       return listGenerationsStmt.all({
         workspace_id: workspaceId,
         limit: safeLimit,
+      });
+    },
+    upsertFile(input) {
+      upsertFileStmt.run({
+        workspace_id: input.workspaceId,
+        rel_path: input.relPath,
+        name: input.name,
+        ext: input.ext ?? null,
+        size: Number.isFinite(input.size) ? input.size : null,
+        mtime: Number.isFinite(input.mtime) ? input.mtime : null,
+        mime: input.mime ?? null,
+        width: Number.isFinite(input.width) ? input.width : null,
+        height: Number.isFinite(input.height) ? input.height : null,
+        duration: Number.isFinite(input.duration) ? input.duration : null,
+      });
+    },
+    updateFileDims(input) {
+      updateFileDimsStmt.run({
+        workspace_id: input.workspaceId,
+        rel_path: input.relPath,
+        width: Number.isFinite(input.width) ? input.width : null,
+        height: Number.isFinite(input.height) ? input.height : null,
+        duration: Number.isFinite(input.duration) ? input.duration : null,
+      });
+    },
+    deletePathPrefix({ workspaceId, relPath }) {
+      const escaped = relPath
+        .replace(/\\/g, "\\\\")
+        .replace(/%/g, "\\%")
+        .replace(/_/g, "\\_");
+      const prefix = `${escaped}/%`;
+      deleteFilePrefixStmt.run({
+        workspace_id: workspaceId,
+        rel_path: relPath,
+        prefix,
+      });
+      deleteGenerationsPrefixStmt.run({
+        workspace_id: workspaceId,
+        rel_path: relPath,
+        prefix,
+      });
+    },
+    listFiles({ workspaceId, limit = 50000, offset = 0 }) {
+      const safeLimit =
+        typeof limit === "number" && Number.isFinite(limit)
+          ? Math.max(1, Math.min(limit, 50000))
+          : 50000;
+      const safeOffset =
+        typeof offset === "number" && Number.isFinite(offset)
+          ? Math.max(0, Math.min(offset, 50000))
+          : 0;
+      return listFilesStmt.all({
+        workspace_id: workspaceId,
+        limit: safeLimit,
+        offset: safeOffset,
       });
     },
     insertPrompt(input) {
@@ -199,6 +352,24 @@ export async function createMetaDb(dbPath) {
         limit: safeLimit,
       });
     },
+    transaction(fn) {
+      db.exec("BEGIN");
+      try {
+        const result = fn();
+        db.exec("COMMIT");
+        return result;
+      } catch (error) {
+        try {
+          db.exec("ROLLBACK");
+        } catch {
+          // ignore
+        }
+        throw error;
+      }
+    },
+    close() {
+      db.close();
+    },
+    _db: db,
   };
 }
-

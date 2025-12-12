@@ -213,6 +213,48 @@ server.get("/files", async (request, reply) => {
     }
   })();
   if (!workspaceId) return;
+  if (metaDb) {
+    try {
+      const limitRaw =
+        request.query &&
+          typeof request.query === "object" &&
+          "limit" in request.query
+          ? request.query.limit
+          : undefined;
+      const offsetRaw =
+        request.query &&
+          typeof request.query === "object" &&
+          "offset" in request.query
+          ? request.query.offset
+          : undefined;
+      const limitNum = Number(limitRaw);
+      const offsetNum = Number(offsetRaw);
+      const limit = Number.isFinite(limitNum) ? limitNum : 50000;
+      const offset = Number.isFinite(offsetNum) ? offsetNum : 0;
+
+      const rows = metaDb.listFiles({ workspaceId, limit, offset });
+      if (rows.length) {
+        const entries = rows.map((row) => ({
+          id: row.rel_path,
+          name: row.name,
+          relPath: row.rel_path,
+          kind: "file",
+          ext: row.ext ?? "",
+          size: row.size ?? 0,
+          mtime: row.mtime ?? 0,
+          mime: row.mime ?? "application/octet-stream",
+          width: row.width ?? undefined,
+          height: row.height ?? undefined,
+          duration: row.duration ?? undefined,
+        }));
+        return { entries };
+      }
+    } catch (error) {
+      request.log.error(error);
+      // Fall through to filesystem listing
+    }
+  }
+
   const workspaceDir = await ensureWorkspaceDir(workspaceId);
   const entries = await readTree(workspaceDir);
   entries.sort((a, b) => b.mtime - a.mtime);
@@ -318,6 +360,23 @@ server.post("/files", async (request, reply) => {
         savedStats = stats;
         savedMime = mime.lookup(ext) || "application/octet-stream";
         fileProcessed = true;
+
+        if (metaDb) {
+          try {
+            const name = path.basename(relPath);
+            metaDb.upsertFile({
+              workspaceId,
+              relPath,
+              name,
+              ext,
+              size: stats.size,
+              mtime: stats.mtimeMs,
+              mime: savedMime,
+            });
+          } catch (error) {
+            request.log.warn(error, "Failed to update file index");
+          }
+        }
       } else {
         // Handle fields if needed, but we prefer query params now
         if (part.type === "field") {
@@ -355,6 +414,13 @@ server.delete("/files", async (request, reply) => {
   const targetPath = toSafePath(workspaceDir, relPath);
   try {
     await fs.rm(targetPath, { recursive: true, force: true });
+    if (metaDb) {
+      try {
+        metaDb.deletePathPrefix({ workspaceId: workspace, relPath });
+      } catch (error) {
+        request.log.warn(error, "Failed to update file index on delete");
+      }
+    }
     reply.send({ ok: true });
   } catch {
     reply.code(404).send({ error: "Not found" });
@@ -378,6 +444,25 @@ server.patch("/files", async (request, reply) => {
 
   try {
     await fs.rename(oldFullPath, newFullPath);
+    if (metaDb) {
+      try {
+        const stats = await fs.stat(newFullPath);
+        const ext = (path.extname(newPath).replace(".", "") || "").toLowerCase();
+        const mimeType = mime.lookup(ext) || "application/octet-stream";
+        metaDb.deletePathPrefix({ workspaceId: workspace, relPath });
+        metaDb.upsertFile({
+          workspaceId: workspace,
+          relPath: newPath,
+          name: path.basename(newPath),
+          ext,
+          size: stats.size,
+          mtime: stats.mtimeMs,
+          mime: mimeType,
+        });
+      } catch (error) {
+        request.log.warn(error, "Failed to update file index on rename");
+      }
+    }
     reply.send({ ok: true });
   } catch (error) {
     reply.code(500).send({ error: error.message ?? "Rename failed" });
@@ -457,6 +542,58 @@ server.get("/meta/health", async () => ({
   ok: Boolean(metaDb),
   dbPath: metaDb?.dbPath ?? null,
 }));
+
+server.post("/meta/files", async (request, reply) => {
+  if (!metaDb) return reply.code(503).send({ error: "Metadata DB unavailable" });
+  const body = request.body ?? {};
+
+  let workspaceId;
+  let relPath;
+  try {
+    workspaceId = sanitizeWorkspaceId(body.workspace ?? body.workspaceId);
+    relPath = sanitizeRelPath(body.relPath ?? body.path);
+  } catch (error) {
+    return reply.code(400).send({ error: error.message ?? "Invalid input" });
+  }
+
+  const width = typeof body.width === "number" ? body.width : undefined;
+  const height = typeof body.height === "number" ? body.height : undefined;
+  const duration = typeof body.duration === "number" ? body.duration : undefined;
+
+  const workspaceDir = await ensureWorkspaceDir(workspaceId);
+  const absPath = toSafePath(workspaceDir, relPath);
+  let stats;
+  try {
+    stats = await fs.stat(absPath);
+    if (!stats.isFile()) {
+      return reply.code(404).send({ error: "Not found" });
+    }
+  } catch {
+    return reply.code(404).send({ error: "Not found" });
+  }
+
+  const ext = (path.extname(relPath).replace(".", "") || "").toLowerCase();
+  const mimeType = mime.lookup(ext) || "application/octet-stream";
+
+  try {
+    metaDb.upsertFile({
+      workspaceId,
+      relPath,
+      name: path.basename(relPath),
+      ext,
+      size: stats.size,
+      mtime: stats.mtimeMs,
+      mime: mimeType,
+      width,
+      height,
+      duration,
+    });
+    return reply.send({ ok: true });
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ error: "Failed to update file metadata" });
+  }
+});
 
 server.post("/meta/generations", async (request, reply) => {
   if (!metaDb) return reply.code(503).send({ error: "Metadata DB unavailable" });
