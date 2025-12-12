@@ -8,6 +8,7 @@ import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import mime from "mime-types";
 import dotenv from "dotenv";
+import { createMetaDb } from "./meta-db.js";
 
 // Load env files: .env.server overrides .env if both exist.
 dotenv.config({
@@ -23,6 +24,9 @@ const PORT = Number(process.env.FILE_API_PORT ?? 8787);
 const STORAGE_ROOT = path.resolve(
   process.env.FILE_STORAGE_ROOT ?? path.join(process.cwd(), "data")
 );
+const META_DB_PATH = path.resolve(
+  process.env.FILE_META_DB_PATH ?? path.join(STORAGE_ROOT, "metadata.sqlite")
+);
 const API_TOKEN = process.env.FILE_API_TOKEN;
 const CORS_ORIGIN = process.env.FILE_API_CORS_ORIGIN ?? "http://localhost:5173";
 const MAX_SIZE_MB = Number(process.env.FILE_MAX_SIZE_MB ?? 1024);
@@ -34,6 +38,14 @@ const server = Fastify({
 });
 
 await fs.mkdir(STORAGE_ROOT, { recursive: true });
+
+let metaDb = null;
+try {
+  metaDb = await createMetaDb(META_DB_PATH);
+  console.log(`✓ Metadata DB: ${metaDb.dbPath}`);
+} catch (error) {
+  console.warn("⚠ Metadata DB disabled:", error?.message ?? error);
+}
 
 await server.register(cors, {
   origin: CORS_ORIGIN === "*" ? true : CORS_ORIGIN,
@@ -57,7 +69,7 @@ try {
   server.setNotFoundHandler(async (request, reply) => {
     if (request.url.startsWith("/files") || request.url.startsWith("/health") ||
       request.url.startsWith("/workspaces") || request.url.startsWith("/publish") ||
-      request.url.startsWith("/log")) {
+      request.url.startsWith("/log") || request.url.startsWith("/meta")) {
       return reply.code(404).send({ error: "Not found" });
     }
     return reply.sendFile("index.html");
@@ -68,7 +80,7 @@ try {
 }
 
 // API routes that require auth
-const API_ROUTES = ["/files", "/workspaces", "/publish", "/log"];
+const API_ROUTES = ["/files", "/workspaces", "/publish", "/log", "/meta"];
 
 server.addHook("onRequest", async (request, reply) => {
   // Get just the pathname (without query string)
@@ -233,6 +245,10 @@ server.get("/files/:workspace/*", async (request, reply) => {
   }
 
   const mimeType = mime.lookup(absPath) || "application/octet-stream";
+  const isVideo = typeof mimeType === "string" && mimeType.startsWith("video/");
+  const cacheControl = isVideo
+    ? "no-store"
+    : "private, max-age=0, must-revalidate";
   const range = request.headers.range;
 
   if (range) {
@@ -253,12 +269,14 @@ server.get("/files/:workspace/*", async (request, reply) => {
     reply.header("Accept-Ranges", "bytes");
     reply.header("Content-Length", chunkSize);
     reply.header("Content-Type", mimeType);
+    reply.header("Cache-Control", cacheControl);
     return reply.send(createReadStream(absPath, { start, end }));
   }
 
   reply.header("Accept-Ranges", "bytes");
   reply.header("Content-Length", stats.size);
   reply.header("Content-Type", mimeType);
+  reply.header("Cache-Control", cacheControl);
   return reply.send(createReadStream(absPath));
 });
 
@@ -432,6 +450,173 @@ server.post("/log", async (request, reply) => {
   } catch (error) {
     request.log.error(error);
     return reply.code(500).send({ error: "Failed to write log" });
+  }
+});
+
+server.get("/meta/health", async () => ({
+  ok: Boolean(metaDb),
+  dbPath: metaDb?.dbPath ?? null,
+}));
+
+server.post("/meta/generations", async (request, reply) => {
+  if (!metaDb) return reply.code(503).send({ error: "Metadata DB unavailable" });
+  const body = request.body ?? {};
+  let workspaceId;
+  let outputRelPath;
+  try {
+    workspaceId = sanitizeWorkspaceId(body.workspace ?? body.workspaceId);
+    outputRelPath = sanitizeRelPath(body.outputRelPath ?? body.output?.relPath);
+  } catch (error) {
+    return reply.code(400).send({ error: error.message ?? "Invalid input" });
+  }
+
+  const category = body.category;
+  const safeCategory =
+    category === "image" || category === "video" || category === "upscale"
+      ? category
+      : null;
+
+  const prompt =
+    typeof body.prompt === "string" && body.prompt.trim()
+      ? body.prompt.slice(0, 50_000)
+      : null;
+
+  const payloadJson =
+    body.payload !== undefined ? JSON.stringify(body.payload).slice(0, 1_000_000) : null;
+
+  try {
+    const result = metaDb.insertGeneration({
+      workspaceId,
+      outputRelPath,
+      outputMime:
+        typeof body.outputMime === "string"
+          ? body.outputMime
+          : typeof body.output?.mime === "string"
+            ? body.output.mime
+            : null,
+      outputSize:
+        typeof body.outputSize === "number"
+          ? body.outputSize
+          : typeof body.output?.size === "number"
+            ? body.output.size
+            : null,
+      category: safeCategory,
+      modelId: typeof body.modelId === "string" ? body.modelId : null,
+      provider: typeof body.provider === "string" ? body.provider : null,
+      endpoint: typeof body.endpoint === "string" ? body.endpoint : null,
+      prompt,
+      seed: body.seed !== undefined ? String(body.seed) : null,
+      payloadJson,
+    });
+    return reply.send({ ok: true, id: result.id, createdAt: result.createdAt });
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ error: "Failed to write generation metadata" });
+  }
+});
+
+server.get("/meta/generations", async (request, reply) => {
+  if (!metaDb) return reply.code(503).send({ error: "Metadata DB unavailable" });
+  const workspaceRaw =
+    request.query &&
+      typeof request.query === "object" &&
+      "workspace" in request.query
+      ? request.query.workspace
+      : undefined;
+  const limitRaw =
+    request.query &&
+      typeof request.query === "object" &&
+      "limit" in request.query
+      ? request.query.limit
+      : undefined;
+
+  let workspaceId;
+  try {
+    workspaceId = sanitizeWorkspaceId(workspaceRaw);
+  } catch (error) {
+    return reply.code(400).send({ error: error.message ?? "Invalid workspace" });
+  }
+
+  const limitNum = Number(limitRaw);
+  const limit = Number.isFinite(limitNum) ? limitNum : 50;
+
+  try {
+    const rows = metaDb.listGenerations({ workspaceId, limit });
+    return reply.send({ entries: rows });
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ error: "Failed to list generation metadata" });
+  }
+});
+
+server.post("/meta/prompts", async (request, reply) => {
+  if (!metaDb) return reply.code(503).send({ error: "Metadata DB unavailable" });
+  const body = request.body ?? {};
+
+  const prompt =
+    typeof body.prompt === "string" && body.prompt.trim()
+      ? body.prompt.slice(0, 50_000)
+      : null;
+  if (!prompt) return reply.code(400).send({ error: "Missing prompt" });
+
+  let workspaceId = null;
+  try {
+    if (body.workspace ?? body.workspaceId) {
+      workspaceId = sanitizeWorkspaceId(body.workspace ?? body.workspaceId);
+    }
+  } catch (error) {
+    return reply.code(400).send({ error: error.message ?? "Invalid workspace" });
+  }
+
+  const tab = body.tab === "image" || body.tab === "video" ? body.tab : null;
+
+  try {
+    const result = metaDb.insertPrompt({
+      workspaceId,
+      tab,
+      modelId: typeof body.modelId === "string" ? body.modelId : null,
+      prompt,
+    });
+    return reply.send({ ok: true, createdAt: result.createdAt });
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ error: "Failed to write prompt history" });
+  }
+});
+
+server.get("/meta/prompts", async (request, reply) => {
+  if (!metaDb) return reply.code(503).send({ error: "Metadata DB unavailable" });
+  const workspaceRaw =
+    request.query &&
+      typeof request.query === "object" &&
+      "workspace" in request.query
+      ? request.query.workspace
+      : undefined;
+  const limitRaw =
+    request.query &&
+      typeof request.query === "object" &&
+      "limit" in request.query
+      ? request.query.limit
+      : undefined;
+
+  let workspaceId = null;
+  if (workspaceRaw !== undefined) {
+    try {
+      workspaceId = sanitizeWorkspaceId(workspaceRaw);
+    } catch (error) {
+      return reply.code(400).send({ error: error.message ?? "Invalid workspace" });
+    }
+  }
+
+  const limitNum = Number(limitRaw);
+  const limit = Number.isFinite(limitNum) ? limitNum : 50;
+
+  try {
+    const entries = metaDb.listPrompts({ workspaceId, limit });
+    return reply.send({ entries });
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ error: "Failed to list prompt history" });
   }
 });
 

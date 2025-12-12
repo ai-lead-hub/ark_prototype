@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useCatalog } from "../state/useCatalog";
 import { useQueue } from "../state/queue";
 import { type FileEntry, getFileUrl, publishFile, uploadFile } from "../lib/api/files";
@@ -28,6 +28,7 @@ export default function FileBrowser() {
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [fileDims, setFileDims] = useState<Record<string, { w: number; h: number }>>({});
   const [operationLoading, setOperationLoading] = useState<string | null>(null);
+  const playingVideoRef = useRef<HTMLVideoElement | null>(null);
 
   const getFileStyles = (entry: FileEntry) => {
     if (entry.mime.startsWith("image/")) {
@@ -429,14 +430,14 @@ export default function FileBrowser() {
                   const url = getFileUrl(connection, entry.relPath, { includeToken: true });
                   const styles = getFileStyles(entry);
 
-                  return (
-                    <button
-                      key={entry.id}
-                      type="button"
-                      draggable={entry.kind === "file"}
-                      onDragStart={(event) => {
-                        if (entry.kind === "file") {
-                          event.dataTransfer.setData(
+	                  return (
+	                    <button
+	                      key={entry.id}
+	                      type="button"
+	                      draggable={entry.kind === "file"}
+	                      onDragStart={(event) => {
+	                        if (entry.kind === "file") {
+	                          event.dataTransfer.setData(
                             FILE_ENTRY_MIME,
                             JSON.stringify({
                               workspaceId: connection.workspaceId,
@@ -453,38 +454,49 @@ export default function FileBrowser() {
                       onKeyDown={(e) => handleKeyDown(e, entry)}
                       className={`group relative flex aspect-square flex-col overflow-hidden rounded-lg border transition focus:outline-none focus:ring-2 focus:ring-sky-500 ${selected?.id === entry.id ? "ring-2 ring-yellow-500" : ""
                         } ${styles.grid}`}
-                    >
-                      <div className="flex-1 w-full overflow-hidden bg-white/5">
-                        {entry.kind === "dir" ? (
-                          <div className="flex h-full items-center justify-center text-4xl">
-                            📁
-                          </div>
-                        ) : entry.mime.startsWith("video") ? (
-                          <video
-                            src={url}
-                            className="h-full w-full object-cover"
-                            preload="metadata"
-                            muted
-                            loop
-                            onMouseEnter={(e) => {
-                              e.currentTarget.play();
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.pause();
-                              e.currentTarget.currentTime = 0;
-                            }}
-                            onLoadedMetadata={(e) => {
-                              const target = e.target as HTMLVideoElement;
-                              setFileDims((prev) => ({
-                                ...prev,
-                                [entry.id]: { w: target.videoWidth, h: target.videoHeight },
-                              }));
-                            }}
-                          />
-                        ) : (
-                          <img
-                            src={url}
-                            alt={entry.name}
+	                    >
+	                      <div className="flex-1 w-full overflow-hidden bg-white/5">
+	                        {entry.kind === "dir" ? (
+	                          <div className="flex h-full items-center justify-center text-4xl">
+	                            📁
+	                          </div>
+	                        ) : entry.mime.startsWith("video") ? (
+	                          <video
+	                            src={url}
+	                            className="h-full w-full object-cover"
+	                            preload="metadata"
+	                            muted
+	                            loop
+	                            playsInline
+	                            onMouseEnter={(e) => {
+	                              const target = e.currentTarget;
+	                              if (playingVideoRef.current && playingVideoRef.current !== target) {
+	                                playingVideoRef.current.pause();
+	                                playingVideoRef.current.currentTime = 0;
+	                              }
+	                              playingVideoRef.current = target;
+	                              void target.play();
+	                            }}
+	                            onMouseLeave={(e) => {
+	                              const target = e.currentTarget;
+	                              target.pause();
+	                              target.currentTime = 0;
+	                              if (playingVideoRef.current === target) {
+	                                playingVideoRef.current = null;
+	                              }
+	                            }}
+	                            onLoadedMetadata={(e) => {
+	                              const target = e.target as HTMLVideoElement;
+	                              setFileDims((prev) => ({
+	                                ...prev,
+	                                [entry.id]: { w: target.videoWidth, h: target.videoHeight },
+	                              }));
+	                            }}
+	                          />
+	                        ) : (
+	                          <img
+	                            src={url}
+	                            alt={entry.name}
                             className="h-full w-full object-cover"
                             loading="lazy"
                             onLoad={(e) => {

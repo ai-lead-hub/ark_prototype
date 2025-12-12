@@ -37,6 +37,7 @@ import {
   uploadFile,
   type WorkspaceConnection,
 } from "../lib/api/files";
+import { recordGeneration, recordPrompt } from "../lib/api/meta";
 import { useQueue } from "../state/queue";
 import { expandPrompt } from "../lib/llm";
 
@@ -58,8 +59,29 @@ type ReferenceUpload = {
   preview: string;
   name: string;
   uploading: boolean;
+  createdAt?: number;
   error?: string;
 };
+
+const UPLOAD_URL_TTL_MS = 30 * 60 * 1000;
+const IMAGE_REFERENCE_UPLOADS_KEY = "controls_imageReferenceUploads_v1";
+const VIDEO_START_FRAME_KEY = "controls_videoStartFrame_v1";
+const VIDEO_END_FRAME_KEY = "controls_videoEndFrame_v1";
+
+type PersistedReferenceUpload = {
+  id: string;
+  url: string;
+  name: string;
+  createdAt: number;
+};
+
+type PersistedUploadSlot = {
+  url: string;
+  name?: string;
+  createdAt: number;
+};
+
+type UploadSlotState = UploadSlot & { createdAt?: number };
 
 
 
@@ -105,13 +127,80 @@ export default function ControlsPane() {
   const [history, setHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
 
-  const [startFrame, setStartFrame] = useState<UploadSlot>({ uploading: false });
+  const loadPersistedImageReferenceUploads = (): ReferenceUpload[] => {
+    if (typeof localStorage === "undefined") return [];
+    try {
+      const raw = localStorage.getItem(IMAGE_REFERENCE_UPLOADS_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed)) return [];
+      const now = Date.now();
+      return (parsed as PersistedReferenceUpload[])
+        .filter(
+          (entry) =>
+            entry &&
+            typeof entry.id === "string" &&
+            typeof entry.url === "string" &&
+            typeof entry.name === "string" &&
+            typeof entry.createdAt === "number" &&
+            now - entry.createdAt <= UPLOAD_URL_TTL_MS
+        )
+        .slice(0, 5)
+        .map((entry) => ({
+          id: entry.id,
+          url: entry.url,
+          preview: entry.url,
+          name: entry.name,
+          uploading: false,
+          createdAt: entry.createdAt,
+        }));
+    } catch {
+      return [];
+    }
+  };
 
-  const [endFrame, setEndFrame] = useState<UploadSlot>({ uploading: false });
+  const loadPersistedUploadSlot = (storageKey: string): UploadSlotState => {
+    if (typeof localStorage === "undefined") return { uploading: false };
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (!raw) return { uploading: false };
+      const parsed = JSON.parse(raw) as unknown;
+      if (
+        !parsed ||
+        typeof parsed !== "object" ||
+        typeof (parsed as PersistedUploadSlot).url !== "string" ||
+        typeof (parsed as PersistedUploadSlot).createdAt !== "number"
+      ) {
+        return { uploading: false };
+      }
+      const slot = parsed as PersistedUploadSlot;
+      if (Date.now() - slot.createdAt > UPLOAD_URL_TTL_MS) {
+        return { uploading: false };
+      }
+      return {
+        uploading: false,
+        url: slot.url,
+        preview: slot.url,
+        name: slot.name,
+        createdAt: slot.createdAt,
+      };
+    } catch {
+      return { uploading: false };
+    }
+  };
 
+  const [startFrame, setStartFrame] = useState<UploadSlotState>(() =>
+    loadPersistedUploadSlot(VIDEO_START_FRAME_KEY)
+  );
 
+  const [endFrame, setEndFrame] = useState<UploadSlotState>(() =>
+    loadPersistedUploadSlot(VIDEO_END_FRAME_KEY)
+  );
 
-  const [referenceUploads, setReferenceUploads] = useState<ReferenceUpload[]>([]);
+  const [imageReferenceUploads, setImageReferenceUploads] = useState<ReferenceUpload[]>(
+    () => loadPersistedImageReferenceUploads()
+  );
+  const [videoReferenceUploads, setVideoReferenceUploads] = useState<ReferenceUpload[]>([]);
 
   const [aspectRatio, setAspectRatio] = usePersistentState("aspectRatio", "16:9");
   const [imageResolution, setImageResolution] = useState("1K");
@@ -140,6 +229,116 @@ export default function ControlsPane() {
   >("paramValues", {});
 
   const modelKind = activeTab;
+  const referenceUploads = modelKind === "image" ? imageReferenceUploads : videoReferenceUploads;
+  const setReferenceUploads = modelKind === "image" ? setImageReferenceUploads : setVideoReferenceUploads;
+
+  useEffect(() => {
+    if (typeof localStorage === "undefined") return;
+    try {
+      const now = Date.now();
+      const persisted = imageReferenceUploads
+        .filter(
+          (entry) =>
+            entry.url &&
+            typeof entry.createdAt === "number" &&
+            now - entry.createdAt <= UPLOAD_URL_TTL_MS
+        )
+        .slice(0, 5)
+        .map(
+          (entry): PersistedReferenceUpload => ({
+            id: entry.id,
+            url: entry.url as string,
+            name: entry.name,
+            createdAt: entry.createdAt as number,
+          })
+        );
+      localStorage.setItem(IMAGE_REFERENCE_UPLOADS_KEY, JSON.stringify(persisted));
+    } catch {
+      // Ignore storage errors
+    }
+  }, [imageReferenceUploads]);
+
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      setStartFrame((prev) => {
+        if (
+          prev.url &&
+          typeof prev.createdAt === "number" &&
+          Date.now() - prev.createdAt > UPLOAD_URL_TTL_MS
+        ) {
+          return { uploading: false };
+        }
+        return prev;
+      });
+      setEndFrame((prev) => {
+        if (
+          prev.url &&
+          typeof prev.createdAt === "number" &&
+          Date.now() - prev.createdAt > UPLOAD_URL_TTL_MS
+        ) {
+          return { uploading: false };
+        }
+        return prev;
+      });
+      setImageReferenceUploads((prev) => {
+        const now = Date.now();
+        const next = prev.filter(
+          (entry) =>
+            !(
+              entry.url &&
+              typeof entry.createdAt === "number" &&
+              now - entry.createdAt > UPLOAD_URL_TTL_MS
+            )
+        );
+        return next.length === prev.length ? prev : next;
+      });
+    }, 30_000);
+    return () => clearInterval(intervalId);
+  }, []);
+
+  useEffect(() => {
+    if (typeof localStorage === "undefined") return;
+    try {
+      if (
+        startFrame.url &&
+        typeof startFrame.createdAt === "number" &&
+        Date.now() - startFrame.createdAt <= UPLOAD_URL_TTL_MS
+      ) {
+        const payload: PersistedUploadSlot = {
+          url: startFrame.url,
+          name: startFrame.name,
+          createdAt: startFrame.createdAt,
+        };
+        localStorage.setItem(VIDEO_START_FRAME_KEY, JSON.stringify(payload));
+      } else {
+        localStorage.removeItem(VIDEO_START_FRAME_KEY);
+      }
+    } catch {
+      // Ignore storage errors
+    }
+  }, [startFrame.url, startFrame.name, startFrame.createdAt]);
+
+  useEffect(() => {
+    if (typeof localStorage === "undefined") return;
+    try {
+      if (
+        endFrame.url &&
+        typeof endFrame.createdAt === "number" &&
+        Date.now() - endFrame.createdAt <= UPLOAD_URL_TTL_MS
+      ) {
+        const payload: PersistedUploadSlot = {
+          url: endFrame.url,
+          name: endFrame.name,
+          createdAt: endFrame.createdAt,
+        };
+        localStorage.setItem(VIDEO_END_FRAME_KEY, JSON.stringify(payload));
+      } else {
+        localStorage.removeItem(VIDEO_END_FRAME_KEY);
+      }
+    } catch {
+      // Ignore storage errors
+    }
+  }, [endFrame.url, endFrame.name, endFrame.createdAt]);
 
   const selectedVideo = useMemo(() => {
     if (modelKind !== "video") return undefined;
@@ -170,12 +369,14 @@ export default function ControlsPane() {
       : Math.min(selectedImage?.maxRefs ?? 0, 5);
 
   const registerPreview = useCallback((url: string) => {
-    previewRegistry.current.add(url);
+    if (url.startsWith("blob:")) {
+      previewRegistry.current.add(url);
+    }
     return url;
   }, []);
 
   const releasePreview = useCallback((url?: string) => {
-    if (url && previewRegistry.current.has(url)) {
+    if (url && url.startsWith("blob:") && previewRegistry.current.has(url)) {
       URL.revokeObjectURL(url);
       previewRegistry.current.delete(url);
     }
@@ -296,37 +497,42 @@ export default function ControlsPane() {
     [connection]
   );
 
-  const handleStartFrameSelect = useCallback(
-    async (file: File | null) => {
-      setStartFrame((previous) => {
-        if (previous.preview) {
-          releasePreview(previous.preview);
-        }
-        return { uploading: false };
-      });
-      if (!file) return;
+	  const handleStartFrameSelect = useCallback(
+	    async (file: File | null) => {
+	      setStartFrame((previous) => {
+	        if (previous.preview) {
+	          releasePreview(previous.preview);
+	        }
+	        return { uploading: false };
+	      });
+	      if (!file) return;
 
-      // Register preview immediately with original file for responsiveness
-      const preview = registerPreview(URL.createObjectURL(file));
-      setStartFrame({
-        uploading: true,
-        preview,
-        name: file.name,
-      });
+	      // Register preview immediately with original file for responsiveness
+	      const preview = registerPreview(URL.createObjectURL(file));
+	      setStartFrame({
+	        uploading: true,
+	        preview,
+	        name: file.name,
+	      });
 
-      try {
-        const compressed = await compressImage(file);
-        const url = await uploadToFal(compressed);
-        setStartFrame((prev) => ({
-          ...prev,
-          uploading: false,
-          url,
-          error: null,
-        }));
-      } catch (error) {
-        setStartFrame((prev) => ({
-          ...prev,
-          uploading: false,
+	      try {
+	        const compressed = await compressImage(file);
+	        const url = await uploadToFal(compressed);
+	        setStartFrame((prev) => ({
+	          ...prev,
+	          uploading: false,
+	          url,
+	          preview: url,
+	          createdAt: Date.now(),
+	          error: null,
+	        }));
+	        setTimeout(() => {
+	          releasePreviewRef.current(preview);
+	        }, 0);
+	      } catch (error) {
+	        setStartFrame((prev) => ({
+	          ...prev,
+	          uploading: false,
           error: error instanceof Error ? error.message : "Upload failed.",
         }));
       }
@@ -334,36 +540,41 @@ export default function ControlsPane() {
     [registerPreview, releasePreview]
   );
 
-  const handleEndFrameSelect = useCallback(
-    async (file: File | null) => {
-      setEndFrame((previous) => {
-        if (previous.preview) {
-          releasePreview(previous.preview);
-        }
-        return { uploading: false };
-      });
-      if (!file) return;
+	  const handleEndFrameSelect = useCallback(
+	    async (file: File | null) => {
+	      setEndFrame((previous) => {
+	        if (previous.preview) {
+	          releasePreview(previous.preview);
+	        }
+	        return { uploading: false };
+	      });
+	      if (!file) return;
 
-      const preview = registerPreview(URL.createObjectURL(file));
-      setEndFrame({
-        uploading: true,
-        preview,
-        name: file.name,
-      });
+	      const preview = registerPreview(URL.createObjectURL(file));
+	      setEndFrame({
+	        uploading: true,
+	        preview,
+	        name: file.name,
+	      });
 
-      try {
-        const compressed = await compressImage(file);
-        const url = await uploadToFal(compressed);
-        setEndFrame((prev) => ({
-          ...prev,
-          uploading: false,
-          url,
-          error: null,
-        }));
-      } catch (error) {
-        setEndFrame((prev) => ({
-          ...prev,
-          uploading: false,
+	      try {
+	        const compressed = await compressImage(file);
+	        const url = await uploadToFal(compressed);
+	        setEndFrame((prev) => ({
+	          ...prev,
+	          uploading: false,
+	          url,
+	          preview: url,
+	          createdAt: Date.now(),
+	          error: null,
+	        }));
+	        setTimeout(() => {
+	          releasePreviewRef.current(preview);
+	        }, 0);
+	      } catch (error) {
+	        setEndFrame((prev) => ({
+	          ...prev,
+	          uploading: false,
           error: error instanceof Error ? error.message : "Upload failed.",
         }));
       }
@@ -417,10 +628,20 @@ export default function ControlsPane() {
           setReferenceUploads((prev) =>
             prev.map((item) =>
               item.id === entry.id
-                ? { ...item, uploading: false, url }
+                ? {
+                  ...item,
+                  uploading: false,
+                  url,
+                  preview: url,
+                  createdAt: Date.now(),
+                  error: undefined,
+                }
                 : item
             )
           );
+          setTimeout(() => {
+            releasePreviewRef.current(entry.preview);
+          }, 0);
         } catch (error) {
           console.error("Ref upload error:", error);
           setReferenceUploads((prev) =>
@@ -437,7 +658,7 @@ export default function ControlsPane() {
         }
       }
     },
-    [referenceUploads, registerPreview, setStatus]
+    [referenceUploads.length, registerPreview, setReferenceUploads, setStatus]
   );
 
   const removeReference = useCallback(
@@ -450,16 +671,28 @@ export default function ControlsPane() {
         return prev.filter((entry) => entry.id !== id);
       });
     },
-    []
+    [setReferenceUploads]
   );
-
-  const uploadedReferenceUrls = referenceUploads
-    .filter((entry) => Boolean(entry.url))
-    .map((entry) => entry.url as string);
 
   const imageReferenceUrls =
     modelKind === "image" && (selectedImage?.maxRefs ?? 0) !== 0
-      ? uploadedReferenceUrls
+      ? imageReferenceUploads
+        .filter(
+          (entry) =>
+            Boolean(entry.url) &&
+            typeof entry.createdAt === "number" &&
+            Date.now() - entry.createdAt <= UPLOAD_URL_TTL_MS
+        )
+        .map((entry) => entry.url as string)
+        .slice(0, Math.min(selectedImage?.maxRefs ?? 5, 5))
+      : [];
+
+  const videoReferenceUrls =
+    modelKind === "video" && referenceLimit > 0
+      ? videoReferenceUploads
+        .filter((entry) => Boolean(entry.url))
+        .map((entry) => entry.url as string)
+        .slice(0, referenceLimit)
       : [];
 
 
@@ -488,9 +721,11 @@ export default function ControlsPane() {
   );
 
   const pendingUploads =
-    startFrame.uploading ||
-    endFrame.uploading ||
-    referenceUploads.some((entry) => entry.uploading);
+    modelKind === "video"
+      ? startFrame.uploading ||
+      endFrame.uploading ||
+      videoReferenceUploads.some((entry) => entry.uploading)
+      : imageReferenceUploads.some((entry) => entry.uploading);
 
   useEffect(() => {
     if (!selectedVideo) {
@@ -532,31 +767,6 @@ export default function ControlsPane() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedVideo]);
-
-  useEffect(() => {
-    const limit =
-      modelKind === "video"
-        ? videoReferenceConfig?.max ?? 0
-        : selectedImage?.maxRefs ?? 0;
-
-    if (referenceUploads.length > limit) {
-      setReferenceUploads((prev) => {
-        const kept = prev.slice(0, limit);
-        const removed = prev.slice(limit);
-        removed.forEach((entry) => {
-          if (entry.preview) {
-            releasePreviewRef.current(entry.preview);
-          }
-        });
-        return kept;
-      });
-    }
-  }, [
-    modelKind,
-    selectedImage?.maxRefs,
-    videoReferenceConfig?.max,
-    referenceUploads.length,
-  ]);
 
   const handleParamChange = (
     key: string,
@@ -676,7 +886,18 @@ export default function ControlsPane() {
 
     setHistory(nextHistory);
     setHistoryIndex(nextHistory.length - 1);
-  }, [history, historyIndex]);
+    if (connection && newPrompt.trim()) {
+      const modelId = modelKey.replace(/^(image:|video:|upscale:)/, "");
+      void recordPrompt(connection, {
+        workspaceId: connection.workspaceId,
+        tab: modelKind,
+        modelId,
+        prompt: newPrompt.trim(),
+      }).catch(() => {
+        // best-effort
+      });
+    }
+  }, [history, historyIndex, connection, modelKey, modelKind]);
 
   const undo = useCallback(() => {
     if (historyIndex > 0) {
@@ -754,21 +975,42 @@ export default function ControlsPane() {
 
       // Process standard reference uploads
       for (const ref of referenceUploads) {
+        if (
+          ref.url &&
+          typeof ref.createdAt === "number" &&
+          Date.now() - ref.createdAt > UPLOAD_URL_TTL_MS
+        ) {
+          continue;
+        }
         const result = await processRef(ref);
         if (result) validReferenceUrls.push(result);
       }
 
-      // If in video mode, also check start/end frames
-      if (mode === "video") {
-        if (startFrame.preview || startFrame.url) {
-          const result = await processRef(startFrame);
-          if (result) validReferenceUrls.push(result);
-        }
-        if (endFrame.preview || endFrame.url) {
-          const result = await processRef(endFrame);
-          if (result) validReferenceUrls.push(result);
-        }
-      }
+	      // If in video mode, also check start/end frames
+	      if (mode === "video") {
+	        if (
+	          (startFrame.preview || startFrame.url) &&
+	          !(
+	            startFrame.url &&
+	            typeof startFrame.createdAt === "number" &&
+	            Date.now() - startFrame.createdAt > UPLOAD_URL_TTL_MS
+	          )
+	        ) {
+	          const result = await processRef(startFrame);
+	          if (result) validReferenceUrls.push(result);
+	        }
+	        if (
+	          (endFrame.preview || endFrame.url) &&
+	          !(
+	            endFrame.url &&
+	            typeof endFrame.createdAt === "number" &&
+	            Date.now() - endFrame.createdAt > UPLOAD_URL_TTL_MS
+	          )
+	        ) {
+	          const result = await processRef(endFrame);
+	          if (result) validReferenceUrls.push(result);
+	        }
+	      }
 
       // Save current state before expansion
       addToHistory(prompt);
@@ -790,8 +1032,8 @@ export default function ControlsPane() {
   };
 
 
-  const handleGenerate = async (event: FormEvent) => {
-    event.preventDefault();
+	  const handleGenerate = async (event: FormEvent) => {
+	    event.preventDefault();
 
     if (!connection) {
       setStatus("Please connect to a workspace first.");
@@ -806,10 +1048,10 @@ export default function ControlsPane() {
 
     if (!isMounted.current) return;
 
-    try {
-      const modelId = modelKey.replace(/^(image:|video:|upscale:)/, "");
-      const modelSpec = MODEL_SPECS.find((m) => m.id === modelId);
-      const imageModelSpec = IMAGE_MODELS.find((m) => m.id === modelId);
+	    try {
+	      const modelId = modelKey.replace(/^(image:|video:|upscale:)/, "");
+	      const modelSpec = MODEL_SPECS.find((m) => m.id === modelId);
+	      const imageModelSpec = IMAGE_MODELS.find((m) => m.id === modelId);
 
 
       let endpoint = "";
@@ -820,23 +1062,41 @@ export default function ControlsPane() {
 
       let callOptions: ProviderCallOptions | undefined;
 
-      if (modelSpec) {
-        endpoint = modelSpec.endpoint;
-        category = "video";
-        provider = modelSpec.provider ?? "fal";
-        callOptions = modelSpec.taskConfig ? { taskConfig: modelSpec.taskConfig } : undefined;
+	      if (modelSpec) {
+	        endpoint = modelSpec.endpoint;
+	        category = "video";
+	        provider = modelSpec.provider ?? "fal";
+	        callOptions = modelSpec.taskConfig ? { taskConfig: modelSpec.taskConfig } : undefined;
+	        const startFrameUrl =
+	          startFrame.url &&
+	            supportsStartFrame !== false &&
+	            !(
+	              typeof startFrame.createdAt === "number" &&
+	              Date.now() - startFrame.createdAt > UPLOAD_URL_TTL_MS
+	            )
+	            ? startFrame.url
+	            : undefined;
+	        const endFrameUrl =
+	          endFrame.url &&
+	            supportsEndFrame === true &&
+	            !(
+	              typeof endFrame.createdAt === "number" &&
+	              Date.now() - endFrame.createdAt > UPLOAD_URL_TTL_MS
+	            )
+	            ? endFrame.url
+	            : undefined;
 
-        const unifiedPayload: UnifiedPayload = {
-          modelId,
-          prompt,
-          aspect_ratio: aspectRatio,
-          resolution: imageResolution,
-          start_frame_url: startFrame.url,
-          end_frame_url: endFrame.url,
-          reference_image_urls: referenceUploads.map(r => r.url).filter(Boolean) as string[],
-          seed: 1569,
-          duration: paramValues.duration as string | number | undefined,
-          generate_audio: paramValues.generate_audio as boolean | undefined,
+	        const unifiedPayload: UnifiedPayload = {
+	          modelId,
+	          prompt,
+	          aspect_ratio: aspectRatio,
+	          resolution: imageResolution,
+	          start_frame_url: startFrameUrl,
+	          end_frame_url: endFrameUrl,
+	          reference_image_urls: videoReferenceUrls,
+	          seed: 1569,
+	          duration: paramValues.duration as string | number | undefined,
+	          generate_audio: paramValues.generate_audio as boolean | undefined,
         };
 
         payload = buildModelInput(modelSpec, unifiedPayload);
@@ -876,10 +1136,12 @@ export default function ControlsPane() {
         );
       }
 
-      addJob(
-        category,
-        prompt.trim() || modelId,
-        {
+      addToHistory(prompt);
+
+	      addJob(
+	        category,
+	        prompt.trim() || modelId,
+	        {
           endpoint,
           payload,
           modelId,
@@ -975,13 +1237,30 @@ export default function ControlsPane() {
           const filename = buildFilename(modelId, prompt, extension, seed);
           const relPath = `${dateFolder}/${filename}`;
 
-          if (downloadedBlob && connection) {
-            log("Saving to workspace...");
-            await uploadFile(connection, relPath, downloadedBlob);
-            await refreshTree(relPath);
-          } else if (!downloadedBlob) {
-            log(`Result available at URL (could not save to workspace): ${resultUrlStr}`);
-          }
+	          if (downloadedBlob && connection) {
+	            log("Saving to workspace...");
+	            await uploadFile(connection, relPath, downloadedBlob);
+	            try {
+	              await recordGeneration(connection, {
+	                workspaceId: connection.workspaceId,
+	                outputRelPath: relPath,
+	                outputMime: downloadedBlob.type || undefined,
+	                outputSize: downloadedBlob.size,
+	                category,
+	                modelId,
+	                provider,
+	                endpoint,
+	                prompt,
+	                seed,
+	                payload,
+	              });
+	            } catch (error) {
+	              log(`Metadata write failed: ${error instanceof Error ? error.message : String(error)}`);
+	            }
+	            await refreshTree(relPath);
+	          } else if (!downloadedBlob) {
+	            log(`Result available at URL (could not save to workspace): ${resultUrlStr}`);
+	          }
 
           return resultUrlStr || "Blob saved";
         }

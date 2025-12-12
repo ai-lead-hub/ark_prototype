@@ -10,6 +10,7 @@ import { callModelEndpoint, getProviderEnvVar, getProviderKey, type ModelProvide
 import { buildFilename } from "../lib/filename";
 import { uploadToFal } from "../lib/fal";
 import { compressImage } from "../lib/image-utils";
+import { recordGeneration } from "../lib/api/meta";
 
 
 
@@ -470,6 +471,23 @@ export default function PreviewPane({
           if (downloadedBlob && connection) {
             log("Saving to workspace...");
             await uploadFile(connection, relPath, downloadedBlob);
+            try {
+              await recordGeneration(connection, {
+                workspaceId: connection.workspaceId,
+                outputRelPath: relPath,
+                outputMime: downloadedBlob.type || undefined,
+                outputSize: downloadedBlob.size,
+                category: "upscale",
+                modelId: modelSpec.id,
+                provider,
+                endpoint,
+                prompt: "Upscale",
+                seed: "",
+                payload,
+              });
+            } catch (error) {
+              log(`Metadata write failed: ${error instanceof Error ? error.message : String(error)}`);
+            }
             await refreshTree(relPath);
           } else if (!downloadedBlob) {
             log(`Result available at URL (could not save to workspace): ${resultUrlStr}`);
@@ -724,17 +742,19 @@ export default function PreviewPane({
             <div className="text-sm text-rose-300">{error}</div>
           ) : loading || !previewUrl ? (
             <div className="text-sm text-slate-400">Loading preview…</div>
-          ) : selected.mime.startsWith("video") ? (
-            <video
-              key={previewUrl}
-              ref={videoRef}
-              src={previewUrl}
-              crossOrigin="anonymous"
-              controls
-              draggable={selected.kind === "file"}
-              onDragStart={handleDragStart}
-              onLoadedMetadata={handleMetadataLoaded}
-              onDurationChange={handleMetadataLoaded}
+	          ) : selected.mime.startsWith("video") ? (
+	            <video
+	              key={previewUrl}
+	              ref={videoRef}
+	              src={previewUrl}
+	              crossOrigin="anonymous"
+	              preload="metadata"
+	              playsInline
+	              controls
+	              draggable={selected.kind === "file"}
+	              onDragStart={handleDragStart}
+	              onLoadedMetadata={handleMetadataLoaded}
+	              onDurationChange={handleMetadataLoaded}
               className="h-full w-full rounded-xl border border-white/10 bg-black object-contain"
             />
           ) : (
@@ -750,18 +770,18 @@ export default function PreviewPane({
 
         {!isFullScreen && (
           <>
-            {selected && selected.mime.startsWith("video") ? (
-              <div className="rounded-xl border border-white/10 bg-white/5 p-2 text-xs text-slate-200">
-                <div className="flex items-center justify-between">
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      disabled={!canCapture || captureBusy}
-                      onClick={() => void captureFrame(undefined, "Extracting current frame…")}
-                      className="rounded-lg border border-white/10 px-2 py-1 font-semibold text-slate-100 transition hover:border-sky-400 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {captureBusy ? "..." : "Extract"}
-                    </button>
+	            {selected && selected.mime.startsWith("video") ? (
+	              <div className="rounded-xl border border-white/10 bg-white/5 p-2 text-xs text-slate-200">
+	                <div className="flex items-center justify-between">
+	                  <div className="flex gap-2">
+	                    <button
+	                      type="button"
+	                      disabled={!canCapture || captureBusy}
+	                      onClick={() => void captureFrame(undefined, "Extracting current frame…")}
+	                      className="rounded-lg border border-white/10 px-2 py-1 font-semibold text-slate-100 transition hover:border-sky-400 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
+	                    >
+	                      {captureBusy ? "..." : "Extract"}
+	                    </button>
                     <button
                       type="button"
                       disabled={!canCapture || captureBusy}
@@ -785,23 +805,31 @@ export default function PreviewPane({
                     >
                       End
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (videoRef.current) {
-                          videoRef.current.load();
-                        }
-                      }}
-                      className="rounded-lg border border-white/10 px-2 py-1 font-semibold text-slate-100 transition hover:border-sky-400 hover:text-sky-200"
-                      title="Reload video if stuck"
-                    >
-                      ↻
-                    </button>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => void handleDownload()}
-                    className="rounded-lg border border-white/10 p-1.5 text-slate-100 transition hover:border-sky-400 hover:text-sky-200"
+	                    <button
+	                      type="button"
+	                      onClick={() => {
+	                        if (videoRef.current) {
+	                          videoRef.current.load();
+	                        }
+	                      }}
+	                      className="rounded-lg border border-white/10 px-2 py-1 font-semibold text-slate-100 transition hover:border-sky-400 hover:text-sky-200"
+	                      title="Reload video if stuck"
+	                    >
+	                      ↻
+	                    </button>
+	                    <button
+	                      type="button"
+	                      disabled={upscaleBusy}
+	                      onClick={() => void handleUpscale()}
+	                      className="rounded-lg border border-white/10 px-2 py-1 font-semibold text-slate-100 transition hover:border-sky-400 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
+	                    >
+	                      {upscaleBusy ? "..." : "Upscale"}
+	                    </button>
+	                  </div>
+	                  <button
+	                    type="button"
+	                    onClick={() => void handleDownload()}
+	                    className="rounded-lg border border-white/10 p-1.5 text-slate-100 transition hover:border-sky-400 hover:text-sky-200"
                     title="Download original"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -810,14 +838,19 @@ export default function PreviewPane({
                       <line x1="12" y1="15" x2="12" y2="3" />
                     </svg>
                   </button>
-                </div>
-                {captureStatus ? (
-                  <div className="mt-2 rounded-md border border-white/10 bg-black/40 px-2 py-1 text-[10px]">
-                    {captureStatus}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
+	                </div>
+	                {captureStatus ? (
+	                  <div className="mt-2 rounded-md border border-white/10 bg-black/40 px-2 py-1 text-[10px]">
+	                    {captureStatus}
+	                  </div>
+	                ) : null}
+	                {upscaleStatus ? (
+	                  <div className="mt-2 rounded-md border border-white/10 bg-black/40 px-2 py-1 text-[10px]">
+	                    {upscaleStatus}
+	                  </div>
+	                ) : null}
+	              </div>
+	            ) : null}
 
             {selected && selected.kind === "file" && selected.mime.startsWith("image") ? (
               <div className="space-y-2 rounded-xl border border-white/10 bg-white/5 p-3">
