@@ -11,6 +11,8 @@ import { buildFilename } from "../lib/filename";
 import { uploadToFal } from "../lib/fal";
 import { compressImage } from "../lib/image-utils";
 import { recordFileMetadata, recordGeneration } from "../lib/api/meta";
+import { enqueueControlsAction } from "../lib/controls-store";
+import { recordRecentReference } from "../lib/recent-references";
 
 
 
@@ -42,6 +44,7 @@ export default function PreviewPane({
   const [cropStatus, setCropStatus] = useState<string | null>(null);
   const [upscaleBusy, setUpscaleBusy] = useState(false);
   const [upscaleStatus, setUpscaleStatus] = useState<string | null>(null);
+  const [quickStatus, setQuickStatus] = useState<string | null>(null);
   const cropPresets = [
     { value: "16:9", label: "16:9" },
     { value: "1:1", label: "1:1" },
@@ -77,7 +80,69 @@ export default function PreviewPane({
     setCropBusy(false);
     setUpscaleStatus(null);
     setUpscaleBusy(false);
+    setQuickStatus(null);
   }, [selected?.id]);
+
+  const workspaceKey = connection
+    ? `${connection.apiBase}|${connection.workspaceId}`
+    : "";
+
+  const pushControlsFileAction = useCallback(
+    (type: "useStartFrame" | "useEndFrame" | "addReferenceImage") => {
+      if (!connection || !selected || selected.kind !== "file") return;
+
+      if (!selected.mime.startsWith("image/")) {
+        setQuickStatus("Select an image file to use it as a frame/reference.");
+        setTimeout(() => setQuickStatus(null), 2500);
+        return;
+      }
+
+      enqueueControlsAction({
+        type,
+        file: {
+          workspaceId: connection.workspaceId,
+          relPath: selected.relPath,
+          name: selected.name,
+          mime: selected.mime,
+        },
+      });
+
+      if (workspaceKey) {
+        recordRecentReference(
+          workspaceKey,
+          { relPath: selected.relPath, name: selected.name, mime: selected.mime },
+          type === "useStartFrame"
+            ? "startFrame"
+            : type === "useEndFrame"
+              ? "endFrame"
+              : "reference"
+        );
+      }
+
+      setQuickStatus(
+        type === "useStartFrame"
+          ? "Sent to Controls: Start frame"
+          : type === "useEndFrame"
+            ? "Sent to Controls: End frame"
+            : "Sent to Controls: Reference image"
+      );
+      setTimeout(() => setQuickStatus(null), 2000);
+    },
+    [connection, selected, workspaceKey]
+  );
+
+  const pushRecreateAction = useCallback(() => {
+    if (!connection || !selected || selected.kind !== "file") return;
+
+    enqueueControlsAction({
+      type: "recreateFromOutput",
+      workspaceId: connection.workspaceId,
+      relPath: selected.relPath,
+    });
+
+    setQuickStatus("Loading saved settings in Controls…");
+    setTimeout(() => setQuickStatus(null), 2500);
+  }, [connection, selected]);
 
   const ensureMetadataReady = useCallback(async () => {
     const video = videoRef.current;
@@ -248,6 +313,7 @@ export default function PreviewPane({
   const handleMetadataLoaded = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
+    setLoading(false);
     setCanCapture(true);
     setVideoDuration(
       Number.isFinite(video.duration) && video.duration > 0
@@ -406,7 +472,9 @@ export default function PreviewPane({
     try {
       const provider = modelSpec.provider ?? "fal";
       if (!getProviderKey(provider)) {
-        throw new Error(`Missing ${getProviderEnvVar(provider)} in environment.`);
+        throw new Error(
+          `Missing ${getProviderEnvVar(provider)}. Add it to .env.local and restart the app.`
+        );
       }
 
       // Upload file to get a public URL
@@ -541,17 +609,20 @@ export default function PreviewPane({
     }
   }, [connection, selected, previewUrl, refreshTree, addJob]);
 
+  const selectedRelPath = selected?.relPath;
+  const selectedKind = selected?.kind;
+
   useEffect(() => {
-    if (!connection || !selected || selected.kind === "dir") {
+    if (!connection || !selectedRelPath || selectedKind === "dir") {
       setError(null);
       setPreviewUrl(null);
+      setLoading(false);
       return;
     }
     setLoading(true);
     setError(null);
-    setPreviewUrl(getFileUrl(connection, selected.relPath, { includeToken: true }));
-    setLoading(false);
-  }, [connection, selected]);
+    setPreviewUrl(getFileUrl(connection, selectedRelPath, { includeToken: true }));
+  }, [connection, selectedRelPath, selectedKind]);
 
 
 
@@ -770,43 +841,64 @@ export default function PreviewPane({
       )}
 
       <div className="flex flex-1 flex-col gap-3 overflow-y-auto min-h-0">
-        <div className="flex-1 min-h-0 rounded-2xl border border-white/10 bg-black/30 p-4">
-          {error ? (
-            <div className="text-sm text-rose-300">{error}</div>
-          ) : loading || !previewUrl ? (
-            <div className="text-sm text-slate-400">Loading preview…</div>
-	          ) : selected.mime.startsWith("video") ? (
-	            <video
-	              key={previewUrl}
-	              ref={videoRef}
-	              src={previewUrl}
-	              crossOrigin="anonymous"
-	              preload="metadata"
-	              playsInline
-	              controls
-	              draggable={selected.kind === "file"}
-	              onDragStart={handleDragStart}
-	              onLoadedMetadata={handleMetadataLoaded}
-	              onDurationChange={handleMetadataLoaded}
-              className="h-full w-full rounded-xl border border-white/10 bg-black object-contain"
-            />
-          ) : (
-            <img
-              src={previewUrl}
-              alt={selected.name}
-              draggable={selected.kind === "file"}
-              onDragStart={handleDragStart}
-              className="h-full w-full rounded-xl border border-white/10 object-contain"
-            />
-          )}
-        </div>
+	        <div className="flex-1 min-h-0 rounded-2xl border border-white/10 bg-black/30 p-4">
+	          {error ? (
+	            <div className="text-sm text-rose-300">{error}</div>
+	          ) : !previewUrl ? (
+	            <div className="text-sm text-slate-400">Loading preview…</div>
+            ) : (
+              <div className="relative h-full w-full">
+                {selected.mime.startsWith("video") ? (
+                  <video
+                    key={previewUrl}
+                    ref={videoRef}
+                    src={previewUrl}
+                    crossOrigin="anonymous"
+                    preload="metadata"
+                    playsInline
+                    controls
+                    draggable={selected.kind === "file"}
+                    onDragStart={handleDragStart}
+                    onError={() => {
+                      setLoading(false);
+                      setError("Unable to load video preview.");
+                    }}
+                    onLoadedData={() => {
+                      setLoading(false);
+                    }}
+                    onLoadedMetadata={handleMetadataLoaded}
+                    onDurationChange={handleMetadataLoaded}
+                    className="h-full w-full rounded-xl border border-white/10 bg-black object-contain"
+                  />
+                ) : (
+                  <img
+                    src={previewUrl}
+                    alt={selected.name}
+                    draggable={selected.kind === "file"}
+                    onDragStart={handleDragStart}
+                    onLoad={() => setLoading(false)}
+                    onError={() => {
+                      setLoading(false);
+                      setError("Unable to load image preview.");
+                    }}
+                    className="h-full w-full rounded-xl border border-white/10 object-contain"
+                  />
+                )}
+                {loading ? (
+                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-xl bg-black/40 text-sm text-slate-200 backdrop-blur-sm">
+                    Loading preview…
+                  </div>
+                ) : null}
+              </div>
+            )}
+	        </div>
 
         {!isFullScreen && (
           <>
-	            {selected && selected.mime.startsWith("video") ? (
-	              <div className="rounded-xl border border-white/10 bg-white/5 p-2 text-xs text-slate-200">
-	                <div className="flex items-center justify-between">
-	                  <div className="flex gap-2">
+		            {selected && selected.mime.startsWith("video") ? (
+		              <div className="rounded-xl border border-white/10 bg-white/5 p-2 text-xs text-slate-200">
+		                <div className="flex items-center justify-between">
+		                  <div className="flex gap-2">
 	                    <button
 	                      type="button"
 	                      disabled={!canCapture || captureBusy}
@@ -850,40 +942,57 @@ export default function PreviewPane({
 	                    >
 	                      ↻
 	                    </button>
-	                    <button
-	                      type="button"
-	                      disabled={upscaleBusy}
-	                      onClick={() => void handleUpscale()}
-	                      className="rounded-lg border border-white/10 px-2 py-1 font-semibold text-slate-100 transition hover:border-sky-400 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
-	                    >
-	                      {upscaleBusy ? "..." : "Upscale"}
-	                    </button>
-	                  </div>
-	                  <button
-	                    type="button"
-	                    onClick={() => void handleDownload()}
-	                    className="rounded-lg border border-white/10 p-1.5 text-slate-100 transition hover:border-sky-400 hover:text-sky-200"
-                    title="Download original"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                      <polyline points="7 10 12 15 17 10" />
-                      <line x1="12" y1="15" x2="12" y2="3" />
-                    </svg>
-                  </button>
-	                </div>
-	                {captureStatus ? (
-	                  <div className="mt-2 rounded-md border border-white/10 bg-black/40 px-2 py-1 text-[10px]">
-	                    {captureStatus}
+		                    <button
+		                      type="button"
+		                      disabled={upscaleBusy}
+		                      onClick={() => void handleUpscale()}
+		                      className="rounded-lg border border-white/10 px-2 py-1 font-semibold text-slate-100 transition hover:border-sky-400 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
+		                    >
+		                      {upscaleBusy ? "..." : "Upscale"}
+		                    </button>
+		                  </div>
+		                  <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={pushRecreateAction}
+                          className="rounded-lg border border-white/10 p-1.5 text-slate-100 transition hover:border-indigo-400 hover:text-indigo-200"
+                          title="Recreate (load prompt/model used to make this file)"
+                          aria-label="Recreate"
+                        >
+                          ⟳
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleDownload()}
+                          className="rounded-lg border border-white/10 p-1.5 text-slate-100 transition hover:border-sky-400 hover:text-sky-200"
+                          title="Download original"
+                          aria-label="Download"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="7 10 12 15 17 10" />
+                            <line x1="12" y1="15" x2="12" y2="3" />
+                          </svg>
+                        </button>
+                      </div>
+		                </div>
+		                {captureStatus ? (
+		                  <div className="mt-2 rounded-md border border-white/10 bg-black/40 px-2 py-1 text-[10px]">
+		                    {captureStatus}
 	                  </div>
 	                ) : null}
-	                {upscaleStatus ? (
-	                  <div className="mt-2 rounded-md border border-white/10 bg-black/40 px-2 py-1 text-[10px]">
-	                    {upscaleStatus}
-	                  </div>
-	                ) : null}
-	              </div>
-	            ) : null}
+		                {upscaleStatus ? (
+		                  <div className="mt-2 rounded-md border border-white/10 bg-black/40 px-2 py-1 text-[10px]">
+		                    {upscaleStatus}
+		                  </div>
+		                ) : null}
+                    {quickStatus ? (
+                      <div className="mt-2 rounded-md border border-white/10 bg-black/40 px-2 py-1 text-[10px]">
+                        {quickStatus}
+                      </div>
+                    ) : null}
+		              </div>
+		            ) : null}
 
             {selected && selected.kind === "file" && selected.mime.startsWith("image") ? (
               <div className="space-y-2 rounded-xl border border-white/10 bg-white/5 p-3">
@@ -908,28 +1017,67 @@ export default function PreviewPane({
                     >
                       {cropBusy ? "Cropping…" : "Crop"}
                     </button>
-                    <button
-                      type="button"
-                      disabled={upscaleBusy}
-                      onClick={() => void handleUpscale()}
-                      className="rounded-lg border border-white/10 px-3 py-1 text-xs font-semibold text-slate-100 transition hover:border-sky-400 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {upscaleBusy ? "Upscaling…" : "Upscale"}
-                    </button>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => void handleDownload()}
-                    className="rounded-lg border border-white/10 p-1.5 text-slate-100 transition hover:border-sky-400 hover:text-sky-200"
-                    title="Download original"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                      <polyline points="7 10 12 15 17 10" />
-                      <line x1="12" y1="15" x2="12" y2="3" />
-                    </svg>
-                  </button>
-                </div>
+	                    <button
+	                      type="button"
+	                      disabled={upscaleBusy}
+	                      onClick={() => void handleUpscale()}
+	                      className="rounded-lg border border-white/10 px-3 py-1 text-xs font-semibold text-slate-100 transition hover:border-sky-400 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
+	                    >
+	                      {upscaleBusy ? "Upscaling…" : "Upscale"}
+	                    </button>
+	                  </div>
+	                  <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={pushRecreateAction}
+                        className="rounded-lg border border-white/10 p-1.5 text-slate-100 transition hover:border-indigo-400 hover:text-indigo-200"
+                        title="Recreate (load prompt/model used to make this file)"
+                        aria-label="Recreate"
+                      >
+                        ⟳
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => pushControlsFileAction("useStartFrame")}
+                        className="rounded-lg border border-white/10 p-1.5 text-slate-100 transition hover:border-emerald-400 hover:text-emerald-200"
+                        title="Use as start frame"
+                        aria-label="Use as start frame"
+                      >
+                        ⏮
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => pushControlsFileAction("useEndFrame")}
+                        className="rounded-lg border border-white/10 p-1.5 text-slate-100 transition hover:border-emerald-400 hover:text-emerald-200"
+                        title="Use as end frame"
+                        aria-label="Use as end frame"
+                      >
+                        ⏭
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => pushControlsFileAction("addReferenceImage")}
+                        className="rounded-lg border border-white/10 p-1.5 text-slate-100 transition hover:border-sky-400 hover:text-sky-200"
+                        title="Add as reference image"
+                        aria-label="Add as reference image"
+                      >
+                        ⊕
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleDownload()}
+                        className="rounded-lg border border-white/10 p-1.5 text-slate-100 transition hover:border-sky-400 hover:text-sky-200"
+                        title="Download original"
+                        aria-label="Download"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                          <polyline points="7 10 12 15 17 10" />
+                          <line x1="12" y1="15" x2="12" y2="3" />
+                        </svg>
+                      </button>
+                    </div>
+	                </div>
                 {cropStatus ? (
                   <div className="rounded-md border border-white/10 bg-black/40 px-2 py-2 text-[11px] text-slate-200">
                     {cropStatus}
@@ -938,6 +1086,11 @@ export default function PreviewPane({
                 {upscaleStatus ? (
                   <div className="rounded-md border border-white/10 bg-black/40 px-2 py-2 text-[11px] text-slate-200">
                     {upscaleStatus}
+                  </div>
+                ) : null}
+                {quickStatus ? (
+                  <div className="rounded-md border border-white/10 bg-black/40 px-2 py-2 text-[11px] text-slate-200">
+                    {quickStatus}
                   </div>
                 ) : null}
               </div>

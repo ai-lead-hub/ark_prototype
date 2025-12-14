@@ -12,6 +12,8 @@ Run the following command to start both the frontend and the file server:
 npm run dev:all
 ```
 
+Requires Node.js 22+.
+
 - **Frontend**: `http://localhost:5173`
 - **File Server**: `http://localhost:8787`
 
@@ -26,7 +28,7 @@ npm run dev:all
 
 ### Step 3: Generate Your First Asset!
 
-1.  **Select a Model** - Choose from the dropdown (start with "kling-2.5-pro" for videos or "flux-kontext-pro" for images).
+1.  **Select a Model** - Choose from the dropdown (start with "kling-2.5-pro" for videos or "flux-2-pro" for images).
 2.  **Upload a Start Frame** (for videos) - Drag and drop an image or click "Browse".
 3.  **Write a Prompt** - Describe what you want to create (e.g., "a cat playing piano in a jazz club").
 4.  **Click Generate** - Wait for the magic to happen! ✨
@@ -79,7 +81,7 @@ Videos need at least one reference image to start from:
 
 Images are simpler - just describe what you want!
 
-1.  **Choose an image model** (e.g., "flux-kontext-pro" or "imagen-4")
+1.  **Choose an image model** (e.g., "flux-2-pro" or "nano-banana-edit")
 2.  **Write your prompt** - Be specific! More details = better results
 3.  **Select size preset** - Square, portrait, or landscape
 4.  **Optional: Upload reference images** - For style transfer or editing
@@ -125,7 +127,7 @@ Make your images higher quality:
 **For Videos:**
 -   **kling-2.5-pro** - Best quality, slower
 -   **veo-3.1-fast** - Quick generations from text only
--   **ltx-2-fast** - Fast, good for testing ideas
+-   **kling-2.1-pro** - More cost-effective option
 
 **For Images:**
 -   **flux-2-pro** - Professional quality, detailed

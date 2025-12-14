@@ -121,6 +121,10 @@ export type GenerationListEntry = {
   seed: string | null;
 };
 
+export type GenerationDetailEntry = GenerationListEntry & {
+  payload: unknown | null;
+};
+
 export async function listGenerations(
   connection: WorkspaceConnection,
   opts?: { workspaceId?: string; limit?: number }
@@ -136,6 +140,25 @@ export async function listGenerations(
   }
   const payload = (await response.json()) as { entries?: GenerationListEntry[] };
   return Array.isArray(payload.entries) ? payload.entries : [];
+}
+
+export async function getGenerationByOutput(
+  connection: WorkspaceConnection,
+  outputRelPath: string,
+  opts?: { workspaceId?: string }
+): Promise<GenerationDetailEntry | null> {
+  const url = new URL("/meta/generations/by-output", connection.apiBase);
+  url.searchParams.set("workspace", opts?.workspaceId ?? connection.workspaceId);
+  url.searchParams.set("path", outputRelPath);
+
+  const response = await fetch(url, { headers: authHeaders(connection.token) });
+  if (!response.ok) {
+    const message = await response.text().catch(() => "");
+    throw new Error(message || `Meta generation lookup failed: ${response.statusText}`);
+  }
+
+  const payload = (await response.json()) as { entry?: GenerationDetailEntry | null };
+  return payload.entry ?? null;
 }
 
 export type PromptHistoryEntry = {

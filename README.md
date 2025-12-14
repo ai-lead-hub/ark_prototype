@@ -26,6 +26,8 @@ npm install
 npm run dev:all
 ```
 
+Requires Node.js 22+.
+
 Frontend: `http://localhost:5173`  
 File API: `http://localhost:8787` (writes to `./data` by default)
 
@@ -101,7 +103,7 @@ Monitor your usage limits with the credit tracker in the top bar. Click the refr
 ### ✅ **Workspace Storage** - Files organized on the server (`images/YYYY-MM-DD`, `videos/YYYY-MM-DD`)
 ### ✅ **20+ AI Models** - Video, image, and upscaling models included
 ### ✅ **Smart Controls** - UI automatically adapts to each model's parameters
-### ✅ **Prompt Expansion** - Integrated Groq LLM for enhancing prompts
+### ✅ **Prompt Expansion** - Integrated LLM prompt enhancer
 ### ✅ **Built-in Browser** - Browse, preview, and search your generated files
 ### ✅ **Persistent** - Workspace and token are remembered between sessions
 

@@ -12,12 +12,8 @@ import type { ProviderCallOptions, ProviderCallResult } from "./providers/types"
 
 const FAL_BASE_URL = "https://fal.run";
 
-function resolveEnvKey() {
-  return (import.meta.env.VITE_FAL_KEY ?? "").trim();
-}
-
 export function getFalKey() {
-  return resolveEnvKey();
+  return (import.meta.env.VITE_FAL_KEY ?? "").trim();
 }
 
 function ensureFalClient() {

@@ -5,11 +5,19 @@ import { type FileEntry, getFileUrl, publishFile, uploadFile } from "../lib/api/
 import { FILE_ENTRY_MIME } from "../lib/drag-constants";
 import { Spinner } from "./ui/Spinner";
 import { PublishModal } from "./PublishModal";
+import { buildDatedMediaPath, mediaFolderFromMime } from "../lib/storage-paths";
+import { setControlsPrompt } from "../lib/controls-store";
+import { loadPins, removePin, renamePin, togglePin, type PinsMap } from "../lib/pins";
 import {
-  listGenerations,
+  loadRecentReferences,
+  onRecentReferencesChange,
+  removeRecentReference,
+  renameRecentReference,
+  type RecentReference,
+} from "../lib/recent-references";
+import {
   listPrompts,
   recordFileMetadata,
-  type GenerationListEntry,
   type PromptHistoryEntry,
 } from "../lib/api/meta";
 
@@ -29,10 +37,8 @@ export default function FileBrowser() {
 
   const [viewMode, setViewMode] = useState<"list" | "grid">("grid");
   const [showRecent, setShowRecent] = useState(false);
-  const [recentTab, setRecentTab] = useState<"generations" | "prompts">("generations");
-  const [recentGenerations, setRecentGenerations] = useState<GenerationListEntry[]>([]);
-  const [recentBusy, setRecentBusy] = useState(false);
-  const [recentError, setRecentError] = useState<string | null>(null);
+  const [recentTab, setRecentTab] = useState<"references" | "prompts">("references");
+  const [recentReferences, setRecentReferences] = useState<RecentReference[]>([]);
   const [recentPrompts, setRecentPrompts] = useState<PromptHistoryEntry[]>([]);
   const [promptBusy, setPromptBusy] = useState(false);
   const [promptError, setPromptError] = useState<string | null>(null);
@@ -45,6 +51,61 @@ export default function FileBrowser() {
   const [operationLoading, setOperationLoading] = useState<string | null>(null);
   const playingVideoRef = useRef<HTMLVideoElement | null>(null);
   const sentFileMetaRef = useRef<Set<string>>(new Set());
+
+  const [hoverPlayVideos, setHoverPlayVideos] = useState<boolean>(() => {
+    if (typeof localStorage === "undefined") return true;
+    try {
+      const raw = localStorage.getItem("fileBrowser_hoverPlay_v1");
+      if (raw === null) return true;
+      return raw === "true";
+    } catch {
+      return true;
+    }
+  });
+
+  useEffect(() => {
+    if (typeof localStorage === "undefined") return;
+    try {
+      localStorage.setItem("fileBrowser_hoverPlay_v1", String(hoverPlayVideos));
+    } catch {
+      // Ignore storage errors.
+    }
+  }, [hoverPlayVideos]);
+
+  const iconButtonBase =
+    "rounded-md border border-white/10 bg-black/60 p-1 text-xs text-slate-100 transition-opacity";
+  const iconButtonHidden = "opacity-0 group-hover:opacity-100";
+  const iconButtonVisible = "opacity-100";
+  const toolbarIconButtonBase =
+    "inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-black/40 text-sm text-slate-200 transition hover:border-sky-400 hover:text-sky-200";
+
+  const workspaceKey = useMemo(() => {
+    if (!connection) return "";
+    return `${connection.apiBase}|${connection.workspaceId}`;
+  }, [connection]);
+
+  const [pins, setPins] = useState<PinsMap>({});
+
+  useEffect(() => {
+    if (!workspaceKey) {
+      setPins({});
+      return;
+    }
+    setPins(loadPins(workspaceKey));
+  }, [workspaceKey]);
+
+  const refreshReferences = useCallback(() => {
+    if (!workspaceKey) return;
+    setRecentReferences(loadRecentReferences(workspaceKey));
+  }, [workspaceKey]);
+
+  useEffect(() => {
+    if (!workspaceKey) return;
+    const off = onRecentReferencesChange(() => {
+      setRecentReferences(loadRecentReferences(workspaceKey));
+    });
+    return off;
+  }, [workspaceKey]);
 
   const getFileStyles = (entry: FileEntry) => {
     if (entry.mime.startsWith("image/")) {
@@ -82,9 +143,23 @@ export default function FileBrowser() {
       setEditingId(null);
       return;
     }
+    const nextName = editName.trim();
+    const newPath = entry.relPath.replace(entry.name, nextName);
     setOperationLoading(entry.id);
     try {
-      await rename(entry, editName.trim());
+      await rename(entry, nextName);
+      if (workspaceKey && pins[entry.relPath]) {
+        setPins(renamePin(workspaceKey, entry.relPath, newPath));
+      }
+      if (workspaceKey) {
+        setRecentReferences(
+          renameRecentReference(workspaceKey, entry.relPath, {
+            relPath: newPath,
+            name: nextName,
+            mime: entry.mime,
+          })
+        );
+      }
     } catch (error) {
       console.error(error);
       const msg = error instanceof Error ? error.message : 'Unknown error';
@@ -101,6 +176,12 @@ export default function FileBrowser() {
     setOperationLoading(entry.id);
     try {
       await remove(entry);
+      if (workspaceKey && pins[entry.relPath]) {
+        setPins(removePin(workspaceKey, entry.relPath));
+      }
+      if (workspaceKey) {
+        setRecentReferences(removeRecentReference(workspaceKey, entry.relPath));
+      }
     } catch (error) {
       console.error(error);
       const msg = error instanceof Error ? error.message : 'Unknown error';
@@ -154,26 +235,43 @@ export default function FileBrowser() {
       let failCount = 0;
       let renamedCount = 0;
 
-      // Get existing file names for collision detection
-      const existingNames = new Set(entries.map((entry) => entry.name.toLowerCase()));
+      // Get existing file paths for collision detection
+      const existingPaths = new Set(entries.map((entry) => entry.relPath.toLowerCase()));
 
       for (const file of files) {
         try {
+          const folderFromType = mediaFolderFromMime(file.type);
+          const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+          const folder =
+            folderFromType ??
+            (IMAGE_EXTS.includes(ext)
+              ? "images"
+              : VIDEO_EXTS.includes(ext)
+                ? "videos"
+                : null);
+
+          if (!folder) {
+            failCount++;
+            continue;
+          }
+
           let targetName = file.name;
+          let targetPath = buildDatedMediaPath(folder, targetName);
 
           // Check for collision and auto-rename if needed
-          if (existingNames.has(targetName.toLowerCase())) {
+          if (existingPaths.has(targetPath.toLowerCase())) {
             const ext = targetName.includes('.') ? '.' + targetName.split('.').pop() : '';
             const baseName = ext ? targetName.slice(0, -ext.length) : targetName;
             const timestamp = Date.now();
             targetName = `${baseName}_${timestamp}${ext}`;
             renamedCount++;
+            targetPath = buildDatedMediaPath(folder, targetName);
           }
 
-          // Add to existing names to prevent intra-batch collisions
-          existingNames.add(targetName.toLowerCase());
+          // Add to existing paths to prevent intra-batch collisions
+          existingPaths.add(targetPath.toLowerCase());
 
-          await uploadFile(connection, targetName, file);
+          await uploadFile(connection, targetPath, file);
           successCount++;
         } catch (err) {
           console.error(`Failed to upload ${file.name}:`, err);
@@ -232,20 +330,6 @@ export default function FileBrowser() {
     return `${d}d`;
   };
 
-  const refreshRecent = useCallback(async () => {
-    if (!connection) return;
-    setRecentBusy(true);
-    setRecentError(null);
-    try {
-      const entries = await listGenerations(connection, { limit: 30 });
-      setRecentGenerations(entries);
-    } catch (error) {
-      setRecentError(error instanceof Error ? error.message : "Failed to load recent generations");
-    } finally {
-      setRecentBusy(false);
-    }
-  }, [connection]);
-
   const refreshPrompts = useCallback(async () => {
     if (!connection) return;
     setPromptBusy(true);
@@ -265,9 +349,9 @@ export default function FileBrowser() {
     if (recentTab === "prompts") {
       void refreshPrompts();
     } else {
-      void refreshRecent();
+      refreshReferences();
     }
-  }, [showRecent, recentTab, refreshRecent, refreshPrompts, connection?.workspaceId]);
+  }, [showRecent, recentTab, refreshPrompts, refreshReferences, connection?.workspaceId]);
 
   // Reset visible count when filters change
   useEffect(() => {
@@ -302,9 +386,18 @@ export default function FileBrowser() {
     });
   }, [entries, q, filterExt, connection]);
 
+  const orderedEntries = useMemo(() => {
+    if (!pins || Object.keys(pins).length === 0) return filteredEntries;
+    const pinnedEntries = filteredEntries
+      .filter((entry) => Boolean(pins[entry.relPath]))
+      .sort((a, b) => (pins[b.relPath] ?? 0) - (pins[a.relPath] ?? 0));
+    const unpinnedEntries = filteredEntries.filter((entry) => !pins[entry.relPath]);
+    return [...pinnedEntries, ...unpinnedEntries];
+  }, [filteredEntries, pins]);
+
   const visibleEntries = useMemo(() => {
-    return filteredEntries.slice(0, visibleCount);
-  }, [filteredEntries, visibleCount]);
+    return orderedEntries.slice(0, visibleCount);
+  }, [orderedEntries, visibleCount]);
 
   // Cleanup fileDims for removed files
   useEffect(() => {
@@ -411,13 +504,25 @@ export default function FileBrowser() {
         </div>
         <button
           type="button"
-          onClick={() => setShowRecent((v) => !v)}
-          className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${showRecent
-            ? "border-sky-400 text-sky-200"
-            : "border-white/10 text-slate-200 hover:border-sky-400 hover:text-sky-200"
+          onClick={() => setHoverPlayVideos((v) => !v)}
+          className={`${toolbarIconButtonBase} ${hoverPlayVideos
+            ? ""
+            : "border-amber-400/60 text-amber-200 hover:border-amber-300 hover:text-amber-100"
             }`}
+          title={`Hover play videos: ${hoverPlayVideos ? "On" : "Off"} (can reduce memory/CPU)`}
+          aria-label={`Hover play videos: ${hoverPlayVideos ? "On" : "Off"}`}
         >
-          Recent
+          {hoverPlayVideos ? "▶" : "⏸"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowRecent((v) => !v)}
+          className={`${toolbarIconButtonBase} ${showRecent ? "border-sky-400 text-sky-200" : ""
+            }`}
+          title="Recent"
+          aria-label="Toggle recent panel"
+        >
+          🕘
         </button>
         <button
           type="button"
@@ -425,9 +530,11 @@ export default function FileBrowser() {
             refreshTree();
             setVisibleCount(30);
           }}
-          className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:border-sky-400 hover:text-sky-200"
+          className={toolbarIconButtonBase}
+          title="Refresh"
+          aria-label="Refresh file list"
         >
-          Refresh
+          ↻
         </button>
       </div>
 
@@ -441,13 +548,13 @@ export default function FileBrowser() {
               <div className="flex items-center rounded-md border border-white/10 bg-black/30 p-0.5">
                 <button
                   type="button"
-                  onClick={() => setRecentTab("generations")}
-                  className={`rounded px-2 py-1 text-[11px] font-semibold transition ${recentTab === "generations"
+                  onClick={() => setRecentTab("references")}
+                  className={`rounded px-2 py-1 text-[11px] font-semibold transition ${recentTab === "references"
                     ? "bg-white/10 text-white"
                     : "text-slate-400 hover:text-white"
                     }`}
                 >
-                  Generations
+                  References
                 </button>
                 <button
                   type="button"
@@ -463,65 +570,60 @@ export default function FileBrowser() {
             </div>
             <button
               type="button"
-              onClick={() => void (recentTab === "prompts" ? refreshPrompts() : refreshRecent())}
-              disabled={recentTab === "prompts" ? promptBusy : recentBusy}
+              onClick={() => void (recentTab === "prompts" ? refreshPrompts() : refreshReferences())}
+              disabled={recentTab === "prompts" ? promptBusy : false}
               className="rounded-md border border-white/10 px-2 py-1 text-[11px] font-semibold text-slate-200 transition hover:border-sky-400 hover:text-sky-200 disabled:opacity-60"
             >
-              {recentTab === "prompts"
-                ? promptBusy
-                  ? "..."
-                  : "Refresh"
-                : recentBusy
-                  ? "..."
-                  : "Refresh"}
+              {recentTab === "prompts" && promptBusy ? "..." : "Refresh"}
             </button>
           </div>
 
-          {recentTab === "generations" ? (
-            recentError ? (
-              <div className="px-3 py-2 text-xs text-rose-300">
-                {recentError}
-              </div>
-            ) : recentGenerations.length === 0 ? (
+          {recentTab === "references" ? (
+            recentReferences.length === 0 ? (
               <div className="px-3 py-3 text-xs text-slate-400">
-                No generation history yet for this workspace.
+                No recent references yet. Select an image and use “1st / Last / Ref” in the preview pane.
               </div>
             ) : (
               <div className="max-h-[220px] overflow-auto">
-                {recentGenerations.map((gen) => {
-                  const fileName =
-                    gen.output_rel_path.split("/").filter(Boolean).pop() ?? gen.output_rel_path;
+                {recentReferences.map((ref) => {
+                  const match = entries.find((e) => e.relPath === ref.relPath);
                   const subtitle =
-                    gen.model_id || gen.category || "generation";
-                  const title = gen.prompt?.trim()
-                    ? gen.prompt.trim()
-                    : fileName;
+                    ref.lastUse === "startFrame"
+                      ? "Start frame"
+                      : ref.lastUse === "endFrame"
+                        ? "End frame"
+                        : "Reference";
 
                   return (
                     <button
-                      key={gen.id}
+                      key={ref.relPath}
                       type="button"
                       onClick={() => {
-                        const match = entries.find((e) => e.relPath === gen.output_rel_path);
                         if (match) {
                           select(match);
                         } else {
-                          void refreshTree(gen.output_rel_path);
+                          void refreshTree(ref.relPath);
                         }
                       }}
-                      className="flex w-full items-center gap-3 border-b border-white/5 px-3 py-2 text-left text-xs transition hover:bg-white/5"
+                      className="group flex w-full items-center gap-3 border-b border-white/5 px-3 py-2 text-left text-xs transition hover:bg-white/5"
+                      title={ref.relPath}
                     >
                       <div className="w-10 shrink-0 text-[10px] font-semibold text-slate-400">
-                        {formatAgo(gen.created_at)}
+                        {formatAgo(ref.lastUsedAt)}
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate font-semibold text-slate-100">
-                          {title}
-                        </div>
-                        <div className="truncate text-[10px] text-slate-400">
-                          {subtitle} · {gen.output_rel_path}
-                        </div>
-                      </div>
+	                      <div className="min-w-0 flex-1">
+	                        <div className="truncate font-semibold text-slate-100">
+	                          {ref.name}
+	                        </div>
+	                        <div className="truncate text-[10px] text-slate-400">
+	                          {subtitle} · {ref.relPath}
+	                        </div>
+	                      </div>
+	                      {!match ? (
+	                        <div className="shrink-0 text-[10px] font-semibold text-amber-300">
+	                          Missing
+	                        </div>
+	                      ) : null}
                     </button>
                   );
                 })}
@@ -541,9 +643,9 @@ export default function FileBrowser() {
                 <button
                   key={String(p.id)}
                   type="button"
-                  onClick={() => setQuery(p.prompt)}
+                  onClick={() => setControlsPrompt(p.prompt)}
                   className="flex w-full items-center gap-3 border-b border-white/5 px-3 py-2 text-left text-xs transition hover:bg-white/5"
-                  title="Click to set search"
+                  title="Click to use prompt"
                 >
                   <div className="w-10 shrink-0 text-[10px] font-semibold text-slate-400">
                     {formatAgo(p.created_at)}
@@ -662,10 +764,10 @@ export default function FileBrowser() {
                   const styles = getFileStyles(entry);
 
 	                  return (
-	                    <button
-	                      key={entry.id}
-	                      type="button"
-	                      draggable={entry.kind === "file"}
+                    <button
+                      key={entry.id}
+                      type="button"
+                      draggable={entry.kind === "file"}
 	                      onDragStart={(event) => {
 	                        if (entry.kind === "file") {
 	                          event.dataTransfer.setData(
@@ -699,23 +801,31 @@ export default function FileBrowser() {
 	                            muted
 	                            loop
 	                            playsInline
-	                            onMouseEnter={(e) => {
-	                              const target = e.currentTarget;
-	                              if (playingVideoRef.current && playingVideoRef.current !== target) {
-	                                playingVideoRef.current.pause();
-	                                playingVideoRef.current.currentTime = 0;
-	                              }
-	                              playingVideoRef.current = target;
-	                              void target.play();
-	                            }}
-	                            onMouseLeave={(e) => {
-	                              const target = e.currentTarget;
-	                              target.pause();
-	                              target.currentTime = 0;
-	                              if (playingVideoRef.current === target) {
-	                                playingVideoRef.current = null;
-	                              }
-	                            }}
+	                            onMouseEnter={
+	                              hoverPlayVideos
+	                                ? (e) => {
+	                                  const target = e.currentTarget;
+	                                  if (playingVideoRef.current && playingVideoRef.current !== target) {
+	                                    playingVideoRef.current.pause();
+	                                    playingVideoRef.current.currentTime = 0;
+	                                  }
+	                                  playingVideoRef.current = target;
+	                                  void target.play();
+	                                }
+	                                : undefined
+	                            }
+	                            onMouseLeave={
+	                              hoverPlayVideos
+	                                ? (e) => {
+	                                  const target = e.currentTarget;
+	                                  target.pause();
+	                                  target.currentTime = 0;
+	                                  if (playingVideoRef.current === target) {
+	                                    playingVideoRef.current = null;
+	                                  }
+	                                }
+	                                : undefined
+	                            }
 	                            onLoadedMetadata={(e) => {
 	                              const target = e.target as HTMLVideoElement;
 	                              const dims = { w: target.videoWidth, h: target.videoHeight };
@@ -736,11 +846,11 @@ export default function FileBrowser() {
 	                              ) {
 	                                return;
 	                              }
-	                              const key = entry.id;
-	                              if (!sentFileMetaRef.current.has(key)) {
-	                                sentFileMetaRef.current.add(key);
-	                                void recordFileMetadata(connection, {
-	                                  workspaceId: connection.workspaceId,
+                              const key = `${connection.workspaceId}:${entry.relPath}`;
+                              if (!sentFileMetaRef.current.has(key)) {
+                                sentFileMetaRef.current.add(key);
+                                void recordFileMetadata(connection, {
+                                  workspaceId: connection.workspaceId,
 	                                  relPath: entry.relPath,
 	                                  width: dims.w,
 	                                  height: dims.h,
@@ -775,11 +885,11 @@ export default function FileBrowser() {
 	                              ) {
 	                                return;
 	                              }
-	                              const key = entry.id;
-	                              if (!sentFileMetaRef.current.has(key)) {
-	                                sentFileMetaRef.current.add(key);
-	                                void recordFileMetadata(connection, {
-	                                  workspaceId: connection.workspaceId,
+                              const key = `${connection.workspaceId}:${entry.relPath}`;
+                              if (!sentFileMetaRef.current.has(key)) {
+                                sentFileMetaRef.current.add(key);
+                                void recordFileMetadata(connection, {
+                                  workspaceId: connection.workspaceId,
 	                                  relPath: entry.relPath,
 	                                  width: dims.w,
 	                                  height: dims.h,
@@ -791,8 +901,8 @@ export default function FileBrowser() {
 	                          />
 	                        )}
 	                      </div>
-                      <div className="absolute inset-x-0 bottom-0 bg-black/60 p-2 backdrop-blur-sm">
-                        {editingId === entry.id ? (
+	                      <div className="absolute inset-x-0 bottom-0 bg-black/60 p-2 backdrop-blur-sm">
+	                        {editingId === entry.id ? (
                           <input
                             autoFocus
                             type="text"
@@ -806,13 +916,13 @@ export default function FileBrowser() {
                             onClick={(e) => e.stopPropagation()}
                             className="w-full rounded border border-sky-500/50 bg-black/50 px-1 py-0.5 text-xs text-white outline-none"
                           />
-                        ) : (
-                          <div
-                            className="truncate text-xs text-white cursor-text"
-                            title={entry.name}
-                            onDoubleClick={(e) => {
-                              e.stopPropagation();
-                              setEditingId(entry.id);
+	                        ) : (
+	                          <div
+	                            className="truncate text-xs font-semibold text-white cursor-text"
+	                            title={entry.name}
+	                            onDoubleClick={(e) => {
+	                              e.stopPropagation();
+	                              setEditingId(entry.id);
                               setEditName(entry.name);
                             }}
                           >
@@ -820,30 +930,42 @@ export default function FileBrowser() {
                           </div>
                         )}
                       </div>
-                      {operationLoading === entry.id && (
-                        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-                          <Spinner size="md" />
-                        </div>
-                      )}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setPublishingEntry(entry);
-                        }}
-                        className="absolute top-1 right-8 rounded bg-black/60 p-1 text-xs opacity-0 transition-opacity hover:bg-sky-500 hover:text-white group-hover:opacity-100"
-                        title="Publish"
-                      >
-                        🚀
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => handleDelete(entry, e)}
-                        className="absolute top-1 right-1 rounded bg-black/60 p-1 text-xs opacity-0 transition-opacity hover:bg-red-500 hover:text-white group-hover:opacity-100"
-                        title="Delete (Del)"
-                      >
-                        🗑️
-                      </button>
+	                      {operationLoading === entry.id && (
+	                        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+	                          <Spinner size="md" />
+	                        </div>
+	                      )}
+		                      <button
+		                        type="button"
+		                        onClick={(e) => {
+		                          e.stopPropagation();
+		                          setPins(togglePin(workspaceKey, entry.relPath));
+	                        }}
+	                        className={`absolute top-1 right-14 ${iconButtonBase} hover:bg-yellow-500 hover:text-black ${pins[entry.relPath] ? iconButtonVisible : iconButtonHidden
+	                          }`}
+	                        title={pins[entry.relPath] ? "Unpin" : "Pin"}
+	                      >
+	                        📌
+	                      </button>
+	                      <button
+	                        type="button"
+	                        onClick={(e) => {
+	                          e.stopPropagation();
+	                          setPublishingEntry(entry);
+	                        }}
+	                        className={`absolute top-1 right-8 ${iconButtonBase} ${iconButtonHidden} hover:bg-sky-500 hover:text-white`}
+	                        title="Publish"
+	                      >
+	                        🚀
+	                      </button>
+	                      <button
+	                        type="button"
+	                        onClick={(e) => handleDelete(entry, e)}
+	                        className={`absolute top-1 right-1 ${iconButtonBase} ${iconButtonHidden} hover:bg-red-500 hover:text-white`}
+	                        title="Delete (Del)"
+	                      >
+	                        🗑️
+	                      </button>
                     </button>
                   );
                 })}
@@ -869,9 +991,9 @@ export default function FileBrowser() {
 
                   return (
                     <li key={entry.id}>
-                      <button
-                        type="button"
-                        draggable={entry.kind === "file"}
+	                      <button
+	                        type="button"
+	                        draggable={entry.kind === "file"}
                         onDragStart={(event) => {
                           if (entry.kind === "file") {
                             event.dataTransfer.setData(
@@ -886,11 +1008,12 @@ export default function FileBrowser() {
                             event.dataTransfer.effectAllowed = "copy";
                             event.dataTransfer.setData("DownloadURL", `${entry.mime}:${entry.name}:${url}`);
                           }
-                        }}
-                        onClick={() => select(entry)}
-                        className={`group flex w-full items-center justify-between gap-3 border-l-4 px-3 py-2 text-left text-sm transition ${selected?.id === entry.id ? "bg-yellow-500/20" : ""
-                          } ${styles.list}`}
-                      >
+	                        }}
+	                        onClick={() => select(entry)}
+	                        onKeyDown={(e) => handleKeyDown(e, entry)}
+	                        className={`group flex w-full items-center justify-between gap-3 border-l-4 px-3 py-2 text-left text-sm transition focus:outline-none focus:ring-2 focus:ring-sky-500 ${selected?.id === entry.id ? "bg-yellow-500/20" : ""
+	                          } ${styles.list}`}
+	                      >
                         {/* Hidden media for metadata capture - REMOVED for memory optimization */}
 
                         <div className="flex-1 min-w-0">
@@ -933,29 +1056,41 @@ export default function FileBrowser() {
                               )}
                             </div>
                           )}
-                        </div>
-                        <div className="flex items-center gap-2 text-right text-xs text-slate-400">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setPublishingEntry(entry);
-                            }}
-                            className="opacity-0 transition-opacity group-hover:opacity-100 p-1 hover:text-sky-400"
-                            title="Publish"
-                          >
-                            🚀
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => handleDelete(entry, e)}
-                            className="opacity-0 transition-opacity group-hover:opacity-100 p-1 hover:text-red-400"
-                            title="Delete"
-                          >
-                            🗑️
-                          </button>
-                        </div>
-                      </button>
+	                        </div>
+		                        <div className="flex items-center gap-2 text-right text-xs text-slate-400">
+		                          <button
+		                            type="button"
+		                            onClick={(e) => {
+		                              e.stopPropagation();
+	                              setPins(togglePin(workspaceKey, entry.relPath));
+	                            }}
+	                            className={`${iconButtonBase} hover:bg-yellow-500 hover:text-black ${pins[entry.relPath] ? iconButtonVisible : iconButtonHidden
+	                              }`}
+	                            title={pins[entry.relPath] ? "Unpin" : "Pin"}
+	                          >
+	                            📌
+	                          </button>
+	                          <button
+	                            type="button"
+	                            onClick={(e) => {
+	                              e.stopPropagation();
+	                              setPublishingEntry(entry);
+	                            }}
+	                            className={`${iconButtonBase} ${iconButtonHidden} hover:bg-sky-500 hover:text-white`}
+	                            title="Publish"
+	                          >
+	                            🚀
+	                          </button>
+	                          <button
+	                            type="button"
+	                            onClick={(e) => handleDelete(entry, e)}
+	                            className={`${iconButtonBase} ${iconButtonHidden} hover:bg-red-500 hover:text-white`}
+	                            title="Delete (Del)"
+	                          >
+	                            🗑️
+	                          </button>
+	                        </div>
+	                      </button>
                     </li>
                   );
                 })}

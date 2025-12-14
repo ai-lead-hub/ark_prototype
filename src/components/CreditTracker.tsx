@@ -1,18 +1,13 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { getKieCredits, getKieKey } from "../lib/kie";
 import { Tooltip } from "./ui/Tooltip";
 
 export default function CreditTracker() {
     const [credits, setCredits] = useState<number | null>(null);
     const [loading, setLoading] = useState(false);
-    const [hasKey, setHasKey] = useState(false);
+    const [hasKey, setHasKey] = useState(() => Boolean(getKieKey()));
 
-    useEffect(() => {
-        setHasKey(!!getKieKey());
-        void fetchCredits();
-    }, []);
-
-    const fetchCredits = async () => {
+    const fetchCredits = useCallback(async () => {
         if (!getKieKey()) return;
         setLoading(true);
         try {
@@ -21,7 +16,18 @@ export default function CreditTracker() {
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
+
+    useEffect(() => {
+        const present = Boolean(getKieKey());
+        setHasKey(present);
+        if (present) {
+            void fetchCredits();
+        } else {
+            setCredits(null);
+            setLoading(false);
+        }
+    }, [fetchCredits]);
 
     if (!hasKey) return null;
 

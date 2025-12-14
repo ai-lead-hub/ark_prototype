@@ -1,12 +1,7 @@
 import { fal } from "@fal-ai/client";
 import { SYSTEM_PROMPTS } from "./prompts";
-
-
+import { getFalKey } from "./fal";
 const MODEL_ID = "google/gemini-2.5-flash";
-
-function getFalKey() {
-    return (import.meta.env.VITE_FAL_KEY ?? "").trim();
-}
 
 export async function expandPrompt(
     prompt: string,
@@ -16,7 +11,7 @@ export async function expandPrompt(
 ): Promise<string> {
     const key = getFalKey();
     if (!key) {
-        throw new Error("VITE_FAL_KEY is not set in the environment.");
+        throw new Error("Missing VITE_FAL_KEY. Add it to .env.local and restart the app.");
     }
 
     // Configure Fal client

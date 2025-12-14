@@ -20,12 +20,8 @@ import type {
 
 const KIE_BASE_URL = "https://api.kie.ai";
 
-function resolveEnvKey() {
-  return (import.meta.env.VITE_KIE_KEY ?? "").trim();
-}
-
 export function getKieKey() {
-  return resolveEnvKey();
+  return (import.meta.env.VITE_KIE_KEY ?? "").trim();
 }
 
 export async function getKieCredits(): Promise<number> {

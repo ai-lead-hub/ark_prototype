@@ -230,6 +230,28 @@ export async function createMetaDb(dbPath) {
     LIMIT $limit;
   `);
 
+  const getGenerationByOutputStmt = db.prepare(`
+    SELECT
+      id,
+      created_at,
+      workspace_id,
+      output_rel_path,
+      output_mime,
+      output_size,
+      category,
+      model_id,
+      provider,
+      endpoint,
+      prompt,
+      seed,
+      payload_json
+    FROM generations
+    WHERE workspace_id = $workspace_id
+      AND output_rel_path = $output_rel_path
+    ORDER BY created_at DESC
+    LIMIT 1;
+  `);
+
   const listPromptsStmt = db.prepare(`
     SELECT
       id,
@@ -275,6 +297,14 @@ export async function createMetaDb(dbPath) {
         workspace_id: workspaceId,
         limit: safeLimit,
       });
+    },
+    getGenerationByOutput({ workspaceId, outputRelPath }) {
+      return (
+        getGenerationByOutputStmt.get({
+          workspace_id: workspaceId,
+          output_rel_path: outputRelPath,
+        }) ?? null
+      );
     },
     upsertFile(input) {
       upsertFileStmt.run({

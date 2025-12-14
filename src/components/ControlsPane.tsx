@@ -37,18 +37,17 @@ import {
   uploadFile,
   type WorkspaceConnection,
 } from "../lib/api/files";
-import { recordGeneration, recordPrompt } from "../lib/api/meta";
+import { getGenerationByOutput, recordGeneration, recordPrompt } from "../lib/api/meta";
 import { useQueue } from "../state/queue";
 import { expandPrompt } from "../lib/llm";
-
-function formatDateFolder(date: Date) {
-  const pad = (value: number) => value.toString().padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-}
-
-
-
-
+import { buildDatedMediaPath } from "../lib/storage-paths";
+import {
+  consumeControlsActions,
+  getControlsPrompt,
+  onControlsStoreChange,
+  type ControlsAction,
+  type ControlsFileRef,
+} from "../lib/controls-store";
 
 import { type UploadSlot } from "./UpscaleControls";
 import { UploadZone } from "./UploadZone";
@@ -126,6 +125,8 @@ export default function ControlsPane() {
   const [prompt, setPrompt] = usePersistentState("prompt", "");
   const [history, setHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
+  const historyRef = useRef<string[]>([]);
+  const historyIndexRef = useRef(-1);
 
   const loadPersistedImageReferenceUploads = (): ReferenceUpload[] => {
     if (typeof localStorage === "undefined") return [];
@@ -224,13 +225,35 @@ export default function ControlsPane() {
     };
   }, []);
 
+  useEffect(() => {
+    historyRef.current = history;
+  }, [history]);
+
+  useEffect(() => {
+    historyIndexRef.current = historyIndex;
+  }, [historyIndex]);
+
   const [paramValues, setParamValues] = usePersistentState<
     Record<string, string | number | boolean | undefined>
   >("paramValues", {});
 
+  const connectionRef = useRef(connection);
+  useEffect(() => {
+    connectionRef.current = connection;
+  }, [connection]);
+
   const modelKind = activeTab;
   const referenceUploads = modelKind === "image" ? imageReferenceUploads : videoReferenceUploads;
   const setReferenceUploads = modelKind === "image" ? setImageReferenceUploads : setVideoReferenceUploads;
+
+  const activeTabRef = useRef(activeTab);
+  const modelKeyRef = useRef(modelKey);
+  useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
+  useEffect(() => {
+    modelKeyRef.current = modelKey;
+  }, [modelKey]);
 
   useEffect(() => {
     if (typeof localStorage === "undefined") return;
@@ -281,6 +304,18 @@ export default function ControlsPane() {
         return prev;
       });
       setImageReferenceUploads((prev) => {
+        const now = Date.now();
+        const next = prev.filter(
+          (entry) =>
+            !(
+              entry.url &&
+              typeof entry.createdAt === "number" &&
+              now - entry.createdAt > UPLOAD_URL_TTL_MS
+            )
+        );
+        return next.length === prev.length ? prev : next;
+      });
+      setVideoReferenceUploads((prev) => {
         const now = Date.now();
         const next = prev.filter(
           (entry) =>
@@ -674,6 +709,223 @@ export default function ControlsPane() {
     [setReferenceUploads]
   );
 
+  const handleStartFrameSelectRef = useRef(handleStartFrameSelect);
+  const handleEndFrameSelectRef = useRef(handleEndFrameSelect);
+  const handleReferenceFilesRef = useRef(handleReferenceFiles);
+
+  useEffect(() => {
+    handleStartFrameSelectRef.current = handleStartFrameSelect;
+  }, [handleStartFrameSelect]);
+
+  useEffect(() => {
+    handleEndFrameSelectRef.current = handleEndFrameSelect;
+  }, [handleEndFrameSelect]);
+
+  useEffect(() => {
+    handleReferenceFilesRef.current = handleReferenceFiles;
+  }, [handleReferenceFiles]);
+
+  const waitFor = useCallback(async (predicate: () => boolean, timeoutMs = 2000) => {
+    const startedAt = Date.now();
+    while (!predicate()) {
+      if (Date.now() - startedAt > timeoutMs) {
+        throw new Error("Timed out waiting for UI to update.");
+      }
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+  }, []);
+
+  const fetchWorkspaceFile = useCallback(async (fileRef: ControlsFileRef): Promise<File> => {
+    const conn = connectionRef.current;
+    if (!conn) {
+      throw new Error("Connect a workspace first.");
+    }
+    if (fileRef.workspaceId !== conn.workspaceId) {
+      throw new Error("That file is from a different workspace.");
+    }
+    const blob = await fetchFileBlob(conn, fileRef.relPath);
+    return new File([blob], fileRef.name, {
+      type: blob.type || fileRef.mime || "application/octet-stream",
+    });
+  }, []);
+
+  const controlsActionQueueRef = useRef<ControlsAction[]>([]);
+  const processingControlsActionsRef = useRef(false);
+
+  const processControlsAction = useCallback(
+    async (action: ControlsAction) => {
+      try {
+        if (action.type === "useStartFrame") {
+          if (!action.file.mime.startsWith("image/")) {
+            setStatus("Start frame must be an image.");
+            setTimeout(() => setStatus(null), 3000);
+            return;
+          }
+          if (!MODEL_SPECS.length) {
+            setStatus("No video models available.");
+            setTimeout(() => setStatus(null), 3000);
+            return;
+          }
+          setModelKey((prev) =>
+            prev.startsWith("video:") ? prev : `video:${MODEL_SPECS[0].id}`
+          );
+          setActiveTab("video");
+          const file = await fetchWorkspaceFile(action.file);
+          await handleStartFrameSelectRef.current(file);
+          return;
+        }
+
+        if (action.type === "useEndFrame") {
+          if (!action.file.mime.startsWith("image/")) {
+            setStatus("End frame must be an image.");
+            setTimeout(() => setStatus(null), 3000);
+            return;
+          }
+          if (!MODEL_SPECS.length) {
+            setStatus("No video models available.");
+            setTimeout(() => setStatus(null), 3000);
+            return;
+          }
+          setModelKey((prev) =>
+            prev.startsWith("video:") ? prev : `video:${MODEL_SPECS[0].id}`
+          );
+          setActiveTab("video");
+          const file = await fetchWorkspaceFile(action.file);
+          await handleEndFrameSelectRef.current(file);
+          return;
+        }
+
+        if (action.type === "addReferenceImage") {
+          if (!action.file.mime.startsWith("image/")) {
+            setStatus("References must be images.");
+            setTimeout(() => setStatus(null), 3000);
+            return;
+          }
+          if (!IMAGE_MODELS.length) {
+            setStatus("No image models available.");
+            setTimeout(() => setStatus(null), 3000);
+            return;
+          }
+
+          setModelKey((prev) =>
+            prev.startsWith("image:") ? prev : `image:${IMAGE_MODELS[0].id}`
+          );
+          setActiveTab("image");
+
+          await waitFor(
+            () =>
+              activeTabRef.current === "image" &&
+              modelKeyRef.current.startsWith("image:"),
+            2000
+          );
+
+          const file = await fetchWorkspaceFile(action.file);
+          const dt = new DataTransfer();
+          dt.items.add(file);
+          await handleReferenceFilesRef.current(dt.files);
+          return;
+        }
+
+        if (action.type === "recreateFromOutput") {
+          const conn = connectionRef.current;
+          if (!conn) {
+            setStatus("Connect a workspace first.");
+            setTimeout(() => setStatus(null), 3000);
+            return;
+          }
+          if (action.workspaceId !== conn.workspaceId) {
+            setStatus("That file is from a different workspace.");
+            setTimeout(() => setStatus(null), 3000);
+            return;
+          }
+
+          const meta = await getGenerationByOutput(conn, action.relPath, {
+            workspaceId: action.workspaceId,
+          });
+          if (!meta) {
+            setStatus("No generation metadata found for that file.");
+            setTimeout(() => setStatus(null), 3500);
+            return;
+          }
+
+          const category = meta.category;
+          if (category === "upscale") {
+            setStatus("This file was created by Upscale. Use the Upscale controls in the preview pane.");
+            setTimeout(() => setStatus(null), 4500);
+            return;
+          }
+
+          const modelId = meta.model_id;
+          const promptValue = meta.prompt ?? "";
+          if (!modelId) {
+            setStatus("Generation metadata is missing the model id.");
+            setTimeout(() => setStatus(null), 3500);
+            if (promptValue.trim()) setPrompt(promptValue);
+            return;
+          }
+
+          if (category === "video") {
+            if (!MODEL_SPECS.some((spec) => spec.id === modelId)) {
+              setStatus(`Video model not found: ${modelId}`);
+              setTimeout(() => setStatus(null), 3500);
+              if (promptValue.trim()) setPrompt(promptValue);
+              return;
+            } else {
+              setModelKey(`video:${modelId}`);
+              setActiveTab("video");
+            }
+          } else {
+            if (!IMAGE_MODELS.some((spec) => spec.id === modelId)) {
+              setStatus(`Image model not found: ${modelId}`);
+              setTimeout(() => setStatus(null), 3500);
+              if (promptValue.trim()) setPrompt(promptValue);
+              return;
+            } else {
+              setModelKey(`image:${modelId}`);
+              setActiveTab("image");
+            }
+          }
+
+          if (promptValue.trim()) {
+            setPrompt(promptValue);
+          }
+
+          setStatus("Loaded settings. Review and click Generate.");
+          setTimeout(() => setStatus(null), 3000);
+        }
+      } catch (error) {
+        console.error("Controls action failed:", error);
+        setStatus(error instanceof Error ? error.message : "Action failed");
+        setTimeout(() => setStatus(null), 4000);
+      }
+    },
+    [fetchWorkspaceFile, setActiveTab, setModelKey, setPrompt, setStatus, waitFor]
+  );
+
+  const processControlsActions = useCallback(async () => {
+    if (processingControlsActionsRef.current) return;
+    processingControlsActionsRef.current = true;
+    try {
+      while (controlsActionQueueRef.current.length > 0) {
+        const next = controlsActionQueueRef.current.shift();
+        if (!next) continue;
+        // Process sequentially so uploads don't overlap.
+        await processControlsAction(next);
+      }
+    } finally {
+      processingControlsActionsRef.current = false;
+    }
+  }, [processControlsAction]);
+
+  const queueControlsActions = useCallback(
+    (actions: ControlsAction[]) => {
+      if (!actions.length) return;
+      controlsActionQueueRef.current.push(...actions);
+      void processControlsActions();
+    },
+    [processControlsActions]
+  );
+
   const imageReferenceUrls =
     modelKind === "image" && (selectedImage?.maxRefs ?? 0) !== 0
       ? imageReferenceUploads
@@ -690,7 +942,12 @@ export default function ControlsPane() {
   const videoReferenceUrls =
     modelKind === "video" && referenceLimit > 0
       ? videoReferenceUploads
-        .filter((entry) => Boolean(entry.url))
+        .filter(
+          (entry) =>
+            Boolean(entry.url) &&
+            typeof entry.createdAt === "number" &&
+            Date.now() - entry.createdAt <= UPLOAD_URL_TTL_MS
+        )
         .map((entry) => entry.url as string)
         .slice(0, referenceLimit)
       : [];
@@ -877,27 +1134,56 @@ export default function ControlsPane() {
     );
   };
 
-  const addToHistory = useCallback((newPrompt: string) => {
-    if (history[historyIndex] === newPrompt) return;
+  const addToHistory = useCallback(
+    (newPrompt: string) => {
+      const currentHistory = historyRef.current;
+      const currentIndex = historyIndexRef.current;
 
-    const nextHistory = history.slice(0, historyIndex + 1);
-    nextHistory.push(newPrompt);
-    if (nextHistory.length > 50) nextHistory.shift();
+      if (currentHistory[currentIndex] === newPrompt) return;
 
-    setHistory(nextHistory);
-    setHistoryIndex(nextHistory.length - 1);
-    if (connection && newPrompt.trim()) {
-      const modelId = modelKey.replace(/^(image:|video:|upscale:)/, "");
-      void recordPrompt(connection, {
-        workspaceId: connection.workspaceId,
-        tab: modelKind,
-        modelId,
-        prompt: newPrompt.trim(),
-      }).catch(() => {
-        // best-effort
-      });
-    }
-  }, [history, historyIndex, connection, modelKey, modelKind]);
+      const nextHistory = currentHistory.slice(0, currentIndex + 1);
+      nextHistory.push(newPrompt);
+      if (nextHistory.length > 50) nextHistory.shift();
+
+      const nextIndex = nextHistory.length - 1;
+      historyRef.current = nextHistory;
+      historyIndexRef.current = nextIndex;
+
+      setHistory(nextHistory);
+      setHistoryIndex(nextIndex);
+
+      if (connection && newPrompt.trim()) {
+        const modelId = modelKey.replace(/^(image:|video:|upscale:)/, "");
+        void recordPrompt(connection, {
+          workspaceId: connection.workspaceId,
+          tab: modelKind,
+          modelId,
+          prompt: newPrompt.trim(),
+        }).catch(() => {
+          // best-effort
+        });
+      }
+    },
+    [connection, modelKey, modelKind]
+  );
+
+  useEffect(() => {
+    const syncPrompt = () => {
+      const next = getControlsPrompt();
+      const actions = consumeControlsActions();
+      if (actions.length) {
+        queueControlsActions(actions);
+      }
+
+      if (typeof next !== "string") return;
+      if (next === prompt) return;
+      setPrompt(next);
+      addToHistory(next);
+    };
+
+    const off = onControlsStoreChange(syncPrompt);
+    return off;
+  }, [addToHistory, prompt, queueControlsActions, setPrompt]);
 
   const undo = useCallback(() => {
     if (historyIndex > 0) {
@@ -1132,7 +1418,7 @@ export default function ControlsPane() {
       }
       if (!getProviderKey(provider)) {
         throw new Error(
-          `Missing ${getProviderEnvVar(provider)} in the environment.`
+          `Missing ${getProviderEnvVar(provider)}. Add it to .env.local and restart the app.`
         );
       }
 
@@ -1233,9 +1519,9 @@ export default function ControlsPane() {
             }
           }
 
-          const dateFolder = formatDateFolder(new Date());
-          const filename = buildFilename(modelId, prompt, extension, seed);
-          const relPath = `${dateFolder}/${filename}`;
+	          const folder = category === "image" ? "images" : "videos";
+	          const filename = buildFilename(modelId, prompt, extension, seed);
+	          const relPath = buildDatedMediaPath(folder, filename);
 
 	          if (downloadedBlob && connection) {
 	            log("Saving to workspace...");

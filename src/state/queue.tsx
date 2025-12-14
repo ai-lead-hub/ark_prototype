@@ -10,6 +10,7 @@ import {
     type ReactNode,
 } from "react";
 import type { QueueJob } from "./queueTypes";
+import { authHeaders } from "../lib/api/files";
 
 type QueueContextType = {
     jobs: QueueJob[];
@@ -202,11 +203,15 @@ export function QueueProvider({ children }: { children: ReactNode }) {
 
                         // Log to server
                         try {
-                            const payload = nextJob.payload as { connection?: { apiBase?: string } };
+                            const payload = nextJob.payload as { connection?: { apiBase?: string; token?: string } };
                             const apiBase = payload?.connection?.apiBase || "http://localhost:8787";
+                            const token = payload?.connection?.token;
                             await fetch(new URL("/log", apiBase).toString(), {
                                 method: "POST",
-                                headers: { "Content-Type": "application/json" },
+                                headers: {
+                                    "Content-Type": "application/json",
+                                    ...authHeaders(token),
+                                },
                                 body: JSON.stringify({
                                     level: "error",
                                     message: `Job ${nextJob.id} failed`,

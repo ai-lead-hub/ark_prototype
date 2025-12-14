@@ -686,6 +686,51 @@ server.get("/meta/generations", async (request, reply) => {
   }
 });
 
+server.get("/meta/generations/by-output", async (request, reply) => {
+  if (!metaDb) return reply.code(503).send({ error: "Metadata DB unavailable" });
+  const workspaceRaw =
+    request.query &&
+      typeof request.query === "object" &&
+      "workspace" in request.query
+      ? request.query.workspace
+      : undefined;
+  const pathRaw =
+    request.query &&
+      typeof request.query === "object" &&
+      "path" in request.query
+      ? request.query.path
+      : undefined;
+
+  let workspaceId;
+  let outputRelPath;
+  try {
+    workspaceId = sanitizeWorkspaceId(workspaceRaw);
+    outputRelPath = sanitizeRelPath(pathRaw);
+  } catch (error) {
+    return reply.code(400).send({ error: error.message ?? "Invalid input" });
+  }
+
+  try {
+    const row = metaDb.getGenerationByOutput({ workspaceId, outputRelPath });
+    if (!row) {
+      return reply.send({ entry: null });
+    }
+    const { payload_json: payloadJsonRaw, ...rest } = row;
+    let payload = null;
+    if (typeof payloadJsonRaw === "string" && payloadJsonRaw.trim()) {
+      try {
+        payload = JSON.parse(payloadJsonRaw);
+      } catch {
+        payload = payloadJsonRaw;
+      }
+    }
+    return reply.send({ entry: { ...rest, payload } });
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ error: "Failed to fetch generation metadata" });
+  }
+});
+
 server.post("/meta/prompts", async (request, reply) => {
   if (!metaDb) return reply.code(503).send({ error: "Metadata DB unavailable" });
   const body = request.body ?? {};
