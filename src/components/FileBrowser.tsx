@@ -20,6 +20,7 @@ import {
   recordFileMetadata,
   type PromptHistoryEntry,
 } from "../lib/api/meta";
+import { useHoverPlayVideos } from "../lib/useHoverPlayVideos";
 
 const IMAGE_EXTS = ["png", "jpg", "jpeg", "webp"];
 const VIDEO_EXTS = ["mp4", "webm", "mov", "mkv"];
@@ -52,25 +53,7 @@ export default function FileBrowser() {
   const playingVideoRef = useRef<HTMLVideoElement | null>(null);
   const sentFileMetaRef = useRef<Set<string>>(new Set());
 
-  const [hoverPlayVideos, setHoverPlayVideos] = useState<boolean>(() => {
-    if (typeof localStorage === "undefined") return true;
-    try {
-      const raw = localStorage.getItem("fileBrowser_hoverPlay_v1");
-      if (raw === null) return true;
-      return raw === "true";
-    } catch {
-      return true;
-    }
-  });
-
-  useEffect(() => {
-    if (typeof localStorage === "undefined") return;
-    try {
-      localStorage.setItem("fileBrowser_hoverPlay_v1", String(hoverPlayVideos));
-    } catch {
-      // Ignore storage errors.
-    }
-  }, [hoverPlayVideos]);
+  const [hoverPlayVideos] = useHoverPlayVideos();
 
   const iconButtonBase =
     "rounded-md border border-white/10 bg-black/60 p-1 text-xs text-slate-100 transition-opacity";
@@ -504,18 +487,6 @@ export default function FileBrowser() {
         </div>
         <button
           type="button"
-          onClick={() => setHoverPlayVideos((v) => !v)}
-          className={`${toolbarIconButtonBase} ${hoverPlayVideos
-            ? ""
-            : "border-amber-400/60 text-amber-200 hover:border-amber-300 hover:text-amber-100"
-            }`}
-          title={`Hover play videos: ${hoverPlayVideos ? "On" : "Off"} (can reduce memory/CPU)`}
-          aria-label={`Hover play videos: ${hoverPlayVideos ? "On" : "Off"}`}
-        >
-          {hoverPlayVideos ? "▶" : "⏸"}
-        </button>
-        <button
-          type="button"
           onClick={() => setShowRecent((v) => !v)}
           className={`${toolbarIconButtonBase} ${showRecent ? "border-sky-400 text-sky-200" : ""
             }`}
@@ -611,19 +582,19 @@ export default function FileBrowser() {
                       <div className="w-10 shrink-0 text-[10px] font-semibold text-slate-400">
                         {formatAgo(ref.lastUsedAt)}
                       </div>
-	                      <div className="min-w-0 flex-1">
-	                        <div className="truncate font-semibold text-slate-100">
-	                          {ref.name}
-	                        </div>
-	                        <div className="truncate text-[10px] text-slate-400">
-	                          {subtitle} · {ref.relPath}
-	                        </div>
-	                      </div>
-	                      {!match ? (
-	                        <div className="shrink-0 text-[10px] font-semibold text-amber-300">
-	                          Missing
-	                        </div>
-	                      ) : null}
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-semibold text-slate-100">
+                          {ref.name}
+                        </div>
+                        <div className="truncate text-[10px] text-slate-400">
+                          {subtitle} · {ref.relPath}
+                        </div>
+                      </div>
+                      {!match ? (
+                        <div className="shrink-0 text-[10px] font-semibold text-amber-300">
+                          Missing
+                        </div>
+                      ) : null}
                     </button>
                   );
                 })}
@@ -763,14 +734,14 @@ export default function FileBrowser() {
                   const url = getFileUrl(connection, entry.relPath, { includeToken: true });
                   const styles = getFileStyles(entry);
 
-	                  return (
+                  return (
                     <button
                       key={entry.id}
                       type="button"
                       draggable={entry.kind === "file"}
-	                      onDragStart={(event) => {
-	                        if (entry.kind === "file") {
-	                          event.dataTransfer.setData(
+                      onDragStart={(event) => {
+                        if (entry.kind === "file") {
+                          event.dataTransfer.setData(
                             FILE_ENTRY_MIME,
                             JSON.stringify({
                               workspaceId: connection.workspaceId,
@@ -787,122 +758,122 @@ export default function FileBrowser() {
                       onKeyDown={(e) => handleKeyDown(e, entry)}
                       className={`group relative flex aspect-square flex-col overflow-hidden rounded-lg border transition focus:outline-none focus:ring-2 focus:ring-sky-500 ${selected?.id === entry.id ? "ring-2 ring-yellow-500" : ""
                         } ${styles.grid}`}
-	                    >
-	                      <div className="flex-1 w-full overflow-hidden bg-white/5">
-	                        {entry.kind === "dir" ? (
-	                          <div className="flex h-full items-center justify-center text-4xl">
-	                            📁
-	                          </div>
-	                        ) : entry.mime.startsWith("video") ? (
-	                          <video
-	                            src={url}
-	                            className="h-full w-full object-cover"
-	                            preload="metadata"
-	                            muted
-	                            loop
-	                            playsInline
-	                            onMouseEnter={
-	                              hoverPlayVideos
-	                                ? (e) => {
-	                                  const target = e.currentTarget;
-	                                  if (playingVideoRef.current && playingVideoRef.current !== target) {
-	                                    playingVideoRef.current.pause();
-	                                    playingVideoRef.current.currentTime = 0;
-	                                  }
-	                                  playingVideoRef.current = target;
-	                                  void target.play();
-	                                }
-	                                : undefined
-	                            }
-	                            onMouseLeave={
-	                              hoverPlayVideos
-	                                ? (e) => {
-	                                  const target = e.currentTarget;
-	                                  target.pause();
-	                                  target.currentTime = 0;
-	                                  if (playingVideoRef.current === target) {
-	                                    playingVideoRef.current = null;
-	                                  }
-	                                }
-	                                : undefined
-	                            }
-	                            onLoadedMetadata={(e) => {
-	                              const target = e.target as HTMLVideoElement;
-	                              const dims = { w: target.videoWidth, h: target.videoHeight };
-	                              setFileDims((prev) => ({
-	                                ...prev,
-	                                [entry.id]: dims,
-	                              }));
-	                              if (
-	                                typeof entry.width === "number" &&
-	                                typeof entry.height === "number" &&
-	                                entry.width === dims.w &&
-	                                entry.height === dims.h &&
-	                                (Number.isFinite(target.duration) && target.duration > 0
-	                                  ? typeof entry.duration === "number" &&
-	                                  Number.isFinite(entry.duration) &&
-	                                  Math.abs(entry.duration - target.duration) < 0.25
-	                                  : true)
-	                              ) {
-	                                return;
-	                              }
+                    >
+                      <div className="flex-1 w-full overflow-hidden bg-white/5">
+                        {entry.kind === "dir" ? (
+                          <div className="flex h-full items-center justify-center text-4xl">
+                            📁
+                          </div>
+                        ) : entry.mime.startsWith("video") ? (
+                          <video
+                            src={url}
+                            className="h-full w-full object-cover"
+                            preload="metadata"
+                            muted
+                            loop
+                            playsInline
+                            onMouseEnter={
+                              hoverPlayVideos
+                                ? (e) => {
+                                  const target = e.currentTarget;
+                                  if (playingVideoRef.current && playingVideoRef.current !== target) {
+                                    playingVideoRef.current.pause();
+                                    playingVideoRef.current.currentTime = 0;
+                                  }
+                                  playingVideoRef.current = target;
+                                  void target.play();
+                                }
+                                : undefined
+                            }
+                            onMouseLeave={
+                              hoverPlayVideos
+                                ? (e) => {
+                                  const target = e.currentTarget;
+                                  target.pause();
+                                  target.currentTime = 0;
+                                  if (playingVideoRef.current === target) {
+                                    playingVideoRef.current = null;
+                                  }
+                                }
+                                : undefined
+                            }
+                            onLoadedMetadata={(e) => {
+                              const target = e.target as HTMLVideoElement;
+                              const dims = { w: target.videoWidth, h: target.videoHeight };
+                              setFileDims((prev) => ({
+                                ...prev,
+                                [entry.id]: dims,
+                              }));
+                              if (
+                                typeof entry.width === "number" &&
+                                typeof entry.height === "number" &&
+                                entry.width === dims.w &&
+                                entry.height === dims.h &&
+                                (Number.isFinite(target.duration) && target.duration > 0
+                                  ? typeof entry.duration === "number" &&
+                                  Number.isFinite(entry.duration) &&
+                                  Math.abs(entry.duration - target.duration) < 0.25
+                                  : true)
+                              ) {
+                                return;
+                              }
                               const key = `${connection.workspaceId}:${entry.relPath}`;
                               if (!sentFileMetaRef.current.has(key)) {
                                 sentFileMetaRef.current.add(key);
                                 void recordFileMetadata(connection, {
                                   workspaceId: connection.workspaceId,
-	                                  relPath: entry.relPath,
-	                                  width: dims.w,
-	                                  height: dims.h,
-	                                  duration:
-	                                    Number.isFinite(target.duration) && target.duration > 0
-	                                      ? target.duration
-	                                      : undefined,
-	                                }).catch(() => {
-	                                  sentFileMetaRef.current.delete(key);
-	                                });
-	                              }
-	                            }}
-	                          />
-	                        ) : (
-	                          <img
-	                            src={url}
-	                            alt={entry.name}
-	                            className="h-full w-full object-cover"
-	                            loading="lazy"
-	                            onLoad={(e) => {
-	                              const target = e.target as HTMLImageElement;
-	                              const dims = { w: target.naturalWidth, h: target.naturalHeight };
-	                              setFileDims((prev) => ({
-	                                ...prev,
-	                                [entry.id]: dims,
-	                              }));
-	                              if (
-	                                typeof entry.width === "number" &&
-	                                typeof entry.height === "number" &&
-	                                entry.width === dims.w &&
-	                                entry.height === dims.h
-	                              ) {
-	                                return;
-	                              }
+                                  relPath: entry.relPath,
+                                  width: dims.w,
+                                  height: dims.h,
+                                  duration:
+                                    Number.isFinite(target.duration) && target.duration > 0
+                                      ? target.duration
+                                      : undefined,
+                                }).catch(() => {
+                                  sentFileMetaRef.current.delete(key);
+                                });
+                              }
+                            }}
+                          />
+                        ) : (
+                          <img
+                            src={url}
+                            alt={entry.name}
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                            onLoad={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              const dims = { w: target.naturalWidth, h: target.naturalHeight };
+                              setFileDims((prev) => ({
+                                ...prev,
+                                [entry.id]: dims,
+                              }));
+                              if (
+                                typeof entry.width === "number" &&
+                                typeof entry.height === "number" &&
+                                entry.width === dims.w &&
+                                entry.height === dims.h
+                              ) {
+                                return;
+                              }
                               const key = `${connection.workspaceId}:${entry.relPath}`;
                               if (!sentFileMetaRef.current.has(key)) {
                                 sentFileMetaRef.current.add(key);
                                 void recordFileMetadata(connection, {
                                   workspaceId: connection.workspaceId,
-	                                  relPath: entry.relPath,
-	                                  width: dims.w,
-	                                  height: dims.h,
-	                                }).catch(() => {
-	                                  sentFileMetaRef.current.delete(key);
-	                                });
-	                              }
-	                            }}
-	                          />
-	                        )}
-	                      </div>
-	                      <div className="absolute inset-x-0 bottom-0 bg-black/60 p-2 backdrop-blur-sm">
-	                        {editingId === entry.id ? (
+                                  relPath: entry.relPath,
+                                  width: dims.w,
+                                  height: dims.h,
+                                }).catch(() => {
+                                  sentFileMetaRef.current.delete(key);
+                                });
+                              }
+                            }}
+                          />
+                        )}
+                      </div>
+                      <div className="absolute inset-x-0 bottom-0 bg-black/60 p-2 backdrop-blur-sm">
+                        {editingId === entry.id ? (
                           <input
                             autoFocus
                             type="text"
@@ -916,13 +887,13 @@ export default function FileBrowser() {
                             onClick={(e) => e.stopPropagation()}
                             className="w-full rounded border border-sky-500/50 bg-black/50 px-1 py-0.5 text-xs text-white outline-none"
                           />
-	                        ) : (
-	                          <div
-	                            className="truncate text-xs font-semibold text-white cursor-text"
-	                            title={entry.name}
-	                            onDoubleClick={(e) => {
-	                              e.stopPropagation();
-	                              setEditingId(entry.id);
+                        ) : (
+                          <div
+                            className="truncate text-xs font-semibold text-white cursor-text"
+                            title={entry.name}
+                            onDoubleClick={(e) => {
+                              e.stopPropagation();
+                              setEditingId(entry.id);
                               setEditName(entry.name);
                             }}
                           >
@@ -930,42 +901,42 @@ export default function FileBrowser() {
                           </div>
                         )}
                       </div>
-	                      {operationLoading === entry.id && (
-	                        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-	                          <Spinner size="md" />
-	                        </div>
-	                      )}
-		                      <button
-		                        type="button"
-		                        onClick={(e) => {
-		                          e.stopPropagation();
-		                          setPins(togglePin(workspaceKey, entry.relPath));
-	                        }}
-	                        className={`absolute top-1 right-14 ${iconButtonBase} hover:bg-yellow-500 hover:text-black ${pins[entry.relPath] ? iconButtonVisible : iconButtonHidden
-	                          }`}
-	                        title={pins[entry.relPath] ? "Unpin" : "Pin"}
-	                      >
-	                        📌
-	                      </button>
-	                      <button
-	                        type="button"
-	                        onClick={(e) => {
-	                          e.stopPropagation();
-	                          setPublishingEntry(entry);
-	                        }}
-	                        className={`absolute top-1 right-8 ${iconButtonBase} ${iconButtonHidden} hover:bg-sky-500 hover:text-white`}
-	                        title="Publish"
-	                      >
-	                        🚀
-	                      </button>
-	                      <button
-	                        type="button"
-	                        onClick={(e) => handleDelete(entry, e)}
-	                        className={`absolute top-1 right-1 ${iconButtonBase} ${iconButtonHidden} hover:bg-red-500 hover:text-white`}
-	                        title="Delete (Del)"
-	                      >
-	                        🗑️
-	                      </button>
+                      {operationLoading === entry.id && (
+                        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                          <Spinner size="md" />
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPins(togglePin(workspaceKey, entry.relPath));
+                        }}
+                        className={`absolute top-1 right-14 ${iconButtonBase} hover:bg-yellow-500 hover:text-black ${pins[entry.relPath] ? iconButtonVisible : iconButtonHidden
+                          }`}
+                        title={pins[entry.relPath] ? "Unpin" : "Pin"}
+                      >
+                        📌
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPublishingEntry(entry);
+                        }}
+                        className={`absolute top-1 right-8 ${iconButtonBase} ${iconButtonHidden} hover:bg-sky-500 hover:text-white`}
+                        title="Publish"
+                      >
+                        🚀
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => handleDelete(entry, e)}
+                        className={`absolute top-1 right-1 ${iconButtonBase} ${iconButtonHidden} hover:bg-red-500 hover:text-white`}
+                        title="Delete (Del)"
+                      >
+                        🗑️
+                      </button>
                     </button>
                   );
                 })}
@@ -991,9 +962,9 @@ export default function FileBrowser() {
 
                   return (
                     <li key={entry.id}>
-	                      <button
-	                        type="button"
-	                        draggable={entry.kind === "file"}
+                      <button
+                        type="button"
+                        draggable={entry.kind === "file"}
                         onDragStart={(event) => {
                           if (entry.kind === "file") {
                             event.dataTransfer.setData(
@@ -1008,12 +979,12 @@ export default function FileBrowser() {
                             event.dataTransfer.effectAllowed = "copy";
                             event.dataTransfer.setData("DownloadURL", `${entry.mime}:${entry.name}:${url}`);
                           }
-	                        }}
-	                        onClick={() => select(entry)}
-	                        onKeyDown={(e) => handleKeyDown(e, entry)}
-	                        className={`group flex w-full items-center justify-between gap-3 border-l-4 px-3 py-2 text-left text-sm transition focus:outline-none focus:ring-2 focus:ring-sky-500 ${selected?.id === entry.id ? "bg-yellow-500/20" : ""
-	                          } ${styles.list}`}
-	                      >
+                        }}
+                        onClick={() => select(entry)}
+                        onKeyDown={(e) => handleKeyDown(e, entry)}
+                        className={`group flex w-full items-center justify-between gap-3 border-l-4 px-3 py-2 text-left text-sm transition focus:outline-none focus:ring-2 focus:ring-sky-500 ${selected?.id === entry.id ? "bg-yellow-500/20" : ""
+                          } ${styles.list}`}
+                      >
                         {/* Hidden media for metadata capture - REMOVED for memory optimization */}
 
                         <div className="flex-1 min-w-0">
@@ -1056,41 +1027,41 @@ export default function FileBrowser() {
                               )}
                             </div>
                           )}
-	                        </div>
-		                        <div className="flex items-center gap-2 text-right text-xs text-slate-400">
-		                          <button
-		                            type="button"
-		                            onClick={(e) => {
-		                              e.stopPropagation();
-	                              setPins(togglePin(workspaceKey, entry.relPath));
-	                            }}
-	                            className={`${iconButtonBase} hover:bg-yellow-500 hover:text-black ${pins[entry.relPath] ? iconButtonVisible : iconButtonHidden
-	                              }`}
-	                            title={pins[entry.relPath] ? "Unpin" : "Pin"}
-	                          >
-	                            📌
-	                          </button>
-	                          <button
-	                            type="button"
-	                            onClick={(e) => {
-	                              e.stopPropagation();
-	                              setPublishingEntry(entry);
-	                            }}
-	                            className={`${iconButtonBase} ${iconButtonHidden} hover:bg-sky-500 hover:text-white`}
-	                            title="Publish"
-	                          >
-	                            🚀
-	                          </button>
-	                          <button
-	                            type="button"
-	                            onClick={(e) => handleDelete(entry, e)}
-	                            className={`${iconButtonBase} ${iconButtonHidden} hover:bg-red-500 hover:text-white`}
-	                            title="Delete (Del)"
-	                          >
-	                            🗑️
-	                          </button>
-	                        </div>
-	                      </button>
+                        </div>
+                        <div className="flex items-center gap-2 text-right text-xs text-slate-400">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPins(togglePin(workspaceKey, entry.relPath));
+                            }}
+                            className={`${iconButtonBase} hover:bg-yellow-500 hover:text-black ${pins[entry.relPath] ? iconButtonVisible : iconButtonHidden
+                              }`}
+                            title={pins[entry.relPath] ? "Unpin" : "Pin"}
+                          >
+                            📌
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPublishingEntry(entry);
+                            }}
+                            className={`${iconButtonBase} ${iconButtonHidden} hover:bg-sky-500 hover:text-white`}
+                            title="Publish"
+                          >
+                            🚀
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => handleDelete(entry, e)}
+                            className={`${iconButtonBase} ${iconButtonHidden} hover:bg-red-500 hover:text-white`}
+                            title="Delete (Del)"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </button>
                     </li>
                   );
                 })}

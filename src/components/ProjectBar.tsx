@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import {
   createWorkspace,
   getDefaultConnection,
@@ -11,6 +11,7 @@ import { Tooltip } from "./ui/Tooltip";
 import { useQueue } from "../state/queue";
 import QueueLog from "./QueueLog";
 import CreditTracker from "./CreditTracker";
+import { useHoverPlayVideos } from "../lib/useHoverPlayVideos";
 
 const STORAGE_KEY = "file-api-connection";
 
@@ -54,6 +55,8 @@ export default function ProjectBar() {
   const [workspaces, setWorkspaces] = useState<string[]>([]);
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const saved = loadSavedConnection();
@@ -90,6 +93,18 @@ export default function ProjectBar() {
       cancelled = true;
     };
   }, [apiBase, token]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (settingsRef.current && !settingsRef.current.contains(event.target as Node)) {
+        setSettingsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [settingsOpen]);
 
   const handleConnect = async () => {
     const base = apiBase.trim().replace(/\/$/, "");
@@ -151,99 +166,152 @@ export default function ProjectBar() {
     setStatus("Disconnected from workspace.");
   };
 
-
+  const connectionStatusIcon = connection ? "🟢" : "🔴";
+  const connectionLabel = connection ? connection.workspaceId : "Not connected";
 
   return (
     <header className="sticky top-0 z-10 border-b border-white/10 bg-slate-950/70 backdrop-blur-lg">
-      <div className="flex flex-col gap-3 px-4 py-3 text-sm">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex flex-col justify-center min-h-[2.5rem]">
-            {status ? (
-              <span className="text-xs font-medium text-slate-300 animate-pulse-once">
-                {status}
-              </span>
-            ) : !connection ? (
-              <span className="text-xs text-sky-200">
-                👉 Enter details and click Connect
-              </span>
-            ) : (
-              <span className="text-xs font-medium text-slate-300">
-                Ready
-              </span>
+      <div className="flex items-center justify-between gap-3 px-4 py-2 text-sm">
+        {/* Left: Status */}
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-xs" title={connection ? "Connected" : "Disconnected"}>
+            {connectionStatusIcon}
+          </span>
+          <span className="text-xs font-medium text-slate-300 truncate max-w-[200px]">
+            {connectionLabel}
+          </span>
+        </div>
+
+        {/* Right: Actions */}
+        <div className="flex items-center gap-2">
+          <CreditTracker />
+          <QueueButton />
+
+          {/* Settings Button + Dropdown */}
+          <div className="relative" ref={settingsRef}>
+            <button
+              type="button"
+              onClick={() => setSettingsOpen(!settingsOpen)}
+              className={`flex h-7 w-7 items-center justify-center rounded-full border text-sm transition ${settingsOpen
+                ? "border-sky-400 bg-sky-500/20 text-sky-200"
+                : "border-white/10 text-slate-400 hover:border-sky-400 hover:text-white"
+                }`}
+              title="Workspace Settings"
+              aria-label="Toggle workspace settings"
+            >
+              ⚙️
+            </button>
+
+            {/* Settings Dropdown */}
+            {settingsOpen && (
+              <div className="absolute right-0 top-full mt-2 w-80 rounded-lg border border-white/10 bg-slate-900 p-4 shadow-2xl z-50">
+                <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Workspace Connection
+                </div>
+
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <label className="mb-1 block text-[11px] font-medium text-slate-400">
+                      API Base URL
+                    </label>
+                    <input
+                      type="url"
+                      value={apiBase}
+                      onChange={(event) => setApiBase(event.target.value)}
+                      placeholder="http://localhost:8787"
+                      className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 transition-all"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-[11px] font-medium text-slate-400">
+                      Workspace ID
+                    </label>
+                    <input
+                      type="text"
+                      value={workspaceId}
+                      onChange={(event) => setWorkspaceId(event.target.value)}
+                      list="workspace-options"
+                      placeholder="workspace id"
+                      className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 transition-all"
+                    />
+                    <datalist id="workspace-options">
+                      {workspaces.map((ws) => (
+                        <option key={ws} value={ws} />
+                      ))}
+                    </datalist>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-[11px] font-medium text-slate-400">
+                      API Token
+                    </label>
+                    <input
+                      type="password"
+                      value={token}
+                      onChange={(event) => setToken(event.target.value)}
+                      placeholder="Optional"
+                      className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 transition-all"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={handleConnect}
+                      disabled={busy}
+                      className="flex-1 rounded-lg border border-sky-500/50 bg-sky-500/20 px-3 py-1.5 font-semibold text-xs text-sky-200 transition hover:bg-sky-500/30 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {busy ? "..." : connection ? "Reconnect" : "Connect"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCreateWorkspace}
+                      disabled={busy}
+                      className="rounded-lg border border-white/10 px-3 py-1.5 font-semibold text-xs text-slate-200 transition hover:border-sky-400 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      New
+                    </button>
+                    {connection && (
+                      <Tooltip text="Disconnect clears the saved workspace link. Your files stay on the server.">
+                        <button
+                          type="button"
+                          onClick={handleDisconnect}
+                          className="rounded-lg border border-white/10 px-3 py-1.5 font-semibold text-xs text-slate-200 transition hover:border-amber-400 hover:text-amber-100"
+                        >
+                          Disconnect
+                        </button>
+                      </Tooltip>
+                    )}
+                  </div>
+
+                  {status && (
+                    <div className="rounded-md bg-black/30 px-3 py-2 text-xs text-slate-300">
+                      {status}
+                    </div>
+                  )}
+
+                  {/* Divider */}
+                  <div className="border-t border-white/10 pt-3 mt-1">
+                    <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      Preferences
+                    </div>
+                    <HoverPlayToggle />
+                  </div>
+                </div>
+              </div>
             )}
           </div>
-          <div className="ml-auto flex flex-wrap items-center gap-2">
-            <input
-              type="url"
-              value={apiBase}
-              onChange={(event) => setApiBase(event.target.value)}
-              placeholder="http://localhost:8787"
-              className="w-32 sm:w-48 rounded-lg border border-white/10 bg-black/30 px-3 py-1.5 text-xs text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 transition-all"
-            />
-            <input
-              type="text"
-              value={workspaceId}
-              onChange={(event) => setWorkspaceId(event.target.value)}
-              list="workspace-options"
-              placeholder="workspace id"
-              className="w-24 sm:w-32 rounded-lg border border-white/10 bg-black/30 px-3 py-1.5 text-xs text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 transition-all"
-            />
-            <datalist id="workspace-options">
-              {workspaces.map((ws) => (
-                <option key={ws} value={ws} />
-              ))}
-            </datalist>
-            <input
-              type="password"
-              value={token}
-              onChange={(event) => setToken(event.target.value)}
-              placeholder="API token"
-              className="w-24 sm:w-36 rounded-lg border border-white/10 bg-black/30 px-3 py-1.5 text-xs text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 transition-all"
-            />
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleConnect}
-                disabled={busy}
-                className="whitespace-nowrap rounded-full border border-white/20 px-3 py-1 font-semibold text-xs text-white transition hover:border-sky-400 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {busy ? "..." : connection ? "Reconnect" : "Connect"}
-              </button>
-              <button
-                type="button"
-                onClick={handleCreateWorkspace}
-                disabled={busy}
-                className="whitespace-nowrap rounded-full border border-white/10 px-3 py-1 font-semibold text-xs text-slate-200 transition hover:border-sky-400 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                New
-              </button>
-              {connection ? (
-                <Tooltip text="Disconnect clears the saved workspace link. Your files stay on the server.">
-                  <button
-                    type="button"
-                    onClick={handleDisconnect}
-                    className="whitespace-nowrap rounded-full border border-white/10 px-3 py-1 font-semibold text-xs text-slate-200 transition hover:border-amber-400 hover:text-amber-100"
-                  >
-                    Disconnect
-                  </button>
-                </Tooltip>
-              ) : null}
-            </div>
-            <div className="h-4 w-px bg-white/10 mx-1 hidden sm:block" />
-            <div className="flex items-center gap-2">
-              <CreditTracker />
-              <QueueButton />
-              <a
-                href="https://github.com/ai-scape/freepikv5/tree/main"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex h-6 w-6 items-center justify-center rounded-full border border-white/10 text-slate-400 transition hover:border-sky-400 hover:text-white"
-                title="Help & Documentation"
-              >
-                <span className="text-xs font-bold">?</span>
-              </a>
-            </div>
-          </div>
+
+          <a
+            href="https://github.com/ai-scape/freepikv5/tree/main"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex h-7 w-7 items-center justify-center rounded-full border border-white/10 text-slate-400 transition hover:border-sky-400 hover:text-white"
+            title="Help & Documentation"
+          >
+            <span className="text-xs font-bold">?</span>
+          </a>
         </div>
       </div>
 
@@ -273,3 +341,28 @@ function QueueButton() {
     </button>
   );
 }
+
+function HoverPlayToggle() {
+  const [hoverPlayVideos, setHoverPlayVideos] = useHoverPlayVideos();
+
+  return (
+    <label className="flex items-center justify-between cursor-pointer">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-slate-300">Hover play videos</span>
+        <span className="text-[10px] text-slate-500">(can reduce CPU)</span>
+      </div>
+      <button
+        type="button"
+        onClick={() => setHoverPlayVideos(!hoverPlayVideos)}
+        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${hoverPlayVideos ? "bg-sky-500" : "bg-slate-600"
+          }`}
+      >
+        <span
+          className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${hoverPlayVideos ? "translate-x-4" : "translate-x-1"
+            }`}
+        />
+      </button>
+    </label>
+  );
+}
+
