@@ -7,25 +7,27 @@
 }
 
 body {
-  @apply min-h-screen font-sans antialiased text-slate-100;
-  background:
-    radial-gradient(1200px circle at 15% 10%, rgba(59, 130, 246, 0.28), transparent 55%),
-    radial-gradient(900px circle at 85% 15%, rgba(249, 115, 22, 0.18), transparent 55%),
-    radial-gradient(650px circle at 20% 80%, rgba(20, 184, 166, 0.16), transparent 60%),
-    #05070f;
+  @apply min-h-screen font-sans antialiased text-slate-100 bg-slate-950;
+  /* Removed complex gradients for a cleaner, utilitarian look */
+  background-image: linear-gradient(to bottom, #020617, #0f172a);
 }
 
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(148, 163, 184, 0.08);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(100, 116, 139, 0.4);
-  border-radius: 9999px;
+  background: rgba(148, 163, 184, 0.2);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.4);
 }
 
 a {
@@ -33,7 +35,7 @@ a {
 }
 
 .glass-surface {
-  @apply rounded-3xl border border-white/5 bg-white/5 backdrop-blur-xl shadow-panel;
+  @apply border border-white/5 bg-slate-900/80 shadow-sm;
 }
 
 .divider-gradient {
@@ -45,12 +47,7 @@ a {
   position: absolute;
   inset: auto 0 -1px 0;
   height: 1px;
-  background: linear-gradient(
-    90deg,
-    rgba(148, 163, 184, 0),
-    rgba(96, 165, 250, 0.4),
-    rgba(148, 163, 184, 0)
-  );
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .fade-mask {

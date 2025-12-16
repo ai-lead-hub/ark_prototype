@@ -171,7 +171,7 @@ export default function ProjectBar() {
 
   return (
     <header className="sticky top-0 z-10 border-b border-white/10 bg-slate-950/70 backdrop-blur-lg">
-      <div className="flex items-center justify-between gap-3 px-4 py-2 text-sm">
+      <div className="flex items-center justify-between gap-2 px-3 py-1.5 text-sm">
         {/* Left: Status */}
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-xs" title={connection ? "Connected" : "Disconnected"}>

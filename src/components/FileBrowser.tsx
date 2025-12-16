@@ -116,7 +116,7 @@ export default function FileBrowser() {
       };
     }
     return {
-      grid: "border-white/10 bg-black/40",
+      grid: "border-white/5 bg-slate-900/40 hover:bg-slate-800/60 hover:border-white/10",
       list: "border-l-transparent",
     };
   };
@@ -452,7 +452,7 @@ export default function FileBrowser() {
   }
 
   return (
-    <div className="flex h-full flex-col gap-3">
+    <div className="flex h-full flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
         <input
           type="search"
@@ -714,7 +714,7 @@ export default function FileBrowser() {
         ) : (
           <div className="flex flex-col min-h-full">
             {viewMode === "grid" ? (
-              <div className="grid grid-cols-2 gap-3 p-3 sm:grid-cols-3">
+              <div className="grid grid-cols-2 gap-2 p-2 sm:grid-cols-3">
                 {activeJobs.map((job) => (
                   <div
                     key={job.id}

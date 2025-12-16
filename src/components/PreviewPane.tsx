@@ -13,6 +13,7 @@ import { compressImage } from "../lib/image-utils";
 import { recordFileMetadata, recordGeneration } from "../lib/api/meta";
 import { enqueueControlsAction } from "../lib/controls-store";
 import { recordRecentReference } from "../lib/recent-references";
+import ImageEditor from "./ImageEditor";
 
 
 
@@ -840,12 +841,28 @@ export default function PreviewPane({
         </div>
       )}
 
-      <div className="flex flex-1 flex-col gap-3 overflow-y-auto min-h-0">
-	        <div className="flex-1 min-h-0 rounded-2xl border border-white/10 bg-black/30 p-4">
-	          {error ? (
-	            <div className="text-sm text-rose-300">{error}</div>
-	          ) : !previewUrl ? (
-	            <div className="text-sm text-slate-400">Loading preview…</div>
+      {/* Full-screen image editor */}
+      {isFullScreen && selected.mime.startsWith("image") && previewUrl && connection ? (
+        <ImageEditor
+          imageUrl={previewUrl}
+          imageName={selected.name}
+          onSave={async (blob, filename) => {
+            const directoryParts = selected.relPath.split("/");
+            directoryParts.pop();
+            const baseDir = directoryParts.join("/");
+            const relPath = baseDir ? `${baseDir}/${filename}` : filename;
+            await uploadFile(connection, relPath, blob);
+            await refreshTree(relPath);
+          }}
+          onClose={() => onToggleFullScreen?.()}
+        />
+      ) : (
+        <div className="flex flex-1 flex-col gap-3 overflow-y-auto min-h-0">
+          <div className="flex-1 min-h-0 rounded-2xl border border-white/10 bg-black/30 p-4">
+            {error ? (
+              <div className="text-sm text-rose-300">{error}</div>
+            ) : !previewUrl ? (
+              <div className="text-sm text-slate-400">Loading preview…</div>
             ) : (
               <div className="relative h-full w-full">
                 {selected.mime.startsWith("video") ? (
@@ -891,142 +908,142 @@ export default function PreviewPane({
                 ) : null}
               </div>
             )}
-	        </div>
+          </div>
 
-        {!isFullScreen && (
-          <>
-		            {selected && selected.mime.startsWith("video") ? (
-		              <div className="rounded-xl border border-white/10 bg-white/5 p-2 text-xs text-slate-200">
-		                <div className="flex items-center justify-between">
-		                  <div className="flex gap-2">
-	                    <button
-	                      type="button"
-	                      disabled={!canCapture || captureBusy}
-	                      onClick={() => void captureFrame(undefined, "Extracting current frame…")}
-	                      className="rounded-lg border border-white/10 px-2 py-1 font-semibold text-slate-100 transition hover:border-sky-400 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
-	                    >
-	                      {captureBusy ? "..." : "Extract"}
-	                    </button>
-                    <button
-                      type="button"
-                      disabled={!canCapture || captureBusy}
-                      onClick={() => void captureFrame(0, "Extracting start frame…")}
-                      className="rounded-lg border border-white/10 px-2 py-1 font-semibold text-slate-100 transition hover:border-sky-400 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      Start
-                    </button>
-                    <button
-                      type="button"
-                      disabled={!canCapture || captureBusy || !videoDuration}
-                      onClick={() => {
-                        const endTime =
-                          videoDuration ??
-                          (videoRef.current?.duration && Number.isFinite(videoRef.current.duration)
-                            ? videoRef.current.duration
-                            : 0);
-                        void captureFrame(Math.max(endTime - 0.001, 0), "Extracting end frame…");
-                      }}
-                      className="rounded-lg border border-white/10 px-2 py-1 font-semibold text-slate-100 transition hover:border-sky-400 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      End
-                    </button>
-	                    <button
-	                      type="button"
-	                      onClick={() => {
-	                        if (videoRef.current) {
-	                          videoRef.current.load();
-	                        }
-	                      }}
-	                      className="rounded-lg border border-white/10 px-2 py-1 font-semibold text-slate-100 transition hover:border-sky-400 hover:text-sky-200"
-	                      title="Reload video if stuck"
-	                    >
-	                      ↻
-	                    </button>
-		                    <button
-		                      type="button"
-		                      disabled={upscaleBusy}
-		                      onClick={() => void handleUpscale()}
-		                      className="rounded-lg border border-white/10 px-2 py-1 font-semibold text-slate-100 transition hover:border-sky-400 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
-		                    >
-		                      {upscaleBusy ? "..." : "Upscale"}
-		                    </button>
-		                  </div>
-		                  <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={pushRecreateAction}
-                          className="rounded-lg border border-white/10 p-1.5 text-slate-100 transition hover:border-indigo-400 hover:text-indigo-200"
-                          title="Recreate (load prompt/model used to make this file)"
-                          aria-label="Recreate"
-                        >
-                          ⟳
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void handleDownload()}
-                          className="rounded-lg border border-white/10 p-1.5 text-slate-100 transition hover:border-sky-400 hover:text-sky-200"
-                          title="Download original"
-                          aria-label="Download"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                            <polyline points="7 10 12 15 17 10" />
-                            <line x1="12" y1="15" x2="12" y2="3" />
-                          </svg>
-                        </button>
-                      </div>
-		                </div>
-		                {captureStatus ? (
-		                  <div className="mt-2 rounded-md border border-white/10 bg-black/40 px-2 py-1 text-[10px]">
-		                    {captureStatus}
-	                  </div>
-	                ) : null}
-		                {upscaleStatus ? (
-		                  <div className="mt-2 rounded-md border border-white/10 bg-black/40 px-2 py-1 text-[10px]">
-		                    {upscaleStatus}
-		                  </div>
-		                ) : null}
-                    {quickStatus ? (
-                      <div className="mt-2 rounded-md border border-white/10 bg-black/40 px-2 py-1 text-[10px]">
-                        {quickStatus}
-                      </div>
-                    ) : null}
-		              </div>
-		            ) : null}
+          {!isFullScreen && (
+            <>
+              {selected && selected.mime.startsWith("video") ? (
+                <div className="rounded-xl border border-white/10 bg-white/5 p-2 text-xs text-slate-200">
+                  <div className="flex items-center justify-between">
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        disabled={!canCapture || captureBusy}
+                        onClick={() => void captureFrame(undefined, "Extracting current frame…")}
+                        className="rounded-lg border border-white/10 px-2 py-1 font-semibold text-slate-100 transition hover:border-sky-400 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {captureBusy ? "..." : "Extract"}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!canCapture || captureBusy}
+                        onClick={() => void captureFrame(0, "Extracting start frame…")}
+                        className="rounded-lg border border-white/10 px-2 py-1 font-semibold text-slate-100 transition hover:border-sky-400 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Start
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!canCapture || captureBusy || !videoDuration}
+                        onClick={() => {
+                          const endTime =
+                            videoDuration ??
+                            (videoRef.current?.duration && Number.isFinite(videoRef.current.duration)
+                              ? videoRef.current.duration
+                              : 0);
+                          void captureFrame(Math.max(endTime - 0.001, 0), "Extracting end frame…");
+                        }}
+                        className="rounded-lg border border-white/10 px-2 py-1 font-semibold text-slate-100 transition hover:border-sky-400 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        End
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (videoRef.current) {
+                            videoRef.current.load();
+                          }
+                        }}
+                        className="rounded-lg border border-white/10 px-2 py-1 font-semibold text-slate-100 transition hover:border-sky-400 hover:text-sky-200"
+                        title="Reload video if stuck"
+                      >
+                        ↻
+                      </button>
+                      <button
+                        type="button"
+                        disabled={upscaleBusy}
+                        onClick={() => void handleUpscale()}
+                        className="rounded-lg border border-white/10 px-2 py-1 font-semibold text-slate-100 transition hover:border-sky-400 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {upscaleBusy ? "..." : "Upscale"}
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={pushRecreateAction}
+                        className="rounded-lg border border-white/10 p-1.5 text-slate-100 transition hover:border-indigo-400 hover:text-indigo-200"
+                        title="Recreate (load prompt/model used to make this file)"
+                        aria-label="Recreate"
+                      >
+                        ⟳
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleDownload()}
+                        className="rounded-lg border border-white/10 p-1.5 text-slate-100 transition hover:border-sky-400 hover:text-sky-200"
+                        title="Download original"
+                        aria-label="Download"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                          <polyline points="7 10 12 15 17 10" />
+                          <line x1="12" y1="15" x2="12" y2="3" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                  {captureStatus ? (
+                    <div className="mt-2 rounded-md border border-white/10 bg-black/40 px-2 py-1 text-[10px]">
+                      {captureStatus}
+                    </div>
+                  ) : null}
+                  {upscaleStatus ? (
+                    <div className="mt-2 rounded-md border border-white/10 bg-black/40 px-2 py-1 text-[10px]">
+                      {upscaleStatus}
+                    </div>
+                  ) : null}
+                  {quickStatus ? (
+                    <div className="mt-2 rounded-md border border-white/10 bg-black/40 px-2 py-1 text-[10px]">
+                      {quickStatus}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
 
-            {selected && selected.kind === "file" && selected.mime.startsWith("image") ? (
-              <div className="space-y-2 rounded-xl border border-white/10 bg-white/5 p-3">
-                <div className="flex items-center justify-between text-sm">
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={cropAspect}
-                      onChange={(event) => setCropAspect(event.target.value)}
-                      className="rounded-lg border border-white/10 bg-black/40 px-2 py-1 text-xs text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
-                    >
-                      {cropPresets.map((preset) => (
-                        <option key={preset.value} value={preset.value}>
-                          {preset.label}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      disabled={cropBusy}
-                      onClick={() => void handleCropSave()}
-                      className="rounded-lg border border-white/10 px-3 py-1 text-xs font-semibold text-slate-100 transition hover:border-sky-400 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {cropBusy ? "Cropping…" : "Crop"}
-                    </button>
-	                    <button
-	                      type="button"
-	                      disabled={upscaleBusy}
-	                      onClick={() => void handleUpscale()}
-	                      className="rounded-lg border border-white/10 px-3 py-1 text-xs font-semibold text-slate-100 transition hover:border-sky-400 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
-	                    >
-	                      {upscaleBusy ? "Upscaling…" : "Upscale"}
-	                    </button>
-	                  </div>
-	                  <div className="flex items-center gap-2">
+              {selected && selected.kind === "file" && selected.mime.startsWith("image") ? (
+                <div className="space-y-2 rounded-xl border border-white/10 bg-white/5 p-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={cropAspect}
+                        onChange={(event) => setCropAspect(event.target.value)}
+                        className="rounded-lg border border-white/10 bg-black/40 px-2 py-1 text-xs text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
+                      >
+                        {cropPresets.map((preset) => (
+                          <option key={preset.value} value={preset.value}>
+                            {preset.label}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        disabled={cropBusy}
+                        onClick={() => void handleCropSave()}
+                        className="rounded-lg border border-white/10 px-3 py-1 text-xs font-semibold text-slate-100 transition hover:border-sky-400 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {cropBusy ? "Cropping…" : "Crop"}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={upscaleBusy}
+                        onClick={() => void handleUpscale()}
+                        className="rounded-lg border border-white/10 px-3 py-1 text-xs font-semibold text-slate-100 transition hover:border-sky-400 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {upscaleBusy ? "Upscaling…" : "Upscale"}
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2">
                       <button
                         type="button"
                         onClick={pushRecreateAction}
@@ -1077,27 +1094,28 @@ export default function PreviewPane({
                         </svg>
                       </button>
                     </div>
-	                </div>
-                {cropStatus ? (
-                  <div className="rounded-md border border-white/10 bg-black/40 px-2 py-2 text-[11px] text-slate-200">
-                    {cropStatus}
                   </div>
-                ) : null}
-                {upscaleStatus ? (
-                  <div className="rounded-md border border-white/10 bg-black/40 px-2 py-2 text-[11px] text-slate-200">
-                    {upscaleStatus}
-                  </div>
-                ) : null}
-                {quickStatus ? (
-                  <div className="rounded-md border border-white/10 bg-black/40 px-2 py-2 text-[11px] text-slate-200">
-                    {quickStatus}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-          </>
-        )}
-      </div>
+                  {cropStatus ? (
+                    <div className="rounded-md border border-white/10 bg-black/40 px-2 py-2 text-[11px] text-slate-200">
+                      {cropStatus}
+                    </div>
+                  ) : null}
+                  {upscaleStatus ? (
+                    <div className="rounded-md border border-white/10 bg-black/40 px-2 py-2 text-[11px] text-slate-200">
+                      {upscaleStatus}
+                    </div>
+                  ) : null}
+                  {quickStatus ? (
+                    <div className="rounded-md border border-white/10 bg-black/40 px-2 py-2 text-[11px] text-slate-200">
+                      {quickStatus}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

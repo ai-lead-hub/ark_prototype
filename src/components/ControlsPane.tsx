@@ -532,42 +532,42 @@ export default function ControlsPane() {
     [connection]
   );
 
-	  const handleStartFrameSelect = useCallback(
-	    async (file: File | null) => {
-	      setStartFrame((previous) => {
-	        if (previous.preview) {
-	          releasePreview(previous.preview);
-	        }
-	        return { uploading: false };
-	      });
-	      if (!file) return;
+  const handleStartFrameSelect = useCallback(
+    async (file: File | null) => {
+      setStartFrame((previous) => {
+        if (previous.preview) {
+          releasePreview(previous.preview);
+        }
+        return { uploading: false };
+      });
+      if (!file) return;
 
-	      // Register preview immediately with original file for responsiveness
-	      const preview = registerPreview(URL.createObjectURL(file));
-	      setStartFrame({
-	        uploading: true,
-	        preview,
-	        name: file.name,
-	      });
+      // Register preview immediately with original file for responsiveness
+      const preview = registerPreview(URL.createObjectURL(file));
+      setStartFrame({
+        uploading: true,
+        preview,
+        name: file.name,
+      });
 
-	      try {
-	        const compressed = await compressImage(file);
-	        const url = await uploadToFal(compressed);
-	        setStartFrame((prev) => ({
-	          ...prev,
-	          uploading: false,
-	          url,
-	          preview: url,
-	          createdAt: Date.now(),
-	          error: null,
-	        }));
-	        setTimeout(() => {
-	          releasePreviewRef.current(preview);
-	        }, 0);
-	      } catch (error) {
-	        setStartFrame((prev) => ({
-	          ...prev,
-	          uploading: false,
+      try {
+        const compressed = await compressImage(file);
+        const url = await uploadToFal(compressed);
+        setStartFrame((prev) => ({
+          ...prev,
+          uploading: false,
+          url,
+          preview: url,
+          createdAt: Date.now(),
+          error: null,
+        }));
+        setTimeout(() => {
+          releasePreviewRef.current(preview);
+        }, 0);
+      } catch (error) {
+        setStartFrame((prev) => ({
+          ...prev,
+          uploading: false,
           error: error instanceof Error ? error.message : "Upload failed.",
         }));
       }
@@ -575,41 +575,41 @@ export default function ControlsPane() {
     [registerPreview, releasePreview]
   );
 
-	  const handleEndFrameSelect = useCallback(
-	    async (file: File | null) => {
-	      setEndFrame((previous) => {
-	        if (previous.preview) {
-	          releasePreview(previous.preview);
-	        }
-	        return { uploading: false };
-	      });
-	      if (!file) return;
+  const handleEndFrameSelect = useCallback(
+    async (file: File | null) => {
+      setEndFrame((previous) => {
+        if (previous.preview) {
+          releasePreview(previous.preview);
+        }
+        return { uploading: false };
+      });
+      if (!file) return;
 
-	      const preview = registerPreview(URL.createObjectURL(file));
-	      setEndFrame({
-	        uploading: true,
-	        preview,
-	        name: file.name,
-	      });
+      const preview = registerPreview(URL.createObjectURL(file));
+      setEndFrame({
+        uploading: true,
+        preview,
+        name: file.name,
+      });
 
-	      try {
-	        const compressed = await compressImage(file);
-	        const url = await uploadToFal(compressed);
-	        setEndFrame((prev) => ({
-	          ...prev,
-	          uploading: false,
-	          url,
-	          preview: url,
-	          createdAt: Date.now(),
-	          error: null,
-	        }));
-	        setTimeout(() => {
-	          releasePreviewRef.current(preview);
-	        }, 0);
-	      } catch (error) {
-	        setEndFrame((prev) => ({
-	          ...prev,
-	          uploading: false,
+      try {
+        const compressed = await compressImage(file);
+        const url = await uploadToFal(compressed);
+        setEndFrame((prev) => ({
+          ...prev,
+          uploading: false,
+          url,
+          preview: url,
+          createdAt: Date.now(),
+          error: null,
+        }));
+        setTimeout(() => {
+          releasePreviewRef.current(preview);
+        }, 0);
+      } catch (error) {
+        setEndFrame((prev) => ({
+          ...prev,
+          uploading: false,
           error: error instanceof Error ? error.message : "Upload failed.",
         }));
       }
@@ -1272,31 +1272,31 @@ export default function ControlsPane() {
         if (result) validReferenceUrls.push(result);
       }
 
-	      // If in video mode, also check start/end frames
-	      if (mode === "video") {
-	        if (
-	          (startFrame.preview || startFrame.url) &&
-	          !(
-	            startFrame.url &&
-	            typeof startFrame.createdAt === "number" &&
-	            Date.now() - startFrame.createdAt > UPLOAD_URL_TTL_MS
-	          )
-	        ) {
-	          const result = await processRef(startFrame);
-	          if (result) validReferenceUrls.push(result);
-	        }
-	        if (
-	          (endFrame.preview || endFrame.url) &&
-	          !(
-	            endFrame.url &&
-	            typeof endFrame.createdAt === "number" &&
-	            Date.now() - endFrame.createdAt > UPLOAD_URL_TTL_MS
-	          )
-	        ) {
-	          const result = await processRef(endFrame);
-	          if (result) validReferenceUrls.push(result);
-	        }
-	      }
+      // If in video mode, also check start/end frames
+      if (mode === "video") {
+        if (
+          (startFrame.preview || startFrame.url) &&
+          !(
+            startFrame.url &&
+            typeof startFrame.createdAt === "number" &&
+            Date.now() - startFrame.createdAt > UPLOAD_URL_TTL_MS
+          )
+        ) {
+          const result = await processRef(startFrame);
+          if (result) validReferenceUrls.push(result);
+        }
+        if (
+          (endFrame.preview || endFrame.url) &&
+          !(
+            endFrame.url &&
+            typeof endFrame.createdAt === "number" &&
+            Date.now() - endFrame.createdAt > UPLOAD_URL_TTL_MS
+          )
+        ) {
+          const result = await processRef(endFrame);
+          if (result) validReferenceUrls.push(result);
+        }
+      }
 
       // Save current state before expansion
       addToHistory(prompt);
@@ -1318,8 +1318,8 @@ export default function ControlsPane() {
   };
 
 
-	  const handleGenerate = async (event: FormEvent) => {
-	    event.preventDefault();
+  const handleGenerate = async (event: FormEvent) => {
+    event.preventDefault();
 
     if (!connection) {
       setStatus("Please connect to a workspace first.");
@@ -1334,10 +1334,10 @@ export default function ControlsPane() {
 
     if (!isMounted.current) return;
 
-	    try {
-	      const modelId = modelKey.replace(/^(image:|video:|upscale:)/, "");
-	      const modelSpec = MODEL_SPECS.find((m) => m.id === modelId);
-	      const imageModelSpec = IMAGE_MODELS.find((m) => m.id === modelId);
+    try {
+      const modelId = modelKey.replace(/^(image:|video:|upscale:)/, "");
+      const modelSpec = MODEL_SPECS.find((m) => m.id === modelId);
+      const imageModelSpec = IMAGE_MODELS.find((m) => m.id === modelId);
 
 
       let endpoint = "";
@@ -1348,41 +1348,41 @@ export default function ControlsPane() {
 
       let callOptions: ProviderCallOptions | undefined;
 
-	      if (modelSpec) {
-	        endpoint = modelSpec.endpoint;
-	        category = "video";
-	        provider = modelSpec.provider ?? "fal";
-	        callOptions = modelSpec.taskConfig ? { taskConfig: modelSpec.taskConfig } : undefined;
-	        const startFrameUrl =
-	          startFrame.url &&
-	            supportsStartFrame !== false &&
-	            !(
-	              typeof startFrame.createdAt === "number" &&
-	              Date.now() - startFrame.createdAt > UPLOAD_URL_TTL_MS
-	            )
-	            ? startFrame.url
-	            : undefined;
-	        const endFrameUrl =
-	          endFrame.url &&
-	            supportsEndFrame === true &&
-	            !(
-	              typeof endFrame.createdAt === "number" &&
-	              Date.now() - endFrame.createdAt > UPLOAD_URL_TTL_MS
-	            )
-	            ? endFrame.url
-	            : undefined;
+      if (modelSpec) {
+        endpoint = modelSpec.endpoint;
+        category = "video";
+        provider = modelSpec.provider ?? "fal";
+        callOptions = modelSpec.taskConfig ? { taskConfig: modelSpec.taskConfig } : undefined;
+        const startFrameUrl =
+          startFrame.url &&
+            supportsStartFrame !== false &&
+            !(
+              typeof startFrame.createdAt === "number" &&
+              Date.now() - startFrame.createdAt > UPLOAD_URL_TTL_MS
+            )
+            ? startFrame.url
+            : undefined;
+        const endFrameUrl =
+          endFrame.url &&
+            supportsEndFrame === true &&
+            !(
+              typeof endFrame.createdAt === "number" &&
+              Date.now() - endFrame.createdAt > UPLOAD_URL_TTL_MS
+            )
+            ? endFrame.url
+            : undefined;
 
-	        const unifiedPayload: UnifiedPayload = {
-	          modelId,
-	          prompt,
-	          aspect_ratio: aspectRatio,
-	          resolution: imageResolution,
-	          start_frame_url: startFrameUrl,
-	          end_frame_url: endFrameUrl,
-	          reference_image_urls: videoReferenceUrls,
-	          seed: 1569,
-	          duration: paramValues.duration as string | number | undefined,
-	          generate_audio: paramValues.generate_audio as boolean | undefined,
+        const unifiedPayload: UnifiedPayload = {
+          modelId,
+          prompt,
+          aspect_ratio: aspectRatio,
+          resolution: imageResolution,
+          start_frame_url: startFrameUrl,
+          end_frame_url: endFrameUrl,
+          reference_image_urls: videoReferenceUrls,
+          seed: 1569,
+          duration: paramValues.duration as string | number | undefined,
+          generate_audio: paramValues.generate_audio as boolean | undefined,
         };
 
         payload = buildModelInput(modelSpec, unifiedPayload);
@@ -1424,10 +1424,10 @@ export default function ControlsPane() {
 
       addToHistory(prompt);
 
-	      addJob(
-	        category,
-	        prompt.trim() || modelId,
-	        {
+      addJob(
+        category,
+        prompt.trim() || modelId,
+        {
           endpoint,
           payload,
           modelId,
@@ -1519,34 +1519,34 @@ export default function ControlsPane() {
             }
           }
 
-	          const folder = category === "image" ? "images" : "videos";
-	          const filename = buildFilename(modelId, prompt, extension, seed);
-	          const relPath = buildDatedMediaPath(folder, filename);
+          const folder = category === "image" ? "images" : "videos";
+          const filename = buildFilename(modelId, prompt, extension, seed);
+          const relPath = buildDatedMediaPath(folder, filename);
 
-	          if (downloadedBlob && connection) {
-	            log("Saving to workspace...");
-	            await uploadFile(connection, relPath, downloadedBlob);
-	            try {
-	              await recordGeneration(connection, {
-	                workspaceId: connection.workspaceId,
-	                outputRelPath: relPath,
-	                outputMime: downloadedBlob.type || undefined,
-	                outputSize: downloadedBlob.size,
-	                category,
-	                modelId,
-	                provider,
-	                endpoint,
-	                prompt,
-	                seed,
-	                payload,
-	              });
-	            } catch (error) {
-	              log(`Metadata write failed: ${error instanceof Error ? error.message : String(error)}`);
-	            }
-	            await refreshTree(relPath);
-	          } else if (!downloadedBlob) {
-	            log(`Result available at URL (could not save to workspace): ${resultUrlStr}`);
-	          }
+          if (downloadedBlob && connection) {
+            log("Saving to workspace...");
+            await uploadFile(connection, relPath, downloadedBlob);
+            try {
+              await recordGeneration(connection, {
+                workspaceId: connection.workspaceId,
+                outputRelPath: relPath,
+                outputMime: downloadedBlob.type || undefined,
+                outputSize: downloadedBlob.size,
+                category,
+                modelId,
+                provider,
+                endpoint,
+                prompt,
+                seed,
+                payload,
+              });
+            } catch (error) {
+              log(`Metadata write failed: ${error instanceof Error ? error.message : String(error)}`);
+            }
+            await refreshTree(relPath);
+          } else if (!downloadedBlob) {
+            log(`Result available at URL (could not save to workspace): ${resultUrlStr}`);
+          }
 
           return resultUrlStr || "Blob saved";
         }
@@ -1563,7 +1563,7 @@ export default function ControlsPane() {
 
   return (
     <form className="flex h-full flex-col text-sm" onSubmit={handleGenerate}>
-      <div className="flex-1 space-y-3 pb-40">
+      <div className="flex-1 space-y-3 pb-32">
         <div className="space-y-3">
           <div className="flex rounded-lg bg-white/5 p-1">
             {(["image", "video"] as const).map((tab) => (
@@ -2131,12 +2131,12 @@ export default function ControlsPane() {
 
       </div>
 
-      <div className="sticky bottom-0 left-0 right-0 mt-auto space-y-2 border-t border-white/10 bg-slate-950/95 p-3 shadow-[0_-6px_25px_rgba(0,0,0,0.7)] backdrop-blur sm:p-4">
+      <div className="sticky bottom-0 left-0 right-0 mt-auto space-y-2 border-t border-white/10 bg-slate-950/95 p-2 shadow-[0_-6px_25px_rgba(0,0,0,0.7)] backdrop-blur">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <button
             type="submit"
             disabled={pendingUploads || isMissingImageReference || isSubmitting}
-            className="rounded-xl bg-gradient-to-r from-sky-500 via-blue-500 to-indigo-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-sky-500/25 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg bg-gradient-to-r from-sky-500 via-blue-500 to-indigo-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-sky-500/25 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isSubmitting
               ? "Queueing..."
@@ -2147,7 +2147,7 @@ export default function ControlsPane() {
                   : "Generate"}
           </button>
           {pricingLabel ? (
-            <span className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-center text-xs text-slate-300">
+            <span className="rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-center text-xs text-slate-300">
               {pricingLabel}
             </span>
           ) : null}
