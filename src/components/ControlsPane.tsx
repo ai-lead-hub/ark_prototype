@@ -1006,6 +1006,9 @@ export default function ControlsPane() {
           | number
           | boolean
           | undefined;
+      } else if (definition.type === "enum" && definition.values?.length) {
+        // For enums without explicit default, use first value
+        defaults[uiKey] = definition.values[0];
       } else {
         defaults[uiKey] =
           definition.type === "boolean" ? false : undefined;
@@ -1013,11 +1016,27 @@ export default function ControlsPane() {
     });
     // Merge defaults with persisted values
     // We only want to apply defaults for keys that are missing in paramValues
+    // AND ensure that if a value exists, it is valid for the current definition (for enums)
     setParamValues((prev) => {
       const next = { ...prev };
-      Object.entries(defaults).forEach(([key, val]) => {
-        if (next[key] === undefined) {
-          next[key] = val;
+      entries.forEach(([key, definition]) => {
+        if (!definition) return;
+        const uiKey = definition.uiKey ?? (key as keyof UnifiedPayload);
+
+        // If undefined, use default
+        if (next[uiKey] === undefined) {
+          if (defaults[uiKey] !== undefined) {
+            next[uiKey] = defaults[uiKey];
+          }
+        }
+        // If defined, check if it's valid for enum
+        else if (definition.type === "enum" && definition.values) {
+          const currentVal = next[uiKey];
+          // Loose comparison to handle number vs string "5" vs 5
+          const isValid = definition.values.some(v => String(v) === String(currentVal));
+          if (!isValid && defaults[uiKey] !== undefined) {
+            next[uiKey] = defaults[uiKey];
+          }
         }
       });
       return next;
@@ -1073,9 +1092,11 @@ export default function ControlsPane() {
             disabled={isSubmitting || isExpanding}
             className={`w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
           >
-            <option value="">
-              {definition.required ? "Select..." : "Default"}
-            </option>
+            {!definition.required && (
+              <option value="">
+                Default
+              </option>
+            )}
             {definition.values.map((option: string | number) => (
               <option key={String(option)} value={String(option)}>
                 {String(option)}

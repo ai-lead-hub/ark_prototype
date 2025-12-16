@@ -110,8 +110,19 @@ export async function callFalSubscribe(
       },
     });
 
-    // Qwen returns { images: [{ url: "..." }] }
-    const images = (result.data as { images?: Array<{ url: string }> })?.images;
+    const data = result.data as Record<string, unknown>;
+
+    // Handle video response (video.url) - LTX-2, etc.
+    const video = data?.video as { url?: string } | undefined;
+    if (video?.url) {
+      return {
+        url: video.url,
+        blob: await downloadBlob(video.url),
+      };
+    }
+
+    // Handle image response (images[].url) - Qwen, Kling O1, etc.
+    const images = data?.images as Array<{ url: string }> | undefined;
     if (images && images.length > 0 && images[0].url) {
       const url = images[0].url;
       return {
@@ -120,7 +131,7 @@ export async function callFalSubscribe(
       };
     }
 
-    throw new Error("No image URL found in response");
+    throw new Error("No image/video URL found in response");
   } catch (error) {
     throw new Error(
       error instanceof Error ? error.message : "FAL subscribe request failed"

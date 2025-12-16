@@ -105,7 +105,7 @@ const jsonSpecs =
             prompt: unified.prompt,
             image_url: unified.start_frame_url,
             duration,
-            negative_prompt: unified.negative_prompt ?? "blur, distort, and low quality",
+            negative_prompt: unified.negative_prompt ?? "",
             cfg_scale:
               typeof unified.cfg_scale === "number" && Number.isFinite(unified.cfg_scale)
                 ? unified.cfg_scale
@@ -118,6 +118,31 @@ const jsonSpecs =
           return input;
         },
         getVideoUrl: (data) => extractUrl(data, 0, 5),
+      };
+    }
+
+    // Adapter for LTX-2 Image-to-Video (fal-client)
+    if (model.id === "ltx-2-i2v") {
+      model.adapter = {
+        mapInput: (unified) => {
+          if (!unified.start_frame_url) {
+            throw new Error("Start frame is required for LTX-2.");
+          }
+          const input: Record<string, FalInputValue> = {
+            prompt: unified.prompt,
+            image_url: unified.start_frame_url,
+            duration: unified.duration ?? 6,
+            resolution: unified.resolution ?? "1080p",
+            fps: unified.fps ?? 25,
+            generate_audio: unified.generate_audio ?? true,
+          };
+          return input;
+        },
+        getVideoUrl: (data) => {
+          // LTX-2 returns { video: { url: "..." } }
+          const video = (data as { video?: { url?: string } })?.video;
+          return video?.url;
+        },
       };
     }
 

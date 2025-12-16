@@ -213,16 +213,28 @@ async function pollKieTask(
     const statusPayload = await fetchTaskStatus(key, taskId, config, defaults);
     const stateValue = getValueAtPath(statusPayload, defaults.statePath);
 
-    if (typeof stateValue === "string") {
-      if (defaults.successStates.includes(stateValue)) {
+    // Handle both string and numeric state values (Veo uses numeric: 1=success, 2/3=fail)
+    const stateStr = String(stateValue);
+    if (stateValue !== undefined && stateValue !== null) {
+      // Check success states (compare both as string and original type)
+      const isSuccess = defaults.successStates.some(
+        (s: string | number) => s === stateValue || String(s) === stateStr
+      );
+      if (isSuccess) {
         return (
           getValueAtPath(statusPayload, defaults.responseDataPath) ??
           statusPayload
         );
       }
-      if (defaults.failureStates.includes(stateValue)) {
+
+      // Check failure states
+      const isFailure = defaults.failureStates.some(
+        (s: string | number) => s === stateValue || String(s) === stateStr
+      );
+      if (isFailure) {
         const errorMessage =
           (getValueAtPath(statusPayload, "data.failMsg") as string | undefined) ??
+          (getValueAtPath(statusPayload, "data.errorMsg") as string | undefined) ??
           (statusPayload.msg as string | undefined) ??
           (statusPayload.message as string | undefined) ??
           "Task failed.";
