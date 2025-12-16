@@ -14,6 +14,7 @@ import { recordFileMetadata, recordGeneration } from "../lib/api/meta";
 import { enqueueControlsAction } from "../lib/controls-store";
 import { recordRecentReference } from "../lib/recent-references";
 import ImageEditor from "./ImageEditor";
+import VideoPlayer from "./VideoPlayer";
 
 
 
@@ -841,8 +842,22 @@ export default function PreviewPane({
         </div>
       )}
 
-      {/* Full-screen image editor */}
-      {isFullScreen && selected.mime.startsWith("image") && previewUrl && connection ? (
+      {/* Full-screen video player */}
+      {isFullScreen && selected.mime.startsWith("video") && previewUrl && connection ? (
+        <VideoPlayer
+          videoUrl={previewUrl}
+          videoName={selected.name}
+          onSave={async (blob, filename) => {
+            const directoryParts = selected.relPath.split("/");
+            directoryParts.pop();
+            const baseDir = directoryParts.join("/");
+            const relPath = baseDir ? `${baseDir}/${filename}` : filename;
+            await uploadFile(connection, relPath, blob);
+            await refreshTree(relPath);
+          }}
+          onClose={() => onToggleFullScreen?.()}
+        />
+      ) : isFullScreen && selected.mime.startsWith("image") && previewUrl && connection ? (
         <ImageEditor
           imageUrl={previewUrl}
           imageName={selected.name}

@@ -129,18 +129,25 @@ const jsonSpecs =
           mapInput: (unified) => {
             const input: Record<string, FalInputValue> = {};
 
-            // Add imageUrls if startFrame is provided and this is I2V model
-            if (model.id.includes("i2v") && unified.start_frame_url) {
-              const urls = [unified.start_frame_url];
+            // Determine if this is I2V (has image) or T2V (no image)
+            const hasImage = !!unified.start_frame_url;
+
+            if (hasImage) {
+              // I2V mode
+              const urls = [unified.start_frame_url!];
               if (unified.end_frame_url) {
                 urls.push(unified.end_frame_url);
               }
               input.imageUrls = urls;
+              input.generationType = "FIRST_AND_LAST_FRAMES_2_VIDEO";
+            } else {
+              // T2V mode
+              input.generationType = "TEXT_2_VIDEO";
             }
 
             // Map other parameters
             for (const [paramKey, definition] of Object.entries(model.params)) {
-              if (!definition || paramKey === "imageUrls") continue;
+              if (!definition || paramKey === "imageUrls" || paramKey === "generationType") continue;
 
               const uiKey = definition.uiKey ?? (paramKey as keyof UnifiedPayload);
               const value = unified[uiKey];
@@ -212,24 +219,49 @@ const jsonSpecs =
             }
 
             // Determine the KIE model name based on model ID
-            const kieModelMap: Record<string, string> = {
-              "kling-2.5-pro": "kling/v2-5-turbo-image-to-video-pro",
-              "hailuo-2.3-pro": "hailuo/2-3-image-to-video-pro",
-              "wan-2.5-i2v": "wan/2-5-image-to-video",
-              "kling-2.1-pro": "kling/v2-1-pro",
-              "wan-2.2-turbo": "wan/2-2-a14b-image-to-video-turbo",
-              "seedance-pro": "bytedance/v1-pro-image-to-video",
-              "kling-v2-6-pro": "kling-2.6/image-to-video",
+            // Models with both T2V and I2V endpoints - switch based on whether image is provided
+            const kieModelMap: Record<string, { i2v: string; t2v?: string }> = {
+              "kling-2.5-pro": { i2v: "kling/v2-5-turbo-image-to-video-pro" },
+              "hailuo-2.3-pro": { i2v: "hailuo/2-3-image-to-video-pro" }, // T2V unavailable
+              "hailuo-02-pro": {
+                i2v: "hailuo/02-image-to-video-pro",
+                t2v: "hailuo/02-text-to-video-pro"
+              },
+              "wan-2.5-i2v": {
+                i2v: "wan/2-5-image-to-video",
+                t2v: "wan/2-5-text-to-video"
+              },
+              "kling-2.1-pro": { i2v: "kling/v2-1-pro" },
+              "wan-2.2-turbo": { i2v: "wan/2-2-a14b-image-to-video-turbo" },
+              "seedance-pro": {
+                i2v: "bytedance/v1-pro-image-to-video",
+                t2v: "bytedance/v1-pro-text-to-video"
+              },
+              "kling-v2-6-pro": {
+                i2v: "kling-2.6/image-to-video",
+                t2v: "kling-2.6/text-to-video"
+              },
             };
 
-            const kieModel = kieModelMap[model.id];
-            if (!kieModel) {
+            const endpoints = kieModelMap[model.id];
+            if (!endpoints) {
               throw new Error(`Unknown KIE model: ${model.id}`);
             }
 
-            // Special handling for Kling 2.6 - image_urls must be an array
-            if (model.id === "kling-v2-6-pro") {
-              const imageUrl = input.image_urls;
+            // Select endpoint based on whether image is provided
+            const hasImage = !!(unified.start_frame_url || input.image_url || input.image_urls);
+            const kieModel = hasImage ? endpoints.i2v : (endpoints.t2v ?? endpoints.i2v);
+
+            // If using T2V endpoint, remove image-related fields
+            if (!hasImage && endpoints.t2v) {
+              delete input.image_url;
+              delete input.image_urls;
+              delete input.tail_image_url;
+            }
+
+            // Special handling for Kling 2.6 I2V - image_urls must be an array
+            if (model.id === "kling-v2-6-pro" && hasImage) {
+              const imageUrl = input.image_urls ?? unified.start_frame_url;
               if (typeof imageUrl === "string") {
                 input.image_urls = [imageUrl];
               }

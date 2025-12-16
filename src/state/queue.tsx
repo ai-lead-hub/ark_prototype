@@ -112,7 +112,11 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         const processQueue = () => {
             // How many more jobs can we start?
-            const slotsAvailable = CONCURRENCY_LIMIT - processingCount - startingJobsRef.current.size;
+            const currentlyStarting = startingJobsRef.current.size;
+            const slotsAvailable = CONCURRENCY_LIMIT - processingCount - currentlyStarting;
+
+            console.log(`[Queue] Slots: ${slotsAvailable} (limit: ${CONCURRENCY_LIMIT}, processing: ${processingCount}, starting: ${currentlyStarting}, pending: ${pendingJobCount})`);
+
             if (slotsAvailable <= 0) return;
             if (pendingJobCount === 0) return;
 

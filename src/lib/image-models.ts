@@ -96,62 +96,6 @@ function resolveAspectRatio(
 
 export const IMAGE_MODELS: ImageModelSpec[] = [
   {
-    id: "nano-banana-edit",
-    label: "Nano Banana — Edit",
-    endpoint: "/api/v1/jobs/createTask",
-    provider: "kie",
-    pricing: "$0.02/image",
-    mode: "edit",
-    maxRefs: 10,
-    ui: {
-      aspectRatios: [
-        { value: "1:1", label: "Square (1:1)" },
-        { value: "3:4", label: "Portrait (3:4)" },
-        { value: "2:3", label: "Portrait (2:3)" },
-        { value: "9:16", label: "Portrait (9:16)" },
-        { value: "4:3", label: "Landscape (4:3)" },
-        { value: "3:2", label: "Landscape (3:2)" },
-        { value: "16:9", label: "Landscape (16:9)" },
-        { value: "21:9", label: "Landscape (21:9)" },
-      ],
-    },
-    mapInput: ({ prompt, imageUrls, aspectRatio, outputFormat, size }) => {
-      // If references are provided, use edit mode; otherwise fall back to text-to-image.
-      const resolvedAspect = aspectRatio ?? resolveAspectRatio(size);
-      const hasRefs = imageUrls.length > 0;
-      return {
-        model: hasRefs ? "google/nano-banana-edit" : "google/nano-banana",
-        input: {
-          prompt,
-          ...(hasRefs
-            ? { image_urls: imageUrls.slice(0, 10) }
-            : resolvedAspect
-              ? { image_size: resolvedAspect }
-              : {}),
-          output_format: outputFormat ?? "png",
-        },
-      };
-    },
-    taskConfig: {
-      statusEndpoint: "/api/v1/jobs/recordInfo",
-      statePath: "data.state",
-      successStates: ["success"],
-      failureStates: ["fail"],
-      responseDataPath: "data",
-      pollIntervalMs: 4000,
-    },
-    getUrls: (output) => {
-      const data = (output as { resultJson?: string } | undefined)?.resultJson;
-      if (typeof data !== "string") return [];
-      try {
-        const parsed = JSON.parse(data) as { resultUrls?: string[] };
-        return (parsed.resultUrls ?? []).filter(Boolean);
-      } catch {
-        return [];
-      }
-    },
-  },
-  {
     id: "nano-banana-pro-edit",
     label: "Nano Banana Pro — Edit",
     endpoint: "/api/v1/jobs/createTask",
@@ -223,6 +167,62 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
         }
       }
       return [];
+    },
+  },
+  {
+    id: "nano-banana-edit",
+    label: "Nano Banana — Edit",
+    endpoint: "/api/v1/jobs/createTask",
+    provider: "kie",
+    pricing: "$0.02/image",
+    mode: "edit",
+    maxRefs: 10,
+    ui: {
+      aspectRatios: [
+        { value: "1:1", label: "Square (1:1)" },
+        { value: "3:4", label: "Portrait (3:4)" },
+        { value: "2:3", label: "Portrait (2:3)" },
+        { value: "9:16", label: "Portrait (9:16)" },
+        { value: "4:3", label: "Landscape (4:3)" },
+        { value: "3:2", label: "Landscape (3:2)" },
+        { value: "16:9", label: "Landscape (16:9)" },
+        { value: "21:9", label: "Landscape (21:9)" },
+      ],
+    },
+    mapInput: ({ prompt, imageUrls, aspectRatio, outputFormat, size }) => {
+      // If references are provided, use edit mode; otherwise fall back to text-to-image.
+      const resolvedAspect = aspectRatio ?? resolveAspectRatio(size);
+      const hasRefs = imageUrls.length > 0;
+      return {
+        model: hasRefs ? "google/nano-banana-edit" : "google/nano-banana",
+        input: {
+          prompt,
+          ...(hasRefs
+            ? { image_urls: imageUrls.slice(0, 10) }
+            : resolvedAspect
+              ? { image_size: resolvedAspect }
+              : {}),
+          output_format: outputFormat ?? "png",
+        },
+      };
+    },
+    taskConfig: {
+      statusEndpoint: "/api/v1/jobs/recordInfo",
+      statePath: "data.state",
+      successStates: ["success"],
+      failureStates: ["fail"],
+      responseDataPath: "data",
+      pollIntervalMs: 4000,
+    },
+    getUrls: (output) => {
+      const data = (output as { resultJson?: string } | undefined)?.resultJson;
+      if (typeof data !== "string") return [];
+      try {
+        const parsed = JSON.parse(data) as { resultUrls?: string[] };
+        return (parsed.resultUrls ?? []).filter(Boolean);
+      } catch {
+        return [];
+      }
     },
   },
   {
