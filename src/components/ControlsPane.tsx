@@ -39,7 +39,7 @@ import {
 } from "../lib/api/files";
 import { getGenerationByOutput, recordGeneration, recordPrompt } from "../lib/api/meta";
 import { useQueue } from "../state/queue";
-import { expandPrompt } from "../lib/llm";
+import { expandPrompt, alterPrompt } from "../lib/llm";
 import { buildDatedMediaPath } from "../lib/storage-paths";
 import {
   consumeControlsActions,
@@ -122,7 +122,16 @@ export default function ControlsPane() {
     "activeTab",
     DEFAULT_MODEL_KEY.startsWith("image:") ? "image" : "video"
   );
-  const [prompt, setPrompt] = usePersistentState("prompt", "");
+  const [imagePrompt, setImagePrompt] = usePersistentState("imagePrompt", "");
+  const [videoPrompt, setVideoPrompt] = usePersistentState("videoPrompt", "");
+
+  const prompt = activeTab === "image" ? imagePrompt : videoPrompt;
+  const setPrompt = (val: string) => {
+    if (activeTab === "image") setImagePrompt(val);
+    else setVideoPrompt(val);
+  };
+  const [alterInstruction, setAlterInstruction] = useState("");
+  const [isAltering, setIsAltering] = useState(false);
   const [history, setHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const historyRef = useRef<string[]>([]);
@@ -1338,6 +1347,32 @@ export default function ControlsPane() {
     }
   };
 
+  const handleAlter = async () => {
+    if (!prompt.trim() || !alterInstruction.trim() || isAltering || isSubmitting) return;
+
+    try {
+      setIsAltering(true);
+      const mode = activeTab === "image" ? "image" : "video";
+
+      // Save current state before alteration
+      addToHistory(prompt);
+
+      const altered = await alterPrompt(prompt, alterInstruction, mode);
+      setPrompt(altered);
+      setAlterInstruction("");
+
+      // Save new state after alteration
+      addToHistory(altered);
+    } catch (error) {
+      console.error("Alter prompt failed:", error);
+      setStatus(`Failed to alter prompt: ${error instanceof Error ? error.message : String(error)}`);
+      setTimeout(() => setStatus(null), 5000);
+    } finally {
+      if (isMounted.current) {
+        setIsAltering(false);
+      }
+    }
+  };
 
   const handleGenerate = async (event: FormEvent) => {
     event.preventDefault();
@@ -1611,9 +1646,7 @@ export default function ControlsPane() {
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Model
-            </label>
+
             <select
               value={modelKey}
               disabled={isSubmitting || isExpanding}
@@ -1780,9 +1813,7 @@ export default function ControlsPane() {
 
             {/* 2. Prompt */}
             <div className="space-y-1">
-              <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                Prompt
-              </label>
+
               <div className="relative">
                 <textarea
                   value={prompt}
@@ -1816,7 +1847,7 @@ export default function ControlsPane() {
                     type="button"
                     onClick={() => handleExpandPrompt("natural")}
                     disabled={isExpanding || isSubmitting || !prompt.trim()}
-                    className="flex h-7 w-7 items-center justify-center rounded-md bg-white/10 text-slate-300 transition hover:bg-white/20 hover:text-white disabled:opacity-50"
+                    className="flex h-7 w-7 items-center justify-center rounded-md border border-indigo-500/30 bg-indigo-500/20 text-indigo-200 transition hover:bg-indigo-500/40 hover:text-white disabled:opacity-50"
                     title="Expand with Natural Language"
                   >
                     {isExpanding ? (
@@ -1829,7 +1860,7 @@ export default function ControlsPane() {
                     type="button"
                     onClick={() => handleExpandPrompt("yaml")}
                     disabled={isExpanding || isSubmitting || !prompt.trim()}
-                    className="flex h-7 w-7 items-center justify-center rounded-md bg-white/10 text-slate-300 transition hover:bg-white/20 hover:text-white disabled:opacity-50"
+                    className="flex h-7 w-7 items-center justify-center rounded-md border border-indigo-500/30 bg-indigo-500/20 text-indigo-200 transition hover:bg-indigo-500/40 hover:text-white disabled:opacity-50"
                     title="Expand to YAML"
                   >
                     {isExpanding ? (
@@ -1839,6 +1870,49 @@ export default function ControlsPane() {
                     )}
                   </button>
                 </div>
+              </div>
+
+              {/* Alter Box */}
+              <div className="flex gap-2 pt-2">
+                <input
+                  type="text"
+                  value={alterInstruction}
+                  onChange={(e) => setAlterInstruction(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      void handleAlter();
+                    }
+                  }}
+                  placeholder="Refine prompt (e.g. 'make it darker', 'add rain')..."
+                  disabled={isSubmitting || isExpanding || isAltering}
+                  className={`flex-1 rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 placeholder:text-slate-600 ${isSubmitting || isExpanding || isAltering ? "opacity-50 cursor-not-allowed" : ""}`}
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleAlter()}
+                  disabled={!prompt.trim() || !alterInstruction.trim() || isSubmitting || isExpanding || isAltering}
+                  className="flex items-center justify-center rounded-lg border border-white/10 bg-white/5 px-3 text-slate-300 transition hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                  title="Apply Alteration"
+                >
+                  {isAltering ? (
+                    <Spinner size="sm" />
+                  ) : (
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
+                    </svg>
+                  )}
+                </button>
               </div>
             </div>
 
@@ -1928,9 +2002,7 @@ export default function ControlsPane() {
 
             {/* Prompt */}
             <div className="space-y-1">
-              <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                Prompt
-              </label>
+
               <div className="relative">
                 <textarea
                   value={prompt}
@@ -1963,7 +2035,7 @@ export default function ControlsPane() {
                     type="button"
                     onClick={() => handleExpandPrompt("natural")}
                     disabled={isExpanding || !prompt.trim()}
-                    className="flex h-7 w-7 items-center justify-center rounded-md bg-white/10 text-slate-300 transition hover:bg-white/20 hover:text-white disabled:opacity-50"
+                    className="flex h-7 w-7 items-center justify-center rounded-md border border-indigo-500/30 bg-indigo-500/20 text-indigo-200 transition hover:bg-indigo-500/40 hover:text-white disabled:opacity-50"
                     title="Expand with Natural Language"
                   >
                     {isExpanding ? (
@@ -1976,7 +2048,7 @@ export default function ControlsPane() {
                     type="button"
                     onClick={() => handleExpandPrompt("yaml")}
                     disabled={isExpanding || !prompt.trim()}
-                    className="flex h-7 w-7 items-center justify-center rounded-md bg-white/10 text-slate-300 transition hover:bg-white/20 hover:text-white disabled:opacity-50"
+                    className="flex h-7 w-7 items-center justify-center rounded-md border border-indigo-500/30 bg-indigo-500/20 text-indigo-200 transition hover:bg-indigo-500/40 hover:text-white disabled:opacity-50"
                     title="Expand to YAML"
                   >
                     {isExpanding ? (
@@ -1986,6 +2058,49 @@ export default function ControlsPane() {
                     )}
                   </button>
                 </div>
+              </div>
+
+              {/* Alter Box */}
+              <div className="flex gap-2 pt-2">
+                <input
+                  type="text"
+                  value={alterInstruction}
+                  onChange={(e) => setAlterInstruction(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      void handleAlter();
+                    }
+                  }}
+                  placeholder="Refine prompt (e.g. 'make it darker', 'add rain')..."
+                  disabled={isSubmitting || isExpanding || isAltering}
+                  className={`flex-1 rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 placeholder:text-slate-600 ${isSubmitting || isExpanding || isAltering ? "opacity-50 cursor-not-allowed" : ""}`}
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleAlter()}
+                  disabled={!prompt.trim() || !alterInstruction.trim() || isSubmitting || isExpanding || isAltering}
+                  className="flex items-center justify-center rounded-lg border border-white/10 bg-white/5 px-3 text-slate-300 transition hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                  title="Apply Alteration"
+                >
+                  {isAltering ? (
+                    <Spinner size="sm" />
+                  ) : (
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
+                    </svg>
+                  )}
+                </button>
               </div>
             </div>
 
@@ -2147,10 +2262,11 @@ export default function ControlsPane() {
               </div>
             ) : null}
           </div>
-        ) : null}
+        ) : null
+        }
 
 
-      </div>
+      </div >
 
       <div className="sticky bottom-0 left-0 right-0 mt-auto space-y-2 border-t border-white/10 bg-slate-950/95 p-2 shadow-[0_-6px_25px_rgba(0,0,0,0.7)] backdrop-blur">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -2183,6 +2299,6 @@ export default function ControlsPane() {
           </div>
         ) : null}
       </div>
-    </form>
+    </form >
   );
 }

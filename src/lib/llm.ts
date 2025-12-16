@@ -3,10 +3,9 @@ import { SYSTEM_PROMPTS } from "./prompts";
 import { getFalKey } from "./fal";
 const MODEL_ID = "google/gemini-2.5-flash";
 
-export async function expandPrompt(
+async function callFalLlm(
     prompt: string,
-    type: "natural" | "yaml",
-    mode: "image" | "video",
+    systemPrompt: string,
     referenceImages: string[] = []
 ): Promise<string> {
     const key = getFalKey();
@@ -17,17 +16,9 @@ export async function expandPrompt(
     // Configure Fal client
     fal.config({ credentials: key });
 
-    const systemPrompt = SYSTEM_PROMPTS[mode][type];
     const hasImages = referenceImages.length > 0;
-
     // Choose endpoint based on whether we have images
     const endpoint = hasImages ? "openrouter/router/vision" : "openrouter/router";
-
-    // Construct payload
-    // Note: The schema differs slightly between the two endpoints in the docs provided,
-    // but the `input` object structure is largely compatible.
-    // VLM: { model, prompt, image_urls, system_prompt, temperature }
-    // LLM: { model, prompt, system_prompt, temperature }
 
     const input: Record<string, unknown> = {
         model: MODEL_ID,
@@ -40,7 +31,7 @@ export async function expandPrompt(
         input.image_urls = referenceImages;
     }
 
-    console.log(`Fal Request Payload (${endpoint}):`, JSON.stringify(input, null, 2));
+    // console.log(`Fal Request Payload (${endpoint}):`, JSON.stringify(input, null, 2));
 
     try {
         const result = await fal.subscribe(endpoint, {
@@ -48,12 +39,12 @@ export async function expandPrompt(
             logs: true,
             onQueueUpdate: (update) => {
                 if (update.status === "IN_PROGRESS") {
-                    update.logs.map((log) => log.message).forEach((msg) => console.log(`[Fal ${hasImages ? "VLM" : "LLM"}]`, msg));
+                    // update.logs.map((log) => log.message).forEach((msg) => console.log(`[Fal ${hasImages ? "VLM" : "LLM"}]`, msg));
                 }
             },
         });
 
-        console.log(`Fal Response (${endpoint}):`, result);
+        // console.log(`Fal Response (${endpoint}):`, result);
 
         const content = result.data?.output;
 
@@ -68,7 +59,27 @@ export async function expandPrompt(
 
         return cleanContent.trim();
     } catch (error) {
-        console.error(`Error expanding prompt with Fal ${hasImages ? "VLM" : "LLM"}:`, error);
+        console.error(`Error with Fal ${hasImages ? "VLM" : "LLM"}:`, error);
         throw error;
     }
+}
+
+export async function expandPrompt(
+    prompt: string,
+    type: "natural" | "yaml",
+    mode: "image" | "video",
+    referenceImages: string[] = []
+): Promise<string> {
+    const systemPrompt = SYSTEM_PROMPTS[mode][type];
+    return callFalLlm(prompt, systemPrompt, referenceImages);
+}
+
+export async function alterPrompt(
+    currentPrompt: string,
+    instruction: string,
+    mode: "image" | "video"
+): Promise<string> {
+    const systemPrompt = SYSTEM_PROMPTS.alteration[mode];
+    const userMessage = `CURRENT PROMPT:\n${currentPrompt}\n\nINSTRUCTION:\n${instruction}`;
+    return callFalLlm(userMessage, systemPrompt, []);
 }
