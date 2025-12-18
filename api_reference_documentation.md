@@ -131,6 +131,86 @@ This document provides a comprehensive reference for all video generation and im
 
 ---
 
+### Wan 2.6 (I2V/T2V)
+**Provider**: KIE
+**Endpoint**: `/api/v1/jobs/createTask`
+**Pricing**: $0.35-$0.53 (720p) / $0.53-$1.58 (1080p) depending on duration
+
+Supports both Text-to-Video (T2V) and Image-to-Video (I2V). When `image_urls` is empty or omitted, operates in T2V mode.
+
+#### Parameters
+| Parameter | Type | Required | Description | Example |
+| :--- | :--- | :--- | :--- | :--- |
+| `model` | string | Yes | Model ID | `"wan/2-6-image-to-video"` |
+| `input.prompt` | string | Yes | Text prompt. Min 2, max 5000 chars. | `"A beautiful sunset..."` |
+| `input.image_urls` | array | No | Input image URLs. Empty for T2V. Max 10MB per image. | `["https://..."]` |
+| `input.duration` | string | No | Duration. Options: `"5"`, `"10"`, `"15"`. Default: `"5"`. | `"5"` |
+| `input.resolution` | string | No | Resolution. Options: `"720p"`, `"1080p"`. Default: `"1080p"`. | `"1080p"` |
+| `callBackUrl` | string | No | Callback URL for notifications. | `"https://..."` |
+
+#### Request Example (I2V)
+```json
+{
+  "model": "wan/2-6-image-to-video",
+  "callBackUrl": "https://your-domain.com/api/callback",
+  "input": {
+    "prompt": "A beautiful sunset over the ocean...",
+    "image_urls": ["https://file.aiquickdraw.com/..."],
+    "duration": "10",
+    "resolution": "1080p"
+  }
+}
+```
+
+#### Request Example (T2V)
+```json
+{
+  "model": "wan/2-6-image-to-video",
+  "callBackUrl": "https://your-domain.com/api/callback",
+  "input": {
+    "prompt": "A cinematic shot of a rocket launching...",
+    "image_urls": [],
+    "duration": "5",
+    "resolution": "720p"
+  }
+}
+```
+
+---
+
+### Wan 2.6 V2V (Video-to-Video)
+**Provider**: KIE
+**Endpoint**: `/api/v1/jobs/createTask`
+**Pricing**: $0.35-$0.53 (720p) / $0.53-$1.05 (1080p) depending on duration
+
+Transforms existing videos based on a text prompt. Supports up to 3 reference videos.
+
+#### Parameters
+| Parameter | Type | Required | Description | Example |
+| :--- | :--- | :--- | :--- | :--- |
+| `model` | string | Yes | Model ID | `"wan/2-6-video-to-video"` |
+| `input.prompt` | string | Yes | Text prompt. Min 2, max 5000 chars. | `"Transform into anime style..."` |
+| `input.video_urls` | array | Yes | Input video URLs (1-3). Max 10MB per video. Supported: mp4, mov, mkv. | `["https://..."]` |
+| `input.duration` | string | No | Duration. Options: `"5"`, `"10"`. Default: `"5"`. | `"5"` |
+| `input.resolution` | string | No | Resolution. Options: `"720p"`, `"1080p"`. Default: `"1080p"`. | `"1080p"` |
+| `callBackUrl` | string | No | Callback URL for notifications. | `"https://..."` |
+
+#### Request Example
+```json
+{
+  "model": "wan/2-6-video-to-video",
+  "callBackUrl": "https://your-domain.com/api/callback",
+  "input": {
+    "prompt": "Transform this video into a cyberpunk anime style with neon lights",
+    "video_urls": ["https://file.aiquickdraw.com/video1.mp4"],
+    "duration": "10",
+    "resolution": "1080p"
+  }
+}
+```
+
+---
+
 ### Kling 2.1 Pro
 **Provider**: KIE
 **Endpoint**: `/api/v1/jobs/createTask`
@@ -682,6 +762,7 @@ The following models support both Text-to-Video (T2V) and Image-to-Video (I2V) m
 | :--- | :--- | :--- |
 | Kling 2.6 | `kling-2.6/text-to-video` | `kling-2.6/image-to-video` |
 | Wan 2.5 | `wan/2-5-text-to-video` | `wan/2-5-image-to-video` |
+| Wan 2.6 | `wan/2-6-image-to-video` | `wan/2-6-image-to-video` |
 | Seedance Pro | `bytedance/v1-pro-text-to-video` | `bytedance/v1-pro-image-to-video` |
 | Hailuo 2.3 Pro | `hailuo/2-3-text-to-video-pro` | `hailuo/2-3-image-to-video-pro` |
 

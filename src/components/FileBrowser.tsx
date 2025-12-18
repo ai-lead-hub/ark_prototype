@@ -7,7 +7,13 @@ import { Spinner } from "./ui/Spinner";
 import { PublishModal } from "./PublishModal";
 import { buildDatedMediaPath, mediaFolderFromMime } from "../lib/storage-paths";
 import { setControlsPrompt } from "../lib/controls-store";
-import { loadPins, removePin, renamePin, togglePin, type PinsMap } from "../lib/pins";
+import { loadPins, removePin, renamePin, togglePin, savePins, type PinsMap } from "../lib/pins";
+import {
+  loadPublished,
+  addPublished,
+  isPublished,
+  type PublishedMap,
+} from "../lib/published";
 import {
   loadRecentReferences,
   onRecentReferencesChange,
@@ -37,6 +43,8 @@ export default function FileBrowser() {
     [jobs]);
 
   const [viewMode, setViewMode] = useState<"list" | "grid">("grid");
+  const [sortByName, setSortByName] = useState(false);
+  const [published, setPublished] = useState<PublishedMap>({});
   const [showRecent, setShowRecent] = useState(false);
   const [recentTab, setRecentTab] = useState<"references" | "prompts">("references");
   const [recentReferences, setRecentReferences] = useState<RecentReference[]>([]);
@@ -72,9 +80,11 @@ export default function FileBrowser() {
   useEffect(() => {
     if (!workspaceKey) {
       setPins({});
+      setPublished({});
       return;
     }
     setPins(loadPins(workspaceKey));
+    setPublished(loadPublished(workspaceKey));
   }, [workspaceKey]);
 
   const refreshReferences = useCallback(() => {
@@ -286,12 +296,31 @@ export default function FileBrowser() {
     shot: string;
     version: string;
   }) => {
-    if (!connection || !publishingEntry) return;
+    if (!connection || !publishingEntry || !workspaceKey) return;
 
     try {
+      // Build new filename from metadata
+      const ext = publishingEntry.name.split('.').pop() || '';
+      const newName = `${metadata.project}_${metadata.sequence}_${metadata.shot}_v${metadata.version}.${ext}`;
+      const folder = publishingEntry.relPath.substring(0, publishingEntry.relPath.lastIndexOf('/'));
+      const newPath = folder ? `${folder}/${newName}` : newName;
+
+      // Publish the file
       await publishFile(connection, publishingEntry.relPath, metadata);
+
+      // Rename the file to the new naming convention
+      await rename(publishingEntry, newName);
+
+      // Track as published
+      setPublished(addPublished(workspaceKey, newPath));
+
+      // Auto-pin the published file
+      const updatedPins = loadPins(workspaceKey);
+      updatedPins[newPath] = Date.now();
+      savePins(workspaceKey, updatedPins);
+      setPins(updatedPins);
+
       setPublishingEntry(null);
-      alert("File published successfully!");
     } catch (error) {
       console.error("Publish failed:", error);
       throw error; // Re-throw for modal to handle
@@ -370,13 +399,21 @@ export default function FileBrowser() {
   }, [entries, q, filterExt, connection]);
 
   const orderedEntries = useMemo(() => {
-    if (!pins || Object.keys(pins).length === 0) return filteredEntries;
+    // Separate pinned and unpinned
     const pinnedEntries = filteredEntries
       .filter((entry) => Boolean(pins[entry.relPath]))
       .sort((a, b) => (pins[b.relPath] ?? 0) - (pins[a.relPath] ?? 0));
-    const unpinnedEntries = filteredEntries.filter((entry) => !pins[entry.relPath]);
+
+    let unpinnedEntries = filteredEntries.filter((entry) => !pins[entry.relPath]);
+
+    // Apply sorting to unpinned entries
+    if (sortByName) {
+      unpinnedEntries = unpinnedEntries.sort((a, b) => a.name.localeCompare(b.name));
+    }
+    // Default: sorted by mtime (recency) - entries already come sorted from server
+
     return [...pinnedEntries, ...unpinnedEntries];
-  }, [filteredEntries, pins]);
+  }, [filteredEntries, pins, sortByName]);
 
   const visibleEntries = useMemo(() => {
     return orderedEntries.slice(0, visibleCount);
@@ -657,6 +694,17 @@ export default function FileBrowser() {
         >
           Videos
         </button>
+        <button
+          type="button"
+          onClick={() => setSortByName((v) => !v)}
+          className={`rounded-full px-3 py-1 font-semibold transition-colors ${sortByName
+            ? "bg-violet-500/30 text-white"
+            : "bg-white/10 text-slate-300 hover:text-white"
+            }`}
+          title={sortByName ? "Sorted A-Z" : "Sorted by recency"}
+        >
+          {sortByName ? "A→Z" : "New"}
+        </button>
         {filterExt.length ? (
           <button
             type="button"
@@ -757,8 +805,15 @@ export default function FileBrowser() {
                       onClick={() => select(entry)}
                       onKeyDown={(e) => handleKeyDown(e, entry)}
                       className={`group relative flex aspect-square flex-col overflow-hidden rounded-lg border transition focus:outline-none focus:ring-2 focus:ring-sky-500 ${selected?.id === entry.id ? "ring-2 ring-yellow-500" : ""
+                        } ${isPublished(published, entry.relPath) ? "ring-2 ring-violet-400/70 shadow-lg shadow-violet-500/40" : ""
                         } ${styles.grid}`}
                     >
+                      {/* Published star indicator */}
+                      {isPublished(published, entry.relPath) && (
+                        <div className="absolute top-1 left-1 z-10 rounded-full bg-violet-500/90 px-1.5 py-0.5 text-[10px] font-bold text-white shadow-lg shadow-violet-500/50">
+                          ⭐
+                        </div>
+                      )}
                       <div className="flex-1 w-full overflow-hidden bg-white/5">
                         {entry.kind === "dir" ? (
                           <div className="flex h-full items-center justify-center text-4xl">
@@ -983,6 +1038,7 @@ export default function FileBrowser() {
                         onClick={() => select(entry)}
                         onKeyDown={(e) => handleKeyDown(e, entry)}
                         className={`group flex w-full items-center justify-between gap-3 border-l-4 px-3 py-2 text-left text-sm transition focus:outline-none focus:ring-2 focus:ring-sky-500 ${selected?.id === entry.id ? "bg-yellow-500/20" : ""
+                          } ${isPublished(published, entry.relPath) ? "bg-violet-500/15 shadow-md shadow-violet-500/30" : ""
                           } ${styles.list}`}
                       >
                         {/* Hidden media for metadata capture - REMOVED for memory optimization */}
@@ -1005,7 +1061,7 @@ export default function FileBrowser() {
                           ) : (
                             <div className="flex items-center justify-between gap-2">
                               <div
-                                className="font-semibold text-white truncate"
+                                className="font-semibold text-white truncate flex items-center gap-1"
                                 title={entry.name}
                                 onDoubleClick={(e) => {
                                   e.stopPropagation();
@@ -1013,6 +1069,7 @@ export default function FileBrowser() {
                                   setEditName(entry.name);
                                 }}
                               >
+                                {isPublished(published, entry.relPath) && <span className="text-violet-400">⭐</span>}
                                 {entry.name}
                                 {entry.kind === "dir" ? "/" : ""}
                               </div>

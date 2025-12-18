@@ -266,6 +266,10 @@ const jsonSpecs =
                 i2v: "kling-2.6/image-to-video",
                 t2v: "kling-2.6/text-to-video"
               },
+              "wan-2.6-i2v": {
+                i2v: "wan/2-6-image-to-video",
+                t2v: "wan/2-6-image-to-video"  // Same endpoint for both T2V and I2V
+              },
             };
 
             const endpoints = kieModelMap[model.id];
@@ -286,6 +290,14 @@ const jsonSpecs =
 
             // Special handling for Kling 2.6 I2V - image_urls must be an array
             if (model.id === "kling-v2-6-pro" && hasImage) {
+              const imageUrl = input.image_urls ?? unified.start_frame_url;
+              if (typeof imageUrl === "string") {
+                input.image_urls = [imageUrl];
+              }
+            }
+
+            // Special handling for Wan 2.6 I2V - image_urls must be an array
+            if (model.id === "wan-2.6-i2v" && hasImage) {
               const imageUrl = input.image_urls ?? unified.start_frame_url;
               if (typeof imageUrl === "string") {
                 input.image_urls = [imageUrl];

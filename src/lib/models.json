@@ -5,7 +5,7 @@
       "label": "Kling 2.5 Turbo Pro",
       "endpoint": "/api/v1/jobs/createTask",
       "provider": "kie",
-      "pricing": "$0.21 (5s), $0.42 (10s)",
+      "pricing": "$0.21",
       "supports": {
         "startFrame": true,
         "endFrame": true,
@@ -68,7 +68,7 @@
       "label": "Kling V2.6 Pro",
       "endpoint": "/api/v1/jobs/createTask",
       "provider": "kie",
-      "pricing": "$0.28 (5s), $0.55 (10s), $0.55 (5s+audio), $1.10 (10s+audio)",
+      "pricing": "$0.28 / $0.55 🔊",
       "supports": {
         "startFrame": true,
         "endFrame": false,
@@ -122,7 +122,7 @@
       "label": "LTX-2 (I2V)",
       "endpoint": "fal-ai/ltx-2/image-to-video",
       "provider": "fal-client",
-      "pricing": "$0.05/sec",
+      "pricing": "$0.30 🔊",
       "supports": {
         "startFrame": true,
         "endFrame": false,
@@ -181,7 +181,7 @@
       "label": "Hailuo 2.3 Pro",
       "endpoint": "/api/v1/jobs/createTask",
       "provider": "kie",
-      "pricing": "$0.22 (6s 768P), $0.45 (10s 768P), $0.39 (6s 1080P)",
+      "pricing": "$0.39",
       "supports": {
         "startFrame": true,
         "endFrame": false,
@@ -238,7 +238,7 @@
       "label": "Hailuo 02 Pro",
       "endpoint": "/api/v1/jobs/createTask",
       "provider": "kie",
-      "pricing": "$0.20 per video",
+      "pricing": "$0.29",
       "supports": {
         "startFrame": true,
         "endFrame": true,
@@ -288,7 +288,7 @@
       "label": "Wan 2.5 (I2V)",
       "endpoint": "/api/v1/jobs/createTask",
       "provider": "kie",
-      "pricing": "$0.06/sec (720p), $0.10/sec (1080p)",
+      "pricing": "$0.50",
       "supports": {
         "startFrame": true,
         "endFrame": false,
@@ -354,11 +354,69 @@
       }
     },
     {
+      "id": "wan-2.6-i2v",
+      "label": "Wan 2.6",
+      "endpoint": "/api/v1/jobs/createTask",
+      "provider": "kie",
+      "pricing": "$0.35 (720p) / $0.53 (1080p)",
+      "supports": {
+        "startFrame": true,
+        "endFrame": false,
+        "audio": false,
+        "resolution": true,
+        "aspectRatio": false,
+        "fps": false
+      },
+      "taskConfig": {
+        "statusEndpoint": "/api/v1/jobs/recordInfo",
+        "statePath": "data.state",
+        "successStates": [
+          "success"
+        ],
+        "failureStates": [
+          "fail"
+        ],
+        "responseDataPath": "data",
+        "pollIntervalMs": 4000
+      },
+      "params": {
+        "prompt": {
+          "type": "string",
+          "required": true
+        },
+        "image_urls": {
+          "type": "string",
+          "required": false,
+          "uiKey": "start_frame_url"
+        },
+        "duration": {
+          "type": "enum",
+          "required": true,
+          "values": [
+            "5",
+            "10",
+            "15"
+          ]
+        },
+        "resolution": {
+          "type": "enum",
+          "values": [
+            "720p",
+            "1080p"
+          ],
+          "default": "1080p"
+        }
+      },
+      "output": {
+        "videoPath": "video.url"
+      }
+    },
+    {
       "id": "kling-2.1-pro",
       "label": "Kling 2.1 Pro",
       "endpoint": "/api/v1/jobs/createTask",
       "provider": "kie",
-      "pricing": "$0.25 (5s), $0.50 (10s)",
+      "pricing": "$0.25",
       "supports": {
         "startFrame": true,
         "endFrame": true,
@@ -421,7 +479,7 @@
       "label": "Seedance V1 Pro",
       "endpoint": "/api/v1/jobs/createTask",
       "provider": "kie",
-      "pricing": "$0.014/sec (480p), $0.030/sec (720p), $0.070/sec (1080p)",
+      "pricing": "$0.35",
       "supports": {
         "startFrame": true,
         "endFrame": false,
@@ -480,7 +538,8 @@
         },
         "enable_safety_checker": {
           "type": "boolean",
-          "default": true
+          "default": false,
+          "hidden": true
         }
       },
       "output": {
@@ -492,7 +551,7 @@
       "label": "Veo 3.1 Fast",
       "endpoint": "/api/v1/veo/generate",
       "provider": "kie",
-      "pricing": "$0.30 per video",
+      "pricing": "$0.30",
       "supports": {
         "startFrame": true,
         "endFrame": true,
@@ -530,6 +589,11 @@
           "default": "veo3_fast",
           "hidden": true
         },
+        "seeds": {
+          "type": "number",
+          "default": 15690,
+          "hidden": true
+        },
         "aspectRatio": {
           "type": "enum",
           "values": [
@@ -539,11 +603,6 @@
           ],
           "default": "16:9",
           "uiKey": "aspect_ratio"
-        },
-        "seeds": {
-          "type": "number",
-          "default": 15690,
-          "hidden": true
         },
         "enableTranslation": {
           "type": "boolean",

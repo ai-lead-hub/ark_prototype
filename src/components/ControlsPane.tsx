@@ -16,6 +16,10 @@ import {
 import {
   IMAGE_MODELS,
 } from "../lib/image-models";
+import {
+  SPECIAL_MODELS,
+  buildSpecialModelInput,
+} from "../lib/special-models";
 import { getModelPricingLabel } from "../lib/pricing";
 import { uploadToFal } from "../lib/fal";
 import { extensionFromMime } from "../lib/mime";
@@ -118,17 +122,19 @@ export default function ControlsPane() {
     "modelKey",
     DEFAULT_MODEL_KEY
   );
-  const [activeTab, setActiveTab] = usePersistentState<"image" | "video">(
+  const [activeTab, setActiveTab] = usePersistentState<"image" | "video" | "special">(
     "activeTab",
     DEFAULT_MODEL_KEY.startsWith("image:") ? "image" : "video"
   );
   const [imagePrompt, setImagePrompt] = usePersistentState("imagePrompt", "");
   const [videoPrompt, setVideoPrompt] = usePersistentState("videoPrompt", "");
+  const [specialPrompt, setSpecialPrompt] = usePersistentState("specialPrompt", "");
 
-  const prompt = activeTab === "image" ? imagePrompt : videoPrompt;
+  const prompt = activeTab === "image" ? imagePrompt : activeTab === "video" ? videoPrompt : specialPrompt;
   const setPrompt = (val: string) => {
     if (activeTab === "image") setImagePrompt(val);
-    else setVideoPrompt(val);
+    else if (activeTab === "video") setVideoPrompt(val);
+    else setSpecialPrompt(val);
   };
   const [alterInstruction, setAlterInstruction] = useState("");
   const [isAltering, setIsAltering] = useState(false);
@@ -211,6 +217,8 @@ export default function ControlsPane() {
     () => loadPersistedImageReferenceUploads()
   );
   const [videoReferenceUploads, setVideoReferenceUploads] = useState<ReferenceUpload[]>([]);
+  // Video input uploads for Special tab (V2V models)
+  const [videoInputUploads, setVideoInputUploads] = useState<ReferenceUpload[]>([]);
 
   const [aspectRatio, setAspectRatio] = usePersistentState("aspectRatio", "16:9");
   const [imageResolution, setImageResolution] = useState("1K");
@@ -396,13 +404,20 @@ export default function ControlsPane() {
     return IMAGE_MODELS.find((spec) => spec.id === id);
   }, [modelKey, modelKind]);
 
+  const selectedSpecial = useMemo(() => {
+    if (modelKind !== "special") return undefined;
+    const id = modelKey.replace("special:", "");
+    return SPECIAL_MODELS.find((spec) => spec.id === id);
+  }, [modelKey, modelKind]);
+
 
 
   const pricingLabel = useMemo(() => {
     if (selectedVideo) return getModelPricingLabel(selectedVideo.id);
     if (selectedImage) return getModelPricingLabel(selectedImage.id);
+    if (selectedSpecial) return selectedSpecial.pricing;
     return undefined;
-  }, [selectedVideo, selectedImage]);
+  }, [selectedVideo, selectedImage, selectedSpecial]);
 
   const supportsStartFrame = selectedVideo?.supports?.startFrame !== false;
   const supportsEndFrame = selectedVideo?.supports?.endFrame === true;
@@ -1072,7 +1087,7 @@ export default function ControlsPane() {
       definition.uiKey ??
       (key as keyof UnifiedPayload);
     // Skip rendering these - they have dedicated UI sections
-    if (uiKey === "start_frame_url" || uiKey === "end_frame_url" || uiKey === "prompt" || uiKey === "aspect_ratio" || uiKey === "resolution") {
+    if (uiKey === "start_frame_url" || uiKey === "end_frame_url" || uiKey === "prompt" || uiKey === "aspect_ratio" || uiKey === "resolution" || uiKey === "duration") {
       return null;
     }
     const value = paramValues[uiKey];
@@ -1183,10 +1198,10 @@ export default function ControlsPane() {
       setHistoryIndex(nextIndex);
 
       if (connection && newPrompt.trim()) {
-        const modelId = modelKey.replace(/^(image:|video:|upscale:)/, "");
+        const modelId = modelKey.replace(/^(image:|video:|special:|upscale:)/, "");
         void recordPrompt(connection, {
           workspaceId: connection.workspaceId,
-          tab: modelKind,
+          tab: modelKind === "special" ? "video" : modelKind,
           modelId,
           prompt: newPrompt.trim(),
         }).catch(() => {
@@ -1391,7 +1406,7 @@ export default function ControlsPane() {
     if (!isMounted.current) return;
 
     try {
-      const modelId = modelKey.replace(/^(image:|video:|upscale:)/, "");
+      const modelId = modelKey.replace(/^(image:|video:|special:|upscale:)/, "");
       const modelSpec = MODEL_SPECS.find((m) => m.id === modelId);
       const imageModelSpec = IMAGE_MODELS.find((m) => m.id === modelId);
 
@@ -1464,6 +1479,37 @@ export default function ControlsPane() {
         };
 
         payload = imageModelSpec.mapInput(imageJob);
+
+      } else if (selectedSpecial) {
+        // Handle special models (e.g., V2V)
+        endpoint = selectedSpecial.endpoint;
+        category = "video"; // V2V outputs video
+        provider = selectedSpecial.provider as ModelProvider;
+        callOptions = selectedSpecial.taskConfig ? { taskConfig: selectedSpecial.taskConfig } : undefined;
+
+        // Get valid video URLs
+        const validVideoUrls = videoInputUploads
+          .filter(
+            (entry) =>
+              entry.url &&
+              typeof entry.createdAt === "number" &&
+              Date.now() - entry.createdAt <= UPLOAD_URL_TTL_MS
+          )
+          .map((entry) => entry.url as string);
+
+        if (validVideoUrls.length === 0) {
+          throw new Error("Please upload at least one video file.");
+        }
+
+        const specialPayload = buildSpecialModelInput(selectedSpecial, {
+          modelId: selectedSpecial.id,
+          prompt: prompt.trim(),
+          video_urls: validVideoUrls,
+          duration: paramValues.duration as string | undefined,
+          resolution: paramValues.resolution as string | undefined,
+        });
+
+        payload = specialPayload;
 
       } else {
         throw new Error("Model not found");
@@ -1622,7 +1668,7 @@ export default function ControlsPane() {
       <div className="flex-1 space-y-3 pb-32">
         <div className="space-y-3">
           <div className="flex rounded-lg bg-white/5 p-1">
-            {(["image", "video"] as const).map((tab) => (
+            {(["image", "video", "special"] as const).map((tab) => (
               <button
                 key={tab}
                 type="button"
@@ -1633,6 +1679,8 @@ export default function ControlsPane() {
                     setModelKey(`image:${IMAGE_MODELS[0].id}`);
                   } else if (tab === "video" && MODEL_SPECS.length) {
                     setModelKey(`video:${MODEL_SPECS[0].id}`);
+                  } else if (tab === "special" && SPECIAL_MODELS.length) {
+                    setModelKey(`special:${SPECIAL_MODELS[0].id}`);
                   }
                 }}
                 className={`flex-1 rounded-md py-1.5 text-xs font-semibold capitalize transition-all ${activeTab === tab
@@ -1669,6 +1717,16 @@ export default function ControlsPane() {
                 <optgroup label="Image Pipelines">
                   {IMAGE_MODELS.map((spec) => (
                     <option key={spec.id} value={`image:${spec.id}`}>
+                      {spec.label}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+
+              {activeTab === "special" && (
+                <optgroup label="Special Pipelines">
+                  {SPECIAL_MODELS.map((spec) => (
+                    <option key={spec.id} value={`special:${spec.id}`}>
                       {spec.label}
                     </option>
                   ))}
@@ -2104,6 +2162,119 @@ export default function ControlsPane() {
               </div>
             </div>
 
+            {/* Dynamic Params: Duration and other settings side by side */}
+            {selectedVideo ? (
+              <div className="grid grid-cols-2 gap-2">
+                {/* Duration */}
+                {selectedVideo.params.duration && (
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      Duration
+                    </label>
+                    {selectedVideo.params.duration.type === "enum" && selectedVideo.params.duration.values ? (
+                      <select
+                        value={paramValues.duration === undefined ? "" : String(paramValues.duration)}
+                        onChange={(event) =>
+                          handleParamChange(
+                            "duration",
+                            event.target.value === ""
+                              ? undefined
+                              : typeof selectedVideo.params.duration?.values?.[0] === "number"
+                                ? Number(event.target.value)
+                                : event.target.value
+                          )
+                        }
+                        disabled={isSubmitting || isExpanding}
+                        className={`w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
+                      >
+                        {!selectedVideo.params.duration.required && (
+                          <option value="">Default</option>
+                        )}
+                        {selectedVideo.params.duration.values.map((option: string | number) => (
+                          <option key={String(option)} value={String(option)}>
+                            {String(option)}s
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="number"
+                        value={paramValues.duration === undefined ? "" : Number(paramValues.duration)}
+                        onChange={(event) =>
+                          handleParamChange(
+                            "duration",
+                            event.target.value === "" ? undefined : Number(event.target.value)
+                          )
+                        }
+                        disabled={isSubmitting || isExpanding}
+                        className={`w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
+                      />
+                    )}
+                  </div>
+                )}
+
+                {/* Other params - sound/audio first, then others */}
+                {(Object.entries(selectedVideo.params) as Array<
+                  [string, ParamDefinition | undefined]
+                >)
+                  .filter(([key]) => key !== "duration" && key !== "aspect_ratio" && key !== "aspectRatio" && key !== "resolution")
+                  .sort(([keyA], [keyB]) => {
+                    // Prioritize sound/audio params to appear first (next to duration)
+                    const soundKeys = ["sound", "audio", "generate_audio", "with_audio", "enable_audio", "has_audio"];
+                    const aIsSound = soundKeys.some(sk => keyA.toLowerCase().includes(sk));
+                    const bIsSound = soundKeys.some(sk => keyB.toLowerCase().includes(sk));
+                    if (aIsSound && !bIsSound) return -1;
+                    if (!aIsSound && bIsSound) return 1;
+                    return 0;
+                  })
+                  .map(([key, definition]) =>
+                    definition ? renderParamControl(key, definition) : null
+                  )
+                  .filter(Boolean)}
+              </div>
+            ) : null}
+
+            {/* Aspect ratio & Resolution for Video - below other params */}
+            <div className="grid grid-cols-2 gap-2">
+              {(selectedVideo?.params?.aspect_ratio || selectedVideo?.params?.aspectRatio) && (
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Aspect ratio
+                  </label>
+                  <select
+                    value={aspectRatio}
+                    onChange={(event) => setAspectRatio(event.target.value)}
+                    className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
+                  >
+                    {(selectedVideo?.params?.aspect_ratio?.values ?? selectedVideo?.params?.aspectRatio?.values ?? []).map((val) => (
+                      <option key={String(val)} value={String(val)}>
+                        {String(val)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {selectedVideo?.params?.resolution ? (
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Resolution
+                  </label>
+                  <select
+                    value={imageResolution}
+                    onChange={(event) => setImageResolution(event.target.value)}
+                    className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
+                  >
+                    {selectedVideo?.params?.resolution?.values?.map((val) => (
+                      <option key={String(val)} value={String(val)}>
+                        {String(val)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
+            </div>
+
             {/* Reference Images (for video models that support it) */}
             {referenceLimit > 0 ? (
               <div className="space-y-1">
@@ -2207,20 +2378,281 @@ export default function ControlsPane() {
                 </div>
               </div>
             ) : null}
+          </div>
+        ) : null
+        }
 
-            {/* Aspect ratio & Resolution for Video */}
-            <div className="space-y-2">
-              {(selectedVideo?.params?.aspect_ratio || selectedVideo?.params?.aspectRatio) && (
+        {/* SPECIAL CONTROLS */}
+        {modelKind === "special" && selectedSpecial ? (
+          <div className="space-y-4">
+            {/* Video Input Uploads */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Reference Videos (required)
+                </label>
+                <span className="text-[10px] text-slate-500">
+                  Max {selectedSpecial.videoInputConfig?.max ?? 3}
+                </span>
+              </div>
+
+              <div
+                className={`relative flex min-h-[100px] flex-col justify-center rounded-2xl border border-white/10 bg-gradient-to-br from-white/10 to-transparent p-3 transition ${isReferenceDragActive
+                  ? "border-sky-400 shadow-lg shadow-sky-500/20"
+                  : "hover:border-white/20"
+                  } ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
+                onDragEnter={(event) => {
+                  if (isSubmitting || isExpanding) return;
+                  event.preventDefault();
+                  setIsReferenceDragActive(true);
+                }}
+                onDragLeave={(event) => {
+                  if (isSubmitting || isExpanding) return;
+                  event.preventDefault();
+                  setIsReferenceDragActive(false);
+                }}
+                onDragOver={(event) => {
+                  if (isSubmitting || isExpanding) return;
+                  event.preventDefault();
+                  setIsReferenceDragActive(true);
+                }}
+                onDrop={async (event) => {
+                  if (isSubmitting || isExpanding) return;
+                  event.preventDefault();
+                  setIsReferenceDragActive(false);
+
+                  // Use the same file extraction as image uploads (handles both OS and app file browser)
+                  const allFiles = await extractFilesFromDataTransfer(event.dataTransfer);
+                  console.log("Dropped files:", allFiles.map(f => ({ name: f.name, type: f.type, size: f.size })));
+
+                  // Check MIME type OR file extension for video detection
+                  const isVideoFile = (f: File) => {
+                    if (f.type.startsWith("video/")) return true;
+                    const ext = f.name.toLowerCase().split(".").pop();
+                    return ["mp4", "mov", "mkv", "webm", "avi"].includes(ext ?? "");
+                  };
+
+                  const files = allFiles.filter(isVideoFile);
+                  console.log("Filtered video files:", files.length);
+
+                  if (files.length === 0) {
+                    setStatus("Please drop video files (mp4, mov, mkv).");
+                    setTimeout(() => setStatus(null), 3000);
+                    return;
+                  }
+                  const maxVideos = selectedSpecial.videoInputConfig?.max ?? 3;
+                  const availableSlots = maxVideos - videoInputUploads.length;
+                  if (availableSlots <= 0) {
+                    setStatus(`Maximum ${maxVideos} videos allowed.`);
+                    setTimeout(() => setStatus(null), 3000);
+                    return;
+                  }
+                  const filesToUpload = files.slice(0, availableSlots);
+                  for (const file of filesToUpload) {
+                    const id = Math.random().toString(36).slice(2);
+                    const preview = URL.createObjectURL(file);
+                    setVideoInputUploads((prev) => [
+                      ...prev,
+                      { id, preview, name: file.name, uploading: true },
+                    ]);
+                    try {
+                      const url = await uploadToFal(file);
+                      setVideoInputUploads((prev) =>
+                        prev.map((item) =>
+                          item.id === id
+                            ? { ...item, uploading: false, url, createdAt: Date.now() }
+                            : item
+                        )
+                      );
+                    } catch {
+                      setVideoInputUploads((prev) =>
+                        prev.map((item) =>
+                          item.id === id
+                            ? { ...item, uploading: false, error: "Upload failed" }
+                            : item
+                        )
+                      );
+                    }
+                  }
+                }}
+              >
+                <input
+                  type="file"
+                  accept="video/mp4,video/quicktime,video/x-matroska"
+                  multiple
+                  className="hidden"
+                  id="video-input-upload"
+                  disabled={isSubmitting || isExpanding}
+                  onChange={async (event) => {
+                    // Check MIME type OR file extension for video detection
+                    const isVideoFile = (f: File) => {
+                      if (f.type.startsWith("video/")) return true;
+                      const ext = f.name.toLowerCase().split(".").pop();
+                      return ["mp4", "mov", "mkv", "webm", "avi"].includes(ext ?? "");
+                    };
+
+                    const files = Array.from(event.target.files ?? []).filter(isVideoFile);
+                    event.target.value = "";
+                    if (!files.length) return;
+                    const maxVideos = selectedSpecial.videoInputConfig?.max ?? 3;
+                    const availableSlots = maxVideos - videoInputUploads.length;
+                    if (availableSlots <= 0) {
+                      setStatus(`Maximum ${maxVideos} videos allowed.`);
+                      setTimeout(() => setStatus(null), 3000);
+                      return;
+                    }
+                    const filesToUpload = files.slice(0, availableSlots);
+                    for (const file of filesToUpload) {
+                      const id = Math.random().toString(36).slice(2);
+                      const preview = URL.createObjectURL(file);
+                      setVideoInputUploads((prev) => [
+                        ...prev,
+                        { id, preview, name: file.name, uploading: true },
+                      ]);
+                      try {
+                        const url = await uploadToFal(file);
+                        setVideoInputUploads((prev) =>
+                          prev.map((item) =>
+                            item.id === id
+                              ? { ...item, uploading: false, url, createdAt: Date.now() }
+                              : item
+                          )
+                        );
+                      } catch {
+                        setVideoInputUploads((prev) =>
+                          prev.map((item) =>
+                            item.id === id
+                              ? { ...item, uploading: false, error: "Upload failed" }
+                              : item
+                          )
+                        );
+                      }
+                    }
+                  }}
+                />
+
+                {videoInputUploads.length === 0 ? (
+                  <label
+                    htmlFor="video-input-upload"
+                    className="flex flex-col items-center justify-center py-2 text-center cursor-pointer"
+                  >
+                    <div className="mb-2 rounded-full bg-white/5 p-2 text-slate-400">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="m22 8-6 4 6 4V8Z" />
+                        <rect width="14" height="12" x="2" y="6" rx="2" ry="2" />
+                      </svg>
+                    </div>
+                    <div className="text-xs text-slate-400">
+                      <span className="font-medium text-slate-300">Click to upload</span> or drag videos
+                    </div>
+                    <div className="mt-1 text-[10px] text-slate-500">
+                      MP4, MOV, MKV (max 10MB each)
+                    </div>
+                  </label>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {videoInputUploads.map((entry) => (
+                      <div
+                        key={entry.id}
+                        className="relative h-16 w-24 shrink-0 overflow-hidden rounded-md border border-white/10 bg-black/20 group"
+                        title={entry.name}
+                      >
+                        <video
+                          src={entry.preview}
+                          className="h-full w-full object-cover"
+                          muted
+                        />
+                        {entry.uploading && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                            <Spinner size="sm" />
+                          </div>
+                        )}
+                        {entry.error && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-red-500/20 text-[10px] text-red-300">
+                            Error
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity hover:bg-rose-500 group-hover:opacity-100"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setVideoInputUploads((prev) => prev.filter((item) => item.id !== entry.id));
+                          }}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M18 6 6 18" />
+                            <path d="m6 6 12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+
+                    {videoInputUploads.length < (selectedSpecial.videoInputConfig?.max ?? 3) && (
+                      <label
+                        htmlFor="video-input-upload"
+                        className="flex h-16 w-16 shrink-0 items-center justify-center rounded-md border border-dashed border-white/20 bg-white/5 text-slate-400 transition hover:border-sky-400 hover:text-sky-200 cursor-pointer"
+                        title="Add more videos"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M5 12h14" />
+                          <path d="M12 5v14" />
+                        </svg>
+                      </label>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Prompt */}
+            <div className="space-y-1">
+              <div className="relative">
+                <textarea
+                  value={prompt}
+                  onChange={(event) => setPrompt(event.target.value)}
+                  onBlur={() => addToHistory(prompt)}
+                  placeholder="Describe what should happen in the video..."
+                  rows={4}
+                  className="w-full rounded-2xl border border-white/10 bg-black/40 px-3 py-3 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
+                />
+              </div>
+            </div>
+
+            {/* Duration and Resolution */}
+            <div className="grid grid-cols-2 gap-2">
+              {selectedSpecial.params.duration && selectedSpecial.params.duration.values && (
                 <div className="space-y-1">
                   <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                    Aspect ratio
+                    Duration
                   </label>
                   <select
-                    value={aspectRatio}
-                    onChange={(event) => setAspectRatio(event.target.value)}
+                    value={paramValues.duration === undefined ? String(selectedSpecial.params.duration.default ?? selectedSpecial.params.duration.values[0]) : String(paramValues.duration)}
+                    onChange={(event) => handleParamChange("duration", event.target.value)}
+                    disabled={isSubmitting || isExpanding}
                     className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
                   >
-                    {(selectedVideo?.params?.aspect_ratio?.values ?? selectedVideo?.params?.aspectRatio?.values ?? []).map((val) => (
+                    {selectedSpecial.params.duration.values.map((val) => (
+                      <option key={String(val)} value={String(val)}>
+                        {String(val)}s
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {selectedSpecial.params.resolution && selectedSpecial.params.resolution.values && (
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Resolution
+                  </label>
+                  <select
+                    value={paramValues.resolution === undefined ? String(selectedSpecial.params.resolution.default ?? selectedSpecial.params.resolution.values[0]) : String(paramValues.resolution)}
+                    onChange={(event) => handleParamChange("resolution", event.target.value)}
+                    disabled={isSubmitting || isExpanding}
+                    className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
+                  >
+                    {selectedSpecial.params.resolution.values.map((val) => (
                       <option key={String(val)} value={String(val)}>
                         {String(val)}
                       </option>
@@ -2228,52 +2660,19 @@ export default function ControlsPane() {
                   </select>
                 </div>
               )}
-
-              {selectedVideo?.params?.resolution ? (
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                    Resolution
-                  </label>
-                  <select
-                    value={imageResolution}
-                    onChange={(event) => setImageResolution(event.target.value)}
-                    className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
-                  >
-                    {selectedVideo?.params?.resolution?.values?.map((val) => (
-                      <option key={String(val)} value={String(val)}>
-                        {String(val)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ) : null}
             </div>
-
-            {/* Dynamic Params */}
-            {selectedVideo ? (
-              <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                {(Object.entries(selectedVideo.params) as Array<
-                  [string, ParamDefinition | undefined]
-                >)
-                  .map(([key, definition]) =>
-                    definition ? renderParamControl(key, definition) : null
-                  )
-                  .filter(Boolean)}
-              </div>
-            ) : null}
           </div>
-        ) : null
-        }
+        ) : null}
 
 
       </div >
 
-      <div className="sticky bottom-0 left-0 right-0 mt-auto space-y-2 border-t border-white/10 bg-slate-950/95 p-2 shadow-[0_-6px_25px_rgba(0,0,0,0.7)] backdrop-blur">
+      <div className="sticky bottom-0 left-0 right-0 mt-auto space-y-2 border-t border-white/10 bg-slate-950/95 p-3 shadow-[0_-6px_25px_rgba(0,0,0,0.7)] backdrop-blur">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <button
             type="submit"
             disabled={pendingUploads || isMissingImageReference || isSubmitting}
-            className="rounded-lg bg-gradient-to-r from-sky-500 via-blue-500 to-indigo-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-sky-500/25 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-xl bg-gradient-to-r from-sky-500 via-blue-500 to-indigo-500 px-5 py-2 text-sm font-bold text-white shadow-lg shadow-sky-500/30 transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-sky-500/40 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
           >
             {isSubmitting
               ? "Queueing..."
@@ -2281,10 +2680,10 @@ export default function ControlsPane() {
                 ? "Waiting on uploads…"
                 : isMissingImageReference
                   ? "Add a reference image"
-                  : "Generate"}
+                  : "✨ Generate"}
           </button>
           {pricingLabel ? (
-            <span className="rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-center text-xs text-slate-300">
+            <span className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-center text-sm font-semibold text-amber-200">
               {pricingLabel}
             </span>
           ) : null}
