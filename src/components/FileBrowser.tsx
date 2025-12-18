@@ -290,6 +290,86 @@ export default function FileBrowser() {
     }
   };
 
+  // Handle clipboard paste for images
+  const handlePaste = useCallback(async (e: ClipboardEvent) => {
+    if (!connection) return;
+
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    const imageFiles: File[] = [];
+
+    for (const item of items) {
+      if (item.type.startsWith("image/")) {
+        const file = item.getAsFile();
+        if (file) {
+          // Generate a name for pasted images (they don't have names by default)
+          const ext = file.type.split("/")[1] || "png";
+          const timestamp = Date.now();
+          const namedFile = new File([file], `pasted_image_${timestamp}.${ext}`, {
+            type: file.type,
+          });
+          imageFiles.push(namedFile);
+        }
+      }
+    }
+
+    if (imageFiles.length === 0) return;
+
+    e.preventDefault();
+    setUploadStatus(`Pasting ${imageFiles.length} image(s)...`);
+
+    try {
+      const existingPaths = new Set(entries.map((entry) => entry.relPath.toLowerCase()));
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const file of imageFiles) {
+        try {
+          let targetName = file.name;
+          let targetPath = buildDatedMediaPath("images", targetName);
+
+          // Check for collision and auto-rename if needed
+          if (existingPaths.has(targetPath.toLowerCase())) {
+            const ext = targetName.includes('.') ? '.' + targetName.split('.').pop() : '';
+            const baseName = ext ? targetName.slice(0, -ext.length) : targetName;
+            const timestamp = Date.now() + Math.random();
+            targetName = `${baseName}_${Math.floor(timestamp)}.${ext.replace('.', '')}`;
+            targetPath = buildDatedMediaPath("images", targetName);
+          }
+
+          existingPaths.add(targetPath.toLowerCase());
+          await uploadFile(connection, targetPath, file);
+          successCount++;
+        } catch (err) {
+          console.error(`Failed to paste image:`, err);
+          failCount++;
+        }
+      }
+
+      await refreshTree();
+
+      if (failCount > 0) {
+        setUploadStatus(`Pasted ${successCount} images. ${failCount} failed.`);
+      } else {
+        setUploadStatus(`Pasted ${successCount} image(s) successfully.`);
+      }
+      setTimeout(() => setUploadStatus(null), 3000);
+    } catch (error) {
+      console.error("Paste failed:", error);
+      setUploadStatus("Paste failed");
+      setTimeout(() => setUploadStatus(null), 3000);
+    }
+  }, [connection, entries, refreshTree]);
+
+  // Add global paste listener
+  useEffect(() => {
+    document.addEventListener("paste", handlePaste);
+    return () => {
+      document.removeEventListener("paste", handlePaste);
+    };
+  }, [handlePaste]);
+
   const handlePublish = async (metadata: {
     project: string;
     sequence: string;
