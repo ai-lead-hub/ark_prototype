@@ -367,10 +367,20 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
       ],
     },
     mapInput: ({ prompt, imageUrls, aspectRatio, outputFormat, seed }) => {
+      // Map standard aspect ratios to Qwen's expected format
+      const aspectRatioMap: Record<string, string> = {
+        "16:9": "landscape_16_9",
+        "9:16": "portrait_16_9",
+        "4:3": "landscape_4_3",
+        "3:4": "portrait_4_3",
+        "1:1": "square",
+      };
+      const mappedAspectRatio = aspectRatioMap[aspectRatio ?? ""] ?? aspectRatio ?? "square_hd";
+
       return {
         prompt,
         image_urls: imageUrls,
-        image_size: aspectRatio ?? "square_hd",
+        image_size: mappedAspectRatio,
         output_format: outputFormat ?? "png",
         seed: seed ?? 1569,
         enable_safety_checker: true,

@@ -129,6 +129,7 @@ export default function ControlsPane() {
   const [imagePrompt, setImagePrompt] = usePersistentState("imagePrompt", "");
   const [videoPrompt, setVideoPrompt] = usePersistentState("videoPrompt", "");
   const [specialPrompt, setSpecialPrompt] = usePersistentState("specialPrompt", "");
+  const [promptMode, setPromptMode] = usePersistentState<"general" | "photoreal">("promptMode", "photoreal");
 
   const prompt = activeTab === "image" ? imagePrompt : activeTab === "video" ? videoPrompt : specialPrompt;
   const setPrompt = (val: string) => {
@@ -1346,7 +1347,7 @@ export default function ControlsPane() {
       // Save current state before expansion
       addToHistory(prompt);
 
-      const expanded = await expandPrompt(prompt, type, mode, validReferenceUrls);
+      const expanded = await expandPrompt(prompt, type, mode, validReferenceUrls, promptMode);
       setPrompt(expanded);
 
       // Save new state after expansion
@@ -1372,7 +1373,7 @@ export default function ControlsPane() {
       // Save current state before alteration
       addToHistory(prompt);
 
-      const altered = await alterPrompt(prompt, alterInstruction, mode);
+      const altered = await alterPrompt(prompt, alterInstruction, mode, promptMode);
       setPrompt(altered);
       setAlterInstruction("");
 
@@ -1457,6 +1458,11 @@ export default function ControlsPane() {
         };
 
         payload = buildModelInput(modelSpec, unifiedPayload);
+
+        // Use dynamic endpoint from adapter if available (e.g., LTX-2 T2V/I2V switching)
+        if (modelSpec.adapter?.getEndpoint) {
+          endpoint = modelSpec.adapter.getEndpoint(unifiedPayload);
+        }
       } else if (imageModelSpec) {
         endpoint = imageModelSpec.endpoint;
         category = "image";
@@ -2087,6 +2093,25 @@ export default function ControlsPane() {
                     title="Redo"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 7v6h-6" /><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13" /></svg>
+                  </button>
+                  <div className="w-px bg-white/10 mx-1" />
+
+                  {/* Prompt Mode Toggle */}
+                  <button
+                    type="button"
+                    onClick={() => setPromptMode(prev => prev === "photoreal" ? "general" : "photoreal")}
+                    disabled={isExpanding}
+                    className={`flex h-7 w-7 items-center justify-center rounded-md border transition disabled:opacity-50 ${promptMode === "photoreal"
+                        ? "border-emerald-500/30 bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/40 hover:text-white"
+                        : "border-amber-500/30 bg-amber-500/20 text-amber-200 hover:bg-amber-500/40 hover:text-white"
+                      }`}
+                    title={`Current Mode: ${promptMode === "photoreal" ? "Photorealistic (Camera Aware)" : "General (Creative Description)"}`}
+                  >
+                    {promptMode === "photoreal" ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" /><circle cx="12" cy="13" r="3" /></svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>
+                    )}
                   </button>
                   <div className="w-px bg-white/10 mx-1" />
                   <button

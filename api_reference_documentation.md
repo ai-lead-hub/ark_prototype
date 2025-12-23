@@ -66,6 +66,79 @@ This document provides a comprehensive reference for all video generation and im
 
 ---
 
+### Kling V2.6 T2V (Text-to-Video)
+**Provider**: KIE
+**Endpoint**: `/api/v1/jobs/createTask`
+**Pricing**: $0.28 (5s), $0.55 (10s) / with audio: 2x
+
+Generates video purely from text prompt, no image required.
+
+#### Parameters
+| Parameter | Type | Required | Description | Example |
+| :--- | :--- | :--- | :--- | :--- |
+| `model` | string | Yes | Model ID | `"kling-2.6/text-to-video"` |
+| `input.prompt` | string | Yes | Text prompt. Max 1000 chars. | `"A cowboy walking..."` |
+| `input.duration` | string | Yes | Duration. Options: `"5"`, `"10"`. | `"5"` |
+| `input.aspect_ratio` | string | Yes | Aspect ratio. Options: `"1:1"`, `"16:9"`, `"9:16"`. | `"16:9"` |
+| `input.sound` | boolean | Yes | Generate audio with video. | `false` |
+| `callBackUrl` | string | No | Callback URL for notifications. | `"https://..."` |
+
+#### Request Example
+```json
+{
+  "model": "kling-2.6/text-to-video",
+  "callBackUrl": "https://your-domain.com/api/callback",
+  "input": {
+    "prompt": "A cowboy walking through a dusty town at high noon, camera following from behind, cinematic depth, realistic lighting.",
+    "duration": "5",
+    "aspect_ratio": "16:9",
+    "sound": false
+  }
+}
+```
+
+---
+
+### LTX-2 T2V (Text-to-Video)
+**Provider**: FAL
+**Endpoint**: `fal-ai/ltx-2/text-to-video`
+**Pricing**: ~$0.30 per video 🔊
+
+High-quality text-to-video generation with native audio support.
+
+#### Parameters
+| Parameter | Type | Required | Description | Example |
+| :--- | :--- | :--- | :--- | :--- |
+| `prompt` | string | Yes | Text prompt for video generation. | `"A cowboy walking..."` |
+| `duration` | enum | No | Duration in seconds. Options: `6`, `8`, `10`. Default: `6`. | `6` |
+| `resolution` | enum | No | Output resolution. Options: `"1080p"`, `"1440p"`, `"2160p"`. Default: `"1080p"`. | `"1080p"` |
+| `fps` | enum | No | Frames per second. Options: `25`, `50`. Default: `25`. | `25` |
+| `generate_audio` | boolean | No | Generate audio. Default: `true`. | `true` |
+
+#### Request Example
+```json
+{
+  "prompt": "A cowboy walking through a dusty town at high noon, camera following from behind, cinematic depth, realistic lighting, western mood, 4K film grain.",
+  "duration": 6,
+  "resolution": "1080p",
+  "fps": 25,
+  "generate_audio": true
+}
+```
+
+#### Response Example
+```json
+{
+  "video": {
+    "file_name": "ltxv-2-t2v-output.mp4",
+    "content_type": "video/mp4",
+    "url": "https://storage.googleapis.com/falserverless/example_outputs/ltxv-2-t2v-output.mp4"
+  }
+}
+```
+
+---
+
 ### Hailuo 2.3 Pro
 **Provider**: KIE
 **Endpoint**: `/api/v1/jobs/createTask`

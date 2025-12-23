@@ -44,6 +44,7 @@ export type ModelSpec = {
   adapter?: {
     mapInput(unified: UnifiedPayload): Record<string, FalInputValue>;
     getVideoUrl(data: unknown): string | undefined;
+    getEndpoint?(unified: UnifiedPayload): string;
   };
 };
 
@@ -121,27 +122,37 @@ const jsonSpecs =
       };
     }
 
-    // Adapter for LTX-2 Image-to-Video (fal-client)
-    if (model.id === "ltx-2-i2v") {
+    // Adapter for LTX-2 (supports both I2V and T2V)
+    if (model.id === "ltx-2") {
       model.adapter = {
         mapInput: (unified) => {
-          if (!unified.start_frame_url) {
-            throw new Error("Start frame is required for LTX-2.");
-          }
+          const hasImage = !!unified.start_frame_url;
           const input: Record<string, FalInputValue> = {
             prompt: unified.prompt,
-            image_url: unified.start_frame_url,
             duration: unified.duration ?? 6,
             resolution: unified.resolution ?? "1080p",
+            aspect_ratio: unified.aspect_ratio ?? "16:9",
             fps: unified.fps ?? 25,
             generate_audio: unified.generate_audio ?? true,
           };
+
+          // Only include image_url if we have an image (I2V mode)
+          if (hasImage) {
+            input.image_url = unified.start_frame_url;
+          }
+
           return input;
         },
         getVideoUrl: (data) => {
           // LTX-2 returns { video: { url: "..." } }
           const video = (data as { video?: { url?: string } })?.video;
           return video?.url;
+        },
+        // Dynamic endpoint selection
+        getEndpoint: (unified) => {
+          return unified.start_frame_url
+            ? "fal-ai/ltx-2/image-to-video"
+            : "fal-ai/ltx-2/text-to-video";
         },
       };
     }
@@ -268,7 +279,7 @@ const jsonSpecs =
               },
               "wan-2.6-i2v": {
                 i2v: "wan/2-6-image-to-video",
-                t2v: "wan/2-6-image-to-video"  // Same endpoint for both T2V and I2V
+                t2v: "wan/2-6-text-to-video"
               },
             };
 

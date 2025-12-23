@@ -74,7 +74,7 @@
         "endFrame": false,
         "audio": true,
         "resolution": false,
-        "aspectRatio": false,
+        "aspectRatio": true,
         "fps": false
       },
       "taskConfig": {
@@ -107,6 +107,16 @@
             "10"
           ]
         },
+        "aspect_ratio": {
+          "type": "enum",
+          "required": false,
+          "values": [
+            "1:1",
+            "16:9",
+            "9:16"
+          ],
+          "default": "16:9"
+        },
         "sound": {
           "type": "boolean",
           "default": false,
@@ -118,8 +128,8 @@
       }
     },
     {
-      "id": "ltx-2-i2v",
-      "label": "LTX-2 (I2V)",
+      "id": "ltx-2",
+      "label": "LTX-2",
       "endpoint": "fal-ai/ltx-2/image-to-video",
       "provider": "fal-client",
       "pricing": "$0.30 🔊",
@@ -128,7 +138,7 @@
         "endFrame": false,
         "audio": true,
         "resolution": true,
-        "aspectRatio": false,
+        "aspectRatio": true,
         "fps": true
       },
       "params": {
@@ -138,7 +148,7 @@
         },
         "image_url": {
           "type": "string",
-          "required": true,
+          "required": false,
           "uiKey": "start_frame_url"
         },
         "duration": {
@@ -158,6 +168,19 @@
             "2160p"
           ],
           "default": "1080p"
+        },
+        "aspect_ratio": {
+          "type": "enum",
+          "values": [
+            "16:9",
+            "9:16",
+            "1:1",
+            "4:3",
+            "3:4",
+            "21:9",
+            "9:21"
+          ],
+          "default": "16:9"
         },
         "fps": {
           "type": "enum",

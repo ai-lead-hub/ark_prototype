@@ -54,8 +54,8 @@ async function callFalLlm(
 
         let cleanContent = content.trim();
 
-        // Remove markdown code blocks if present
-        cleanContent = cleanContent.replace(/^```(?:yaml|json)?\s*/i, "").replace(/\s*```$/, "");
+        // Remove markdown code blocks and bolding
+        cleanContent = cleanContent.replace(/^```(?:yaml|json)?\s*/i, "").replace(/\s*```$/, "").replace(/\*\*/g, "");
 
         return cleanContent.trim();
     } catch (error) {
@@ -68,18 +68,20 @@ export async function expandPrompt(
     prompt: string,
     type: "natural" | "yaml",
     mode: "image" | "video",
-    referenceImages: string[] = []
+    referenceImages: string[] = [],
+    promptMode: "general" | "photoreal" = "photoreal"
 ): Promise<string> {
-    const systemPrompt = SYSTEM_PROMPTS[mode][type];
+    const systemPrompt = SYSTEM_PROMPTS[mode][promptMode][type];
     return callFalLlm(prompt, systemPrompt, referenceImages);
 }
 
 export async function alterPrompt(
     currentPrompt: string,
     instruction: string,
-    mode: "image" | "video"
+    mode: "image" | "video",
+    promptMode: "general" | "photoreal" = "photoreal"
 ): Promise<string> {
-    const systemPrompt = SYSTEM_PROMPTS.alteration[mode];
+    const systemPrompt = SYSTEM_PROMPTS.alteration[promptMode][mode];
     const userMessage = `CURRENT PROMPT:\n${currentPrompt}\n\nINSTRUCTION:\n${instruction}`;
     return callFalLlm(userMessage, systemPrompt, []);
 }
