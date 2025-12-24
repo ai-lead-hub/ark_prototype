@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { PromptStudio } from "./PromptStudio/PromptStudio";
 import type { ChangeEvent, FormEvent } from "react";
 import {
   DEFAULT_MODEL_ID,
@@ -228,7 +229,7 @@ export default function ControlsPane() {
   const [isExpanding, setIsExpanding] = useState(false);
   // const [busy, setBusy] = useState(false);
   const [isReferenceDragActive, setIsReferenceDragActive] = useState(false);
-
+  const [showPromptStudio, setShowPromptStudio] = useState(false);
 
   const referenceInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -1887,12 +1888,23 @@ export default function ControlsPane() {
                   disabled={isSubmitting || isExpanding}
                   className={`w-full rounded-2xl border border-white/10 bg-black/40 px-3 py-3 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 pb-10 ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
                 />
+                <div className="absolute bottom-2 left-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowPromptStudio(true)}
+                    disabled={isExpanding || isSubmitting}
+                    className="flex h-7 w-9 items-center justify-center rounded-md border border-purple-500/30 bg-purple-500/20 text-purple-200 transition hover:bg-purple-500/40 hover:text-white disabled:opacity-50"
+                    title="Open Photography Prompt Studio"
+                  >
+                    <span className="text-lg">🔭</span>
+                  </button>
+                </div>
                 <div className="absolute bottom-2 right-2 flex gap-1">
                   <button
                     type="button"
                     onClick={undo}
                     disabled={historyIndex <= 0 || isSubmitting || isExpanding}
-                    className="flex h-7 w-7 items-center justify-center rounded-md bg-white/10 text-slate-300 transition hover:bg-white/20 hover:text-white disabled:opacity-30"
+                    className="flex h-7 w-7 items-center justify-center rounded-md border border-rose-500/30 bg-rose-500/20 text-rose-200 transition hover:bg-rose-500/30 hover:text-white disabled:opacity-30 disabled:hover:bg-rose-500/20"
                     title="Undo"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6" /><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" /></svg>
@@ -1901,10 +1913,27 @@ export default function ControlsPane() {
                     type="button"
                     onClick={redo}
                     disabled={historyIndex >= history.length - 1 || isSubmitting || isExpanding}
-                    className="flex h-7 w-7 items-center justify-center rounded-md bg-white/10 text-slate-300 transition hover:bg-white/20 hover:text-white disabled:opacity-30"
+                    className="flex h-7 w-7 items-center justify-center rounded-md border border-rose-500/30 bg-rose-500/20 text-rose-200 transition hover:bg-rose-500/30 hover:text-white disabled:opacity-30 disabled:hover:bg-rose-500/20"
                     title="Redo"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 7v6h-6" /><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13" /></svg>
+                  </button>
+                  <div className="w-px bg-white/10 mx-1" />
+                  <button
+                    type="button"
+                    onClick={() => setPromptMode(prev => prev === "photoreal" ? "general" : "photoreal")}
+                    disabled={isExpanding}
+                    className={`flex h-7 w-7 items-center justify-center rounded-md border transition disabled:opacity-50 ${promptMode === "photoreal"
+                      ? "border-emerald-500/30 bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/40 hover:text-white"
+                      : "border-amber-500/30 bg-amber-500/20 text-amber-200 hover:bg-amber-500/40 hover:text-white"
+                      }`}
+                    title={`Current Mode: ${promptMode === "photoreal" ? "Photorealistic (Camera Aware)" : "General (Creative Description)"}`}
+                  >
+                    {promptMode === "photoreal" ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" /><circle cx="12" cy="13" r="3" /></svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>
+                    )}
                   </button>
                   <div className="w-px bg-white/10 mx-1" />
                   <button
@@ -1933,6 +1962,7 @@ export default function ControlsPane() {
                       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" /><path d="M12 13v6" /><path d="M12 13h-2" /><path d="M12 13h2" /></svg>
                     )}
                   </button>
+
                 </div>
               </div>
 
@@ -2080,7 +2110,7 @@ export default function ControlsPane() {
                     type="button"
                     onClick={undo}
                     disabled={historyIndex <= 0}
-                    className="flex h-7 w-7 items-center justify-center rounded-md bg-white/10 text-slate-300 transition hover:bg-white/20 hover:text-white disabled:opacity-30"
+                    className="flex h-7 w-7 items-center justify-center rounded-md border border-sky-500/30 bg-sky-500/20 text-sky-200 transition hover:bg-sky-500/30 hover:text-white disabled:opacity-30 disabled:hover:bg-sky-500/20"
                     title="Undo"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6" /><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" /></svg>
@@ -2089,7 +2119,7 @@ export default function ControlsPane() {
                     type="button"
                     onClick={redo}
                     disabled={historyIndex >= history.length - 1}
-                    className="flex h-7 w-7 items-center justify-center rounded-md bg-white/10 text-slate-300 transition hover:bg-white/20 hover:text-white disabled:opacity-30"
+                    className="flex h-7 w-7 items-center justify-center rounded-md border border-sky-500/30 bg-sky-500/20 text-sky-200 transition hover:bg-sky-500/30 hover:text-white disabled:opacity-30 disabled:hover:bg-sky-500/20"
                     title="Redo"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 7v6h-6" /><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13" /></svg>
@@ -2102,8 +2132,8 @@ export default function ControlsPane() {
                     onClick={() => setPromptMode(prev => prev === "photoreal" ? "general" : "photoreal")}
                     disabled={isExpanding}
                     className={`flex h-7 w-7 items-center justify-center rounded-md border transition disabled:opacity-50 ${promptMode === "photoreal"
-                        ? "border-emerald-500/30 bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/40 hover:text-white"
-                        : "border-amber-500/30 bg-amber-500/20 text-amber-200 hover:bg-amber-500/40 hover:text-white"
+                      ? "border-emerald-500/30 bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/40 hover:text-white"
+                      : "border-amber-500/30 bg-amber-500/20 text-amber-200 hover:bg-amber-500/40 hover:text-white"
                       }`}
                     title={`Current Mode: ${promptMode === "photoreal" ? "Photorealistic (Camera Aware)" : "General (Creative Description)"}`}
                   >
@@ -2723,6 +2753,18 @@ export default function ControlsPane() {
           </div>
         ) : null}
       </div>
+
+      {showPromptStudio && (
+        <PromptStudio
+          currentPrompt={prompt}
+          onClose={() => setShowPromptStudio(false)}
+          onApply={(newPrompt) => {
+            setPrompt(newPrompt);
+            setShowPromptStudio(false);
+            addToHistory(newPrompt);
+          }}
+        />
+      )}
     </form >
   );
 }
