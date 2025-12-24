@@ -45,14 +45,14 @@ export function PromptStudio({
         VERTICAL_POSITIONS.find(v => v.id === 'eye')
     );
     const [dutchTilt, setDutchTilt] = useState(0); // -45 to +45 degrees
-    const [framingScale, setFramingScale] = useState(55);
+    const [framingScale, setFramingScale] = useState(70); // Default to MCU (Medium Close-Up)
 
-    // Camera settings state
+    // Camera settings state - Cinematic defaults
     const [lens, setLens] = useState<LensType | undefined>(
-        LENS_TYPES.find(l => l.id === 'normal')
+        LENS_TYPES.find(l => l.id === 'portrait') // 85mm portrait lens
     );
     const [aperture, setAperture] = useState<ApertureStop | undefined>(
-        APERTURE_STOPS.find(a => a.id === 'f2.8')
+        APERTURE_STOPS.find(a => a.id === 'f2') // Shallow DOF for cinematic look
     );
     const [shutterSpeed, setShutterSpeed] = useState<ShutterSpeed | undefined>(
         SHUTTER_SPEEDS.find(s => s.id === '1/125')
@@ -66,9 +66,9 @@ export function PromptStudio({
         CAMERA_BODIES.find(c => c.id === 'arri')
     );
     const [filmStock, setFilmStock] = useState<FilmStock | undefined>(
-        FILM_STOCKS.find(f => f.id === 'neutral')
+        FILM_STOCKS.find(f => f.id === 'portra') // Warm, flattering skin tones
     );
-    const [useReferences, setUseReferences] = useState(true);
+    const [useReferences, setUseReferences] = useState(false); // OFF by default
 
     const [isGenerating, setIsGenerating] = useState(false);
     const [error, setError] = useState<string | null>(null);

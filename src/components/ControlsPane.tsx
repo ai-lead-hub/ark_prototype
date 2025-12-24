@@ -1235,6 +1235,7 @@ export default function ControlsPane() {
   const undo = useCallback(() => {
     if (historyIndex > 0) {
       const newIndex = historyIndex - 1;
+      historyIndexRef.current = newIndex;
       setHistoryIndex(newIndex);
       setPrompt(history[newIndex]);
     }
@@ -1243,19 +1244,21 @@ export default function ControlsPane() {
   const redo = useCallback(() => {
     if (historyIndex < history.length - 1) {
       const newIndex = historyIndex + 1;
+      historyIndexRef.current = newIndex;
       setHistoryIndex(newIndex);
       setPrompt(history[newIndex]);
     }
   }, [historyIndex, history, setPrompt]);
 
-  // Initialize history
+  // Initialize/reset history when tab changes to prevent cross-tab pollution
   useEffect(() => {
-    if (history.length === 0 && prompt) {
-      setHistory([prompt]);
-      setHistoryIndex(0);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    // Reset history for the new tab's prompt
+    const initialHistory = prompt ? [prompt] : [];
+    historyRef.current = initialHistory;
+    historyIndexRef.current = initialHistory.length - 1;
+    setHistory(initialHistory);
+    setHistoryIndex(initialHistory.length - 1);
+  }, [activeTab]); // Reset when switching tabs
 
   // Sync activeTab with modelKey to ensure consistency
   useEffect(() => {
@@ -1747,7 +1750,6 @@ export default function ControlsPane() {
         {modelKind === "image" ? (
           <div className="space-y-4">
             {/* 1. Reference Uploads (Top) */}
-            {/* 1. Reference Uploads (Top) */}
             <div className="space-y-1">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -2011,7 +2013,6 @@ export default function ControlsPane() {
             </div>
 
             {/* 3. Aspect ratio & model-specific inputs */}
-            {/* 3. Aspect ratio & model-specific inputs */}
             <div className="space-y-2">
               {modelKind === "image" && (
                 <div className="space-y-1">
@@ -2103,14 +2104,15 @@ export default function ControlsPane() {
                   onChange={(event) => setPrompt(event.target.value)}
                   onBlur={() => addToHistory(prompt)}
                   rows={6}
-                  className="w-full rounded-2xl border border-white/10 bg-black/40 px-3 py-3 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 pb-10"
+                  disabled={isSubmitting || isExpanding}
+                  className={`w-full rounded-2xl border border-white/10 bg-black/40 px-3 py-3 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 pb-10 ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
                 />
                 <div className="absolute bottom-2 right-2 flex gap-1">
                   <button
                     type="button"
                     onClick={undo}
-                    disabled={historyIndex <= 0}
-                    className="flex h-7 w-7 items-center justify-center rounded-md border border-sky-500/30 bg-sky-500/20 text-sky-200 transition hover:bg-sky-500/30 hover:text-white disabled:opacity-30 disabled:hover:bg-sky-500/20"
+                    disabled={historyIndex <= 0 || isSubmitting || isExpanding}
+                    className="flex h-7 w-7 items-center justify-center rounded-md border border-rose-500/30 bg-rose-500/20 text-rose-200 transition hover:bg-rose-500/30 hover:text-white disabled:opacity-30 disabled:hover:bg-rose-500/20"
                     title="Undo"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6" /><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" /></svg>
@@ -2118,8 +2120,8 @@ export default function ControlsPane() {
                   <button
                     type="button"
                     onClick={redo}
-                    disabled={historyIndex >= history.length - 1}
-                    className="flex h-7 w-7 items-center justify-center rounded-md border border-sky-500/30 bg-sky-500/20 text-sky-200 transition hover:bg-sky-500/30 hover:text-white disabled:opacity-30 disabled:hover:bg-sky-500/20"
+                    disabled={historyIndex >= history.length - 1 || isSubmitting || isExpanding}
+                    className="flex h-7 w-7 items-center justify-center rounded-md border border-rose-500/30 bg-rose-500/20 text-rose-200 transition hover:bg-rose-500/30 hover:text-white disabled:opacity-30 disabled:hover:bg-rose-500/20"
                     title="Redo"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 7v6h-6" /><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13" /></svg>
@@ -2757,6 +2759,7 @@ export default function ControlsPane() {
       {showPromptStudio && (
         <PromptStudio
           currentPrompt={prompt}
+          initialImages={imageReferenceUrls}
           onClose={() => setShowPromptStudio(false)}
           onApply={(newPrompt) => {
             setPrompt(newPrompt);
