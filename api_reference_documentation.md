@@ -355,6 +355,60 @@ Transforms existing videos based on a text prompt. Supports up to 3 reference vi
 
 ---
 
+### Seedance 1.5 Pro
+**Provider**: KIE
+**Endpoint**: `/api/v1/jobs/createTask`
+**Pricing**: 720p: $0.07-0.21 (no audio), $0.14-0.42 (with audio)
+
+Supports both T2V (text-to-video) and I2V (image-to-video). When `input_urls` is empty, operates in T2V mode.
+
+#### Parameters
+| Parameter | Type | Required | Description | Example |
+| :--- | :--- | :--- | :--- | :--- |
+| `model` | string | Yes | Model ID | `"bytedance/seedance-1.5-pro"` |
+| `input.prompt` | string | Yes | Text prompt. 3-2500 chars. | `"A person walking in the park..."` |
+| `input.input_urls` | array | No | Input image URLs. Empty for T2V. Max 10MB. | `["https://..."]` |
+| `input.aspect_ratio` | string | No | Aspect ratio. Options: `"1:1"`, `"16:9"`, `"9:16"`, `"4:3"`, `"3:4"`, `"21:9"`. Default: `"1:1"`. | `"16:9"` |
+| `input.resolution` | string | No | Resolution. Options: `"480p"`, `"720p"`. Default: `"720p"`. | `"720p"` |
+| `input.duration` | string | Yes | Duration. Options: `"4"`, `"8"`, `"12"`. | `"8"` |
+| `input.fixed_lens` | boolean | No | Enable static camera. Default: `false`. | `false` |
+| `input.generate_audio` | boolean | No | Generate audio (extra cost). Default: `false`. | `true` |
+| `callBackUrl` | string | No | Callback URL for notifications. | `"https://..."` |
+
+#### Request Example (I2V)
+```json
+{
+  "model": "bytedance/seedance-1.5-pro",
+  "callBackUrl": "https://your-domain.com/api/callback",
+  "input": {
+    "prompt": "A cinematic scene of the subject walking through a forest...",
+    "input_urls": ["https://file.aiquickdraw.com/..."],
+    "aspect_ratio": "16:9",
+    "resolution": "720p",
+    "duration": "8",
+    "fixed_lens": false,
+    "generate_audio": true
+  }
+}
+```
+
+#### Request Example (T2V)
+```json
+{
+  "model": "bytedance/seedance-1.5-pro",
+  "callBackUrl": "https://your-domain.com/api/callback",
+  "input": {
+    "prompt": "A dramatic sunset over the ocean with waves crashing...",
+    "input_urls": [],
+    "aspect_ratio": "16:9",
+    "resolution": "720p",
+    "duration": "8"
+  }
+}
+```
+
+---
+
 ### Veo 3.1 Fast
 **Provider**: KIE
 **Endpoint**: `/api/v1/veo/generate`

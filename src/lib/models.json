@@ -1,6 +1,87 @@
 {
   "models": [
     {
+      "id": "seedance-1.5-pro",
+      "label": "Seedance 1.5 Pro",
+      "endpoint": "/api/v1/jobs/createTask",
+      "provider": "kie",
+      "pricing": "$0.14 / $0.28 🔊",
+      "supports": {
+        "startFrame": true,
+        "endFrame": true,
+        "audio": true,
+        "resolution": true,
+        "aspectRatio": true,
+        "fps": false
+      },
+      "taskConfig": {
+        "statusEndpoint": "/api/v1/jobs/recordInfo",
+        "statePath": "data.state",
+        "successStates": [
+          "success"
+        ],
+        "failureStates": [
+          "fail"
+        ],
+        "responseDataPath": "data",
+        "pollIntervalMs": 4000
+      },
+      "params": {
+        "prompt": {
+          "type": "string",
+          "required": true
+        },
+        "input_urls": {
+          "type": "string",
+          "required": false,
+          "uiKey": "start_frame_url"
+        },
+        "aspect_ratio": {
+          "type": "enum",
+          "required": false,
+          "values": [
+            "1:1",
+            "16:9",
+            "9:16",
+            "4:3",
+            "3:4",
+            "21:9"
+          ],
+          "default": "16:9"
+        },
+        "resolution": {
+          "type": "enum",
+          "values": [
+            "480p",
+            "720p"
+          ],
+          "default": "720p"
+        },
+        "duration": {
+          "type": "enum",
+          "required": true,
+          "values": [
+            "4",
+            "8",
+            "12"
+          ],
+          "default": "8"
+        },
+        "fixed_lens": {
+          "type": "boolean",
+          "default": false,
+          "uiKey": "camera_fixed"
+        },
+        "generate_audio": {
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "output": {
+        "videoPath": "video.url"
+      }
+    },
+    {
       "id": "kling-2.5-pro",
       "label": "Kling 2.5 Turbo Pro",
       "endpoint": "/api/v1/jobs/createTask",
