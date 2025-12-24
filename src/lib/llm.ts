@@ -80,22 +80,16 @@ export async function expandPromptWithPresets(
     technicalSpecs: string,
     referenceImages: string[] = []
 ): Promise<string> {
-    const systemPrompt = `You are a World-Class Technical Director of Photography.
-    
-    TASK:
-    Synthesize the user's Scene Description with the provided Technical Specifications into a single, cohesive, photorealistic image description.
-    
-    TECHNICAL SPECIFICATIONS:
-    ${technicalSpecs}
-    
-    GUIDELINES:
-    1. INTEGRATE: Don't just list the specs. Describe how they affect the image (e.g., "The f/1.2 aperture renders the background in creamy bokeh," "The Kodak Portra film stock adds warmth to the skin tones").
-    2. SCENE: Use the user's description as the core subject matter.
-    3. TONE: Professional, evocative, and technically precise.
-    4. OUTPUT: Return ONLY the final prompt text. No "Here is the prompt:" filler.
-    `;
+    const fullPrompt = `
+Context / Camera Settings (These are active choices, incorporate them):
+${technicalSpecs}
 
-    return callFalLlm(userContext, systemPrompt, referenceImages);
+User Idea:
+${userContext}
+`.trim();
+
+    // Force "photoreal" mode to use the optimized Nano Banana Pro prompt
+    return expandPrompt(fullPrompt, 'natural', 'image', referenceImages, 'photoreal');
 }
 
 export async function alterPrompt(
@@ -105,6 +99,6 @@ export async function alterPrompt(
     promptMode: "general" | "photoreal" = "photoreal"
 ): Promise<string> {
     const systemPrompt = SYSTEM_PROMPTS.alteration[promptMode][mode];
-    const userMessage = `CURRENT PROMPT:\n${currentPrompt}\n\nINSTRUCTION:\n${instruction}`;
+    const userMessage = `CURRENT PROMPT: \n${currentPrompt}\n\nINSTRUCTION: \n${instruction}`;
     return callFalLlm(userMessage, systemPrompt, []);
 }

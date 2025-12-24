@@ -42,7 +42,6 @@ export const VERTICAL_POSITIONS: VerticalPosition[] = [
     { id: 'high', name: 'High Angle', value: 'high angle shot looking down', angle: 45, description: 'Above, looking down', icon: '↘' },
     { id: 'eye', name: 'Eye Level', value: 'eye level shot', angle: 0, description: 'Natural height', icon: '→' },
     { id: 'low', name: 'Low Angle', value: 'low angle shot looking up', angle: -45, description: 'Below, looking up', icon: '↗' },
-    { id: 'worm', name: "Worm's Eye", value: 'worms eye view extreme low angle ground level', angle: -90, description: 'Ground level up', icon: '⬆' },
 ];
 
 // ============================================================================
@@ -88,8 +87,8 @@ export const LENS_TYPES: LensType[] = [
     { id: 'wide', name: 'Wide', mm: 24, effect: 'Environment & Character', distortion: -0.4, description: 'Context, action' },
     { id: 'normal', name: 'Normal', mm: 50, effect: 'How We See', distortion: 0, description: 'Natural, honest' },
     { id: 'portrait', name: 'Portrait', mm: 85, effect: 'Flattering', distortion: 0.3, description: 'Subject isolation' },
-    { id: 'telephoto', name: 'Telephoto', mm: 135, effect: 'Distant & Compressed', distortion: 0.6, description: 'Flattened depth' },
     { id: 'macro', name: 'Macro', mm: 100, effect: 'Micro World', distortion: 0, description: 'Extreme detail' },
+    { id: 'telephoto', name: 'Telephoto', mm: 135, effect: 'Distant & Compressed', distortion: 0.6, description: 'Flattened depth' },
 ];
 
 // Aperture - affects depth of field

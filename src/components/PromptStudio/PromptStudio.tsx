@@ -26,12 +26,14 @@ interface PromptStudioProps {
     onClose: () => void;
     onApply: (prompt: string) => void;
     currentPrompt?: string;
+    initialImages?: string[];
 }
 
 export function PromptStudio({
     onClose,
     onApply,
     currentPrompt = '',
+    initialImages = [],
 }: PromptStudioProps) {
     const [prompt, setPrompt] = useState(currentPrompt);
 
@@ -42,6 +44,7 @@ export function PromptStudio({
     const [verticalPos, setVerticalPos] = useState<VerticalPosition | undefined>(
         VERTICAL_POSITIONS.find(v => v.id === 'eye')
     );
+    const [dutchTilt, setDutchTilt] = useState(0); // -45 to +45 degrees
     const [framingScale, setFramingScale] = useState(55);
 
     // Camera settings state
@@ -65,6 +68,7 @@ export function PromptStudio({
     const [filmStock, setFilmStock] = useState<FilmStock | undefined>(
         FILM_STOCKS.find(f => f.id === 'neutral')
     );
+    const [useReferences, setUseReferences] = useState(true);
 
     const [isGenerating, setIsGenerating] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -99,7 +103,11 @@ export function PromptStudio({
                 presetParts.push(`${filmStock.name} film look`);
             }
 
-            const expandedPrompt = await expandPromptWithPresets(prompt, presetParts.join('\n'), []);
+            const expandedPrompt = await expandPromptWithPresets(
+                prompt,
+                presetParts.join('\n'),
+                useReferences && initialImages ? initialImages : []
+            );
             setPrompt(expandedPrompt);
         } catch (err) {
             console.error(err);
@@ -128,6 +136,10 @@ export function PromptStudio({
                         setHorizontalPos={setHorizontalPos}
                         verticalPos={verticalPos}
                         setVerticalPos={setVerticalPos}
+                        dutchTilt={dutchTilt}
+                        setDutchTilt={setDutchTilt}
+                        useReferences={useReferences}
+                        setUseReferences={setUseReferences}
                         framingScale={framingScale}
                         setFramingScale={setFramingScale}
                         lens={lens}
@@ -152,6 +164,7 @@ export function PromptStudio({
                         setPrompt={setPrompt}
                         horizontalPos={horizontalPos}
                         verticalPos={verticalPos}
+                        dutchTilt={dutchTilt}
                         framingScale={framingScale}
                         lens={lens}
                         aperture={aperture}

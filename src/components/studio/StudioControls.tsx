@@ -1,7 +1,6 @@
 import {
     HORIZONTAL_POSITIONS,
     VERTICAL_POSITIONS,
-    FRAMING_LEVELS,
     LENS_TYPES,
     APERTURE_STOPS,
     SHUTTER_SPEEDS,
@@ -38,6 +37,10 @@ interface StudioControlsProps {
     setCamera: (c: CameraBody) => void;
     filmStock: FilmStock | undefined;
     setFilmStock: (f: FilmStock) => void;
+    dutchTilt: number;
+    setDutchTilt: (d: number) => void;
+    useReferences: boolean;
+    setUseReferences: (u: boolean) => void;
 }
 
 export function StudioControls({
@@ -59,12 +62,37 @@ export function StudioControls({
     setCamera,
     filmStock,
     setFilmStock,
+    dutchTilt,
+    setDutchTilt,
+    useReferences,
+    setUseReferences,
 }: StudioControlsProps) {
 
     const currentFraming = getFramingFromScale(framingScale);
 
     return (
         <div className="flex w-full h-full flex-col overflow-y-auto custom-scrollbar">
+
+            {/* SECTION: CONTEXT */}
+            <section className="p-4 border-b border-white/5 space-y-3">
+                <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Context</label>
+                    <button
+                        type="button"
+                        onClick={() => setUseReferences(!useReferences)}
+                        className={`
+                            relative inline-flex h-4 w-8 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none
+                            ${useReferences ? 'bg-sky-500' : 'bg-slate-700'}
+                        `}
+                        title="Include uploaded images in prompt generation"
+                    >
+                        <span className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${useReferences ? 'translate-x-4' : 'translate-x-0'}`} />
+                    </button>
+                </div>
+                <div className="text-[9px] text-slate-500">
+                    {useReferences ? 'Uploaded images will influence the prompt.' : 'Uploaded images will be ignored.'}
+                </div>
+            </section>
 
             {/* SECTION: POSITION */}
             <section className="p-4 border-b border-white/5 space-y-4">
@@ -81,7 +109,18 @@ export function StudioControls({
                             <button
                                 key={h.id}
                                 type="button"
-                                onClick={() => setHorizontalPos(h)}
+                                onClick={() => {
+                                    setHorizontalPos(h);
+                                    // Reset vertical to eye level
+                                    const eyeLevel = VERTICAL_POSITIONS.find(v => v.id === 'eye');
+                                    if (eyeLevel) setVerticalPos(eyeLevel);
+
+                                    // Reset framing to default (MS)
+                                    setFramingScale(55);
+
+                                    // Reset Dutch Tilt
+                                    setDutchTilt(0);
+                                }}
                                 className={`flex-1 py-2 rounded border text-center transition-all ${horizontalPos?.id === h.id
                                     ? 'border-sky-500 bg-sky-500/20 text-sky-300'
                                     : 'border-white/10 bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white'
@@ -117,6 +156,31 @@ export function StudioControls({
                                 <div className="text-[9px] font-medium">{v.name.split(' ')[0]}</div>
                             </button>
                         ))}
+                    </div>
+                </div>
+
+                {/* Dutch Tilt (Roll) */}
+                <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-medium text-slate-500 flex items-center gap-2">
+                            <span className="w-4 h-4 rounded-full bg-white/10 flex items-center justify-center text-[8px]">⟲</span>
+                            Roll / Dutch Tilt
+                        </label>
+                        <span className="text-xs font-mono font-bold text-sky-400">{dutchTilt}°</span>
+                    </div>
+                    <input
+                        type="range"
+                        min={-45}
+                        max={45}
+                        step={1}
+                        value={dutchTilt}
+                        onChange={(e) => setDutchTilt(Number(e.target.value))}
+                        className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
+                    />
+                    <div className="flex justify-between text-[9px] text-slate-600">
+                        <span>-45°</span>
+                        <span className="text-slate-400">0°</span>
+                        <span>+45°</span>
                     </div>
                 </div>
 
@@ -261,7 +325,7 @@ export function StudioControls({
                                     ? 'border-purple-500 bg-purple-500/20 text-purple-300'
                                     : 'border-white/10 bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white'
                                     }`}
-                                title={c.character}
+                                title={c.description}
                             >
                                 {c.icon} {c.name}
                             </button>
@@ -278,11 +342,14 @@ export function StudioControls({
                                 key={f.id}
                                 type="button"
                                 onClick={() => setFilmStock(f)}
-                                className={`flex-shrink-0 px-2.5 py-1.5 rounded border text-[10px] font-medium flex items-center gap-1.5 whitespace-nowrap transition-all ${filmStock?.id === f.id
-                                    ? 'border-purple-500 bg-purple-500/20 text-purple-300'
-                                    : 'border-white/10 bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white'
-                                    }`}
-                                title={f.look}
+                                title={f.description} // Tooltip
+                                className={`
+                                    flex-shrink-0 px-2.5 py-1.5 rounded border text-[10px] font-medium flex items-center gap-1.5 whitespace-nowrap transition-all
+                                    ${filmStock?.id === f.id
+                                        ? 'border-purple-500 bg-purple-500/20 text-purple-300'
+                                        : 'border-white/10 bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white'
+                                    }
+                                `}
                             >
                                 <span
                                     className="w-2.5 h-2.5 rounded-full border border-white/20"
