@@ -480,31 +480,98 @@ Supports both T2V (text-to-video) and I2V (image-to-video). When `input_urls` is
 **Endpoint**: `/api/v1/jobs/createTask`
 **Pricing**: $0.09/image
 
+Combines text-to-image and image-to-image capabilities. When `image_input` is provided, uses reference images for transformation; otherwise generates purely from text prompt.
+
 #### Parameters
 | Parameter | Type | Required | Description | Example |
 | :--- | :--- | :--- | :--- | :--- |
 | `model` | string | Yes | Model ID | `"nano-banana-pro"` |
-| `input.prompt` | string | Yes | Text description of the image. Max 5000 chars. | `"Comic poster..."` |
-| `input.image_input` | array | No | Input images for reference/edit (max 8). | `["https://..."]` |
-| `input.aspect_ratio` | string | No | Aspect ratio. Options: `"1:1"`, `"2:3"`, `"3:2"`, `"3:4"`, `"4:3"`, `"4:5"`, `"5:4"`, `"9:16"`, `"16:9"`, `"21:9"`. | `"1:1"` |
-| `input.resolution` | string | No | Resolution. Options: `"1K"`, `"2K"`, `"4K"`. | `"1K"` |
-| `input.output_format` | string | No | Output format: `"png"`, `"jpg"`. | `"png"` |
-| `callBackUrl` | string | No | Callback URL for notifications. | `"https://..."` |
+| `input.prompt` | string | Yes | Text description of the image. Max 10000 chars. | `"Comic poster: cool banana hero..."` |
+| `input.image_input` | array(URL) | No | Input images to transform or use as reference (max 8). Each URL max 30MB. Accepts: jpeg, png, webp. | `["https://..."]` |
+| `input.aspect_ratio` | string | No | Aspect ratio. Options: `"1:1"`, `"2:3"`, `"3:2"`, `"3:4"`, `"4:3"`, `"4:5"`, `"5:4"`, `"9:16"`, `"16:9"`, `"21:9"`, `"auto"`. | `"1:1"` |
+| `input.resolution` | string | No | Resolution. Options: `"1K"`, `"2K"`, `"4K"`. Default: `"1K"`. | `"1K"` |
+| `input.output_format` | string | No | Output format. Options: `"png"`, `"jpg"`. Default: `"png"`. | `"png"` |
+| `callBackUrl` | string | No | Callback URL for task completion notifications. | `"https://..."` |
 
-#### Request Example
+#### Request Example (Text-to-Image)
+```bash
+curl -X POST "https://api.kie.ai/api/v1/jobs/createTask" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{
+    "model": "nano-banana-pro",
+    "callBackUrl": "https://your-domain.com/api/callback",
+    "input": {
+      "prompt": "Comic poster: cool banana hero in shades leaps from sci-fi pad. Six panels: 1) 4K mountain landscape, 2) banana holds page of long multilingual text with auto translation, 3) Gemini 3 hologram for search/knowledge/reasoning, 4) camera UI sliders for angle focus color, 5) frame trio 1:1-9:16, 6) consistent banana poses. Footer shows Google icons. Tagline: Nano Banana Pro now on Kie AI.",
+      "aspect_ratio": "1:1",
+      "resolution": "1K",
+      "output_format": "png"
+    }
+}'
+```
+
+#### Request Example (Image-to-Image)
 ```json
 {
   "model": "nano-banana-pro",
   "callBackUrl": "https://your-domain.com/api/callback",
   "input": {
-    "prompt": "Comic poster: cool banana hero in shades leaps from sci-fi pad...",
-    "image_input": [],
-    "aspect_ratio": "1:1",
-    "resolution": "1K",
+    "prompt": "Transform into watercolor painting style",
+    "image_input": ["https://example.com/input-image.jpg"],
+    "aspect_ratio": "16:9",
+    "resolution": "2K",
     "output_format": "png"
   }
 }
 ```
+
+#### Response Example
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "taskId": "task_12345678"
+  }
+}
+```
+
+#### Callback Success Example
+```json
+{
+  "code": 200,
+  "data": {
+    "completeTime": 1755599644000,
+    "costTime": 8,
+    "createTime": 1755599634000,
+    "model": "nano-banana-pro",
+    "param": "{\"callBackUrl\":\"https://your-domain.com/api/callback\",\"model\":\"nano-banana-pro\",\"input\":{\"prompt\":\"...\",\"image_input\":[],\"aspect_ratio\":\"1:1\",\"resolution\":\"1K\",\"output_format\":\"png\"}}",
+    "resultJson": "{\"resultUrls\":[\"https://example.com/generated-image.jpg\"]}",
+    "state": "success",
+    "taskId": "e989621f54392584b05867f87b160672"
+  },
+  "msg": "Playground task completed successfully."
+}
+```
+
+#### Callback Failure Example
+```json
+{
+  "code": 501,
+  "data": {
+    "completeTime": 1755597081000,
+    "failCode": "500",
+    "failMsg": "Internal server error",
+    "model": "nano-banana-pro",
+    "state": "fail",
+    "taskId": "bd3a37c523149e4adf45a3ddb5faf1a8"
+  },
+  "msg": "Playground task failed."
+}
+```
+
+> [!IMPORTANT]
+> The `param` field in callbacks contains the complete Create Task request parameters, not just the input section.
 
 ---
 

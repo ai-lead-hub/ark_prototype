@@ -97,7 +97,7 @@ function resolveAspectRatio(
 export const IMAGE_MODELS: ImageModelSpec[] = [
   {
     id: "nano-banana-pro-edit",
-    label: "Nano Banana Pro — Edit",
+    label: "Nano Banana Pro",
     endpoint: "/api/v1/jobs/createTask",
     provider: "kie",
     pricing: "$0.09/image",
@@ -110,7 +110,7 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
       pollIntervalMs: 4000,
     },
     mode: "edit",
-    maxRefs: 10,
+    maxRefs: 8,
     ui: {
       aspectRatios: [
         { value: "1:1", label: "1:1" },
@@ -123,6 +123,7 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
         { value: "9:16", label: "9:16" },
         { value: "16:9", label: "16:9" },
         { value: "21:9", label: "21:9" },
+        { value: "auto", label: "Auto" },
       ],
       resolutions: [
         { value: "2K", label: "2K" },
@@ -148,7 +149,7 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
         input: {
           prompt,
           ...(imageUrls.length
-            ? { image_input: imageUrls.slice(0, 10) }
+            ? { image_input: imageUrls.slice(0, 8) }
             : {}),
           ...(resolvedAspect ? { aspect_ratio: resolvedAspect } : {}),
           ...(imageResolution ? { resolution: imageResolution } : {}),

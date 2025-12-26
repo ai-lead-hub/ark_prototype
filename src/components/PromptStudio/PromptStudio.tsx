@@ -87,17 +87,27 @@ export function PromptStudio({
         try {
             const presetParts = [];
 
-            // Position
+            // === CAMERA ANGLE & FRAMING FIRST (for higher weight in prompt) ===
+            // Horizontal angle (front, side, back, etc.)
             if (horizontalPos) presetParts.push(horizontalPos.value);
+            // Vertical angle (eye level, high angle, low angle, etc.)
             if (verticalPos) presetParts.push(verticalPos.value);
+            // Framing/shot type (wide, medium, close-up, etc.)
             presetParts.push(currentFraming.value);
+            // Dutch tilt if non-zero
+            if (dutchTilt !== 0) {
+                const tiltDirection = dutchTilt > 0 ? 'right' : 'left';
+                presetParts.push(`dutch angle tilted ${Math.abs(dutchTilt)}° to the ${tiltDirection}`);
+            }
 
-            // Camera settings
+            // === LENS & CAMERA SETTINGS ===
             if (lens) presetParts.push(`${lens.mm}mm ${lens.name.toLowerCase()} lens`);
             if (aperture) presetParts.push(`f/${aperture.value} aperture, ${aperture.dof} depth of field`);
             if (shutterSpeed) presetParts.push(`${shutterSpeed.fraction} shutter speed`);
+            // ISO
+            if (iso) presetParts.push(`ISO ${iso.value}`);
 
-            // Look
+            // === LOOK & STYLE ===
             if (camera) presetParts.push(`shot on ${camera.name}`);
             if (filmStock && filmStock.id !== 'neutral') {
                 presetParts.push(`${filmStock.name} film look`);

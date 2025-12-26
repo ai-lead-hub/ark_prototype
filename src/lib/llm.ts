@@ -80,16 +80,57 @@ export async function expandPromptWithPresets(
     technicalSpecs: string,
     referenceImages: string[] = []
 ): Promise<string> {
-    const fullPrompt = `
-Context / Camera Settings (These are active choices, incorporate them):
-${technicalSpecs}
+    // Import the dedicated studio prompt
+    const { STUDIO_PROMPT } = await import('./prompts');
 
-User Idea:
+    // Split specs into lines for categorization
+    const specLines = technicalSpecs.split('\n').filter(line => line.trim());
+
+    // Categorize: Camera angle, framing, and dutch tilt are HIGH PRIORITY
+    // These should be woven into the first sentence naturally
+    const highPriority: string[] = [];
+    const technical: string[] = [];
+
+    for (const line of specLines) {
+        const lowerLine = line.toLowerCase();
+        // High priority: angle/position keywords, framing/shot types, dutch tilt
+        if (
+            lowerLine.includes('angle') ||
+            lowerLine.includes('level') ||
+            lowerLine.includes('overhead') ||
+            lowerLine.includes('worm') ||
+            lowerLine.includes('front') ||
+            lowerLine.includes('side') ||
+            lowerLine.includes('back') ||
+            lowerLine.includes('perspective') ||
+            lowerLine.includes('shot') ||
+            lowerLine.includes('close-up') ||
+            lowerLine.includes('closeup') ||
+            lowerLine.includes('wide') ||
+            lowerLine.includes('medium') ||
+            lowerLine.includes('full') ||
+            lowerLine.includes('dutch') ||
+            lowerLine.includes('tilt')
+        ) {
+            highPriority.push(line);
+        } else {
+            technical.push(line);
+        }
+    }
+
+    const fullPrompt = `
+=== CAMERA ANGLE & FRAMING (weave into FIRST SENTENCE) ===
+${highPriority.join('\n') || 'Not specified'}
+
+=== SCENE DESCRIPTION ===
 ${userContext}
+
+=== TECHNICAL SPECS (place at END) ===
+${technical.join('\n') || 'Not specified'}
 `.trim();
 
-    // Force "photoreal" mode to use the optimized Nano Banana Pro prompt
-    return expandPrompt(fullPrompt, 'natural', 'image', referenceImages, 'photoreal');
+    // Use the dedicated STUDIO_PROMPT with deep photography knowledge
+    return callFalLlm(fullPrompt, STUDIO_PROMPT, referenceImages);
 }
 
 export async function alterPrompt(
