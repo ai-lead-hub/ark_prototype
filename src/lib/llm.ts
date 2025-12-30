@@ -83,54 +83,87 @@ export async function expandPromptWithPresets(
     // Import the dedicated studio prompt
     const { STUDIO_PROMPT } = await import('./prompts');
 
-    // Split specs into lines for categorization
+    // Parse the technical specs into structured fields
     const specLines = technicalSpecs.split('\n').filter(line => line.trim());
 
-    // Categorize: Camera angle, framing, and dutch tilt are HIGH PRIORITY
-    // These should be woven into the first sentence naturally
-    const highPriority: string[] = [];
-    const technical: string[] = [];
+    // Extract specific values from the spec lines
+    let angle = '';
+    let framing = '';
+    let lens = '';
+    let dutchTilt = '';
+    let aperture = '';
+    let shutter = '';
+    let camera = '';
+    let stock = '';
+    let iso = '';
 
     for (const line of specLines) {
         const lowerLine = line.toLowerCase();
-        // High priority: angle/position keywords, framing/shot types, dutch tilt
-        if (
-            lowerLine.includes('angle') ||
-            lowerLine.includes('level') ||
-            lowerLine.includes('overhead') ||
-            lowerLine.includes('worm') ||
-            lowerLine.includes('front') ||
-            lowerLine.includes('side') ||
-            lowerLine.includes('back') ||
-            lowerLine.includes('perspective') ||
-            lowerLine.includes('shot') ||
-            lowerLine.includes('close-up') ||
-            lowerLine.includes('closeup') ||
-            lowerLine.includes('wide') ||
-            lowerLine.includes('medium') ||
-            lowerLine.includes('full') ||
-            lowerLine.includes('dutch') ||
-            lowerLine.includes('tilt')
-        ) {
-            highPriority.push(line);
-        } else {
-            technical.push(line);
+
+        // Angle detection (horizontal + vertical)
+        if (lowerLine.includes('angle') || lowerLine.includes('level') ||
+            lowerLine.includes('overhead') || lowerLine.includes('worm') ||
+            lowerLine.includes('front') || lowerLine.includes('side') ||
+            lowerLine.includes('back') || lowerLine.includes('perspective')) {
+            angle = angle ? `${angle}, ${line}` : line;
+        }
+        // Framing detection
+        else if (lowerLine.includes('shot') || lowerLine.includes('close-up') ||
+            lowerLine.includes('closeup') || lowerLine.includes('wide') ||
+            lowerLine.includes('medium') || lowerLine.includes('full')) {
+            framing = line;
+        }
+        // Dutch tilt
+        else if (lowerLine.includes('dutch') || lowerLine.includes('tilt')) {
+            dutchTilt = line;
+        }
+        // Lens
+        else if (lowerLine.includes('lens') || lowerLine.includes('mm ')) {
+            lens = line;
+        }
+        // Aperture
+        else if (lowerLine.includes('f/') || lowerLine.includes('aperture')) {
+            aperture = line;
+        }
+        // Shutter
+        else if (lowerLine.includes('shutter') || lowerLine.match(/1\/\d+/)) {
+            shutter = line;
+        }
+        // Camera
+        else if (lowerLine.includes('shot on') || lowerLine.includes('arri') ||
+            lowerLine.includes('red') || lowerLine.includes('sony') ||
+            lowerLine.includes('panavision') || lowerLine.includes('film') ||
+            lowerLine.includes('imax')) {
+            camera = line;
+        }
+        // Film stock
+        else if (lowerLine.includes('portra') || lowerLine.includes('cinestill') ||
+            lowerLine.includes('velvia') || lowerLine.includes('gold') ||
+            lowerLine.includes('tri-x') || lowerLine.includes('film look')) {
+            stock = line;
+        }
+        // ISO
+        else if (lowerLine.includes('iso')) {
+            iso = line;
         }
     }
 
-    const fullPrompt = `
-=== CAMERA ANGLE & FRAMING (weave into FIRST SENTENCE) ===
-${highPriority.join('\n') || 'Not specified'}
-
-=== SCENE DESCRIPTION ===
-${userContext}
-
-=== TECHNICAL SPECS (place at END) ===
-${technical.join('\n') || 'Not specified'}
+    // Build structured input format for the VLM
+    const structuredInput = `
+[SCENE]: ${userContext}
+[ANGLE]: ${angle || 'Not specified'}
+[FRAMING]: ${framing || 'Not specified'}
+[LENS]: ${lens || 'Not specified'}
+[DUTCH_TILT]: ${dutchTilt || '0'}
+[APERTURE]: ${aperture || 'Not specified'}
+[SHUTTER]: ${shutter || 'Not specified'}
+[CAMERA]: ${camera || 'Not specified'}
+[STOCK]: ${stock || 'Not specified'}
+[ISO]: ${iso || 'Not specified'}
 `.trim();
 
-    // Use the dedicated STUDIO_PROMPT with deep photography knowledge
-    return callFalLlm(fullPrompt, STUDIO_PROMPT, referenceImages);
+    // Use the dedicated STUDIO_PROMPT with the structured input
+    return callFalLlm(structuredInput, STUDIO_PROMPT, referenceImages);
 }
 
 export async function alterPrompt(

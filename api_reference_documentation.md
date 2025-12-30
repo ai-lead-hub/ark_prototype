@@ -4,6 +4,68 @@ This document provides a comprehensive reference for all video generation and im
 
 ## Video Generation Models
 
+### Sora 2
+**Provider**: KIE
+**Endpoint**: `/api/v1/jobs/createTask`
+**Pricing**: $0.15 (10s) / $0.23 (15s)
+
+Supports both Text-to-Video (T2V) and Image-to-Video (I2V). When `image_urls` is empty or omitted, operates in T2V mode.
+
+#### Parameters
+| Parameter | Type | Required | Description | Example |
+| :--- | :--- | :--- | :--- | :--- |
+| `model` | string | Yes | Model ID. Use `"sora-2-image-to-video"` for I2V, `"sora-2-text-to-video"` for T2V. | `"sora-2-image-to-video"` |
+| `input.prompt` | string | Yes | Text prompt describing the video. Max 10000 chars. | `"A claymation conductor..."` |
+| `input.image_urls` | array | No | Input image URL for I2V mode. Must be publicly accessible. Max 10MB. Accepts: jpeg, png, webp. | `["https://..."]` |
+| `input.aspect_ratio` | string | No | Aspect ratio. Options: `"portrait"`, `"landscape"`. Default: `"landscape"`. | `"landscape"` |
+| `input.n_frames` | string | No | Video duration. Options: `"10"` (10s), `"15"` (15s). Default: `"10"`. | `"10"` |
+| `input.remove_watermark` | boolean | No | Remove watermarks from output. Default: `true`. | `true` |
+| `input.character_id_list` | array | No | Character IDs for consistent characters. Max 5 IDs. | `["char_1", "char_2"]` |
+| `callBackUrl` | string | No | Callback URL for notifications. | `"https://..."` |
+
+#### Request Example (I2V)
+```json
+{
+  "model": "sora-2-image-to-video",
+  "callBackUrl": "https://your-domain.com/api/callback",
+  "input": {
+    "prompt": "A claymation conductor passionately leads a claymation orchestra, while the entire group joyfully sings in chorus.",
+    "image_urls": ["https://file.aiquickdraw.com/custom-page/akr/section-images/example.jpg"],
+    "aspect_ratio": "landscape",
+    "n_frames": "10",
+    "remove_watermark": true
+  }
+}
+```
+
+#### Request Example (T2V)
+```json
+{
+  "model": "sora-2-text-to-video",
+  "callBackUrl": "https://your-domain.com/api/callback",
+  "input": {
+    "prompt": "A professor stands at the front of a lively classroom, enthusiastically giving a lecture. On the blackboard behind him are colorful chalk diagrams.",
+    "aspect_ratio": "landscape",
+    "n_frames": "15",
+    "remove_watermark": true
+  }
+}
+```
+
+#### Response Example
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "taskId": "task_12345678"
+  }
+}
+```
+
+---
+
+
 ### Kling 2.5 Turbo Pro
 **Provider**: KIE
 **Endpoint**: `/api/v1/jobs/createTask`
@@ -443,6 +505,63 @@ Supports both T2V (text-to-video) and I2V (image-to-video). When `input_urls` is
 ---
 
 ## Image Editing Models
+
+### GPT Image 1.5
+**Provider**: KIE
+**Endpoint**: `/api/v1/jobs/createTask`
+**Pricing**: $0.04/image (medium), $0.11/image (high)
+
+Supports both Text-to-Image (T2I) and Image-to-Image (I2I). When `input_urls` is provided, operates in I2I mode; otherwise generates from text prompt.
+
+#### Parameters
+| Parameter | Type | Required | Description | Example |
+| :--- | :--- | :--- | :--- | :--- |
+| `model` | string | Yes | Model ID. Use `"gpt-image/1.5-image-to-image"` for I2I, `"gpt-image/1.5-text-to-image"` for T2I. | `"gpt-image/1.5-text-to-image"` |
+| `input.prompt` | string | Yes | Text description of the image. Max 1000 chars. | `"Create a photorealistic photo..."` |
+| `input.input_urls` | array | No | Input image URL for I2I mode. Max 10MB. Accepts: jpeg, png, webp. | `["https://..."]` |
+| `input.aspect_ratio` | string | Yes | Aspect ratio. Options: `"1:1"`, `"2:3"`, `"3:2"`. | `"3:2"` |
+| `input.quality` | string | Yes | Quality level. Options: `"medium"` (balanced), `"high"` (slow/detailed). | `"medium"` |
+| `callBackUrl` | string | No | Callback URL for notifications. | `"https://..."` |
+
+#### Request Example (Text-to-Image)
+```json
+{
+  "model": "gpt-image/1.5-text-to-image",
+  "callBackUrl": "https://your-domain.com/api/callback",
+  "input": {
+    "prompt": "Create a photorealistic candid photograph of an elderly sailor standing on a small fishing boat. He has weathered skin with visible wrinkles, pores, and sun texture.",
+    "aspect_ratio": "3:2",
+    "quality": "medium"
+  }
+}
+```
+
+#### Request Example (Image-to-Image)
+```json
+{
+  "model": "gpt-image/1.5-image-to-image",
+  "callBackUrl": "https://your-domain.com/api/callback",
+  "input": {
+    "input_urls": ["https://example.com/input.jpg"],
+    "prompt": "Change her clothing to an elegant blue evening gown. Preserve her face, identity, hairstyle, pose, body shape, background, lighting, and camera angle exactly as in the original image.",
+    "aspect_ratio": "3:2",
+    "quality": "high"
+  }
+}
+```
+
+#### Response Example
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "taskId": "task_12345678"
+  }
+}
+```
+
+---
 
 ### Nano Banana — Edit
 **Provider**: KIE

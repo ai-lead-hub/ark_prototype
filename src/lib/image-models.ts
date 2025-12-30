@@ -288,6 +288,65 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
     },
   },
   {
+    id: "gpt-image-1-5",
+    label: "GPT Image 1.5",
+    endpoint: "/api/v1/jobs/createTask",
+    provider: "kie",
+    pricing: "$0.04/image (medium), $0.11/image (high)",
+    taskConfig: {
+      statusEndpoint: "/api/v1/jobs/recordInfo",
+      statePath: "data.state",
+      successStates: ["success"],
+      failureStates: ["fail"],
+      responseDataPath: "data",
+      pollIntervalMs: 4000,
+    },
+    mode: "edit",
+    maxRefs: 1,
+    ui: {
+      aspectRatios: [
+        { value: "1:1", label: "Square (1:1)" },
+        { value: "2:3", label: "Portrait (2:3)" },
+        { value: "3:2", label: "Landscape (3:2)" },
+      ],
+      resolutions: [
+        { value: "medium", label: "Medium (Balanced)" },
+        { value: "high", label: "High (Detailed)" },
+      ],
+      defaultResolution: "medium",
+    },
+    mapInput: ({ prompt, imageUrls, aspectRatio, imageResolution }) => {
+      const hasRefs = imageUrls.length > 0;
+      // GPT Image 1.5 only accepts 1:1, 2:3, 3:2 for aspect ratio
+      const validAspectRatios = ["1:1", "2:3", "3:2"];
+      const effectiveAspectRatio = validAspectRatios.includes(aspectRatio ?? "")
+        ? aspectRatio
+        : "1:1";
+
+      return {
+        model: hasRefs ? "gpt-image/1.5-image-to-image" : "gpt-image/1.5-text-to-image",
+        input: {
+          prompt,
+          ...(hasRefs ? { input_urls: imageUrls.slice(0, 1) } : {}),
+          aspect_ratio: effectiveAspectRatio,
+          quality: imageResolution ?? "medium",
+        },
+      };
+    },
+    getUrls: (output) => {
+      const resultJson = (output as { resultJson?: string } | undefined)?.resultJson;
+      if (typeof resultJson === "string") {
+        try {
+          const parsed = JSON.parse(resultJson) as { resultUrls?: string[] };
+          return (parsed.resultUrls ?? []).filter(Boolean) as string[];
+        } catch {
+          // fall through
+        }
+      }
+      return [];
+    },
+  },
+  {
     id: "seedream-v4-5",
     label: "Seedream 4.5",
     endpoint: "/api/v1/jobs/createTask",

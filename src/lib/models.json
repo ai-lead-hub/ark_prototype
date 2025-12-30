@@ -1,6 +1,71 @@
 {
   "models": [
     {
+      "id": "sora-2",
+      "label": "Sora 2",
+      "endpoint": "/api/v1/jobs/createTask",
+      "provider": "kie",
+      "pricing": "$0.15 (10s) / $0.23 (15s)",
+      "supports": {
+        "startFrame": true,
+        "endFrame": false,
+        "audio": false,
+        "resolution": false,
+        "aspectRatio": true,
+        "fps": false
+      },
+      "taskConfig": {
+        "statusEndpoint": "/api/v1/jobs/recordInfo",
+        "statePath": "data.state",
+        "successStates": [
+          "success"
+        ],
+        "failureStates": [
+          "fail"
+        ],
+        "responseDataPath": "data",
+        "pollIntervalMs": 4000
+      },
+      "params": {
+        "prompt": {
+          "type": "string",
+          "required": true
+        },
+        "image_urls": {
+          "type": "string",
+          "required": false,
+          "uiKey": "start_frame_url"
+        },
+        "aspect_ratio": {
+          "type": "enum",
+          "required": false,
+          "values": [
+            "portrait",
+            "landscape"
+          ],
+          "default": "landscape"
+        },
+        "n_frames": {
+          "type": "enum",
+          "required": false,
+          "values": [
+            "10",
+            "15"
+          ],
+          "default": "10",
+          "uiKey": "duration"
+        },
+        "remove_watermark": {
+          "type": "boolean",
+          "default": true,
+          "hidden": true
+        }
+      },
+      "output": {
+        "videoPath": "video.url"
+      }
+    },
+    {
       "id": "seedance-1.5-pro",
       "label": "Seedance 1.5 Pro",
       "endpoint": "/api/v1/jobs/createTask",

@@ -257,6 +257,10 @@ const jsonSpecs =
             // Determine the KIE model name based on model ID
             // Models with both T2V and I2V endpoints - switch based on whether image is provided
             const kieModelMap: Record<string, { i2v: string; t2v?: string }> = {
+              "sora-2": {
+                i2v: "sora-2-image-to-video",
+                t2v: "sora-2-text-to-video"
+              },
               "kling-2.5-pro": { i2v: "kling/v2-5-turbo-image-to-video-pro" },
               "hailuo-2.3-pro": { i2v: "hailuo/2-3-image-to-video-pro" }, // T2V unavailable
               "hailuo-02-pro": {
@@ -313,6 +317,14 @@ const jsonSpecs =
 
             // Special handling for Wan 2.6 I2V - image_urls must be an array
             if (model.id === "wan-2.6-i2v" && hasImage) {
+              const imageUrl = input.image_urls ?? unified.start_frame_url;
+              if (typeof imageUrl === "string") {
+                input.image_urls = [imageUrl];
+              }
+            }
+
+            // Special handling for Sora 2 I2V - image_urls must be an array
+            if (model.id === "sora-2" && hasImage) {
               const imageUrl = input.image_urls ?? unified.start_frame_url;
               if (typeof imageUrl === "string") {
                 input.image_urls = [imageUrl];
