@@ -162,28 +162,16 @@ export default function FileBrowser() {
       };
     }
     if (entry.mime.startsWith("video/")) {
-      const dims = fileDims[entry.id];
-      if (!dims)
-        return {
-          grid: "border-white/10 bg-black/40",
-          list: "border-l-transparent",
-        }; // Default until loaded
-      if (dims.h >= 1080) {
-        return {
-          grid: "border-green-500/50 bg-green-500/5",
-          list: "border-l-green-500/50",
-        };
-      }
       return {
-        grid: "border-blue-500/50 bg-blue-500/5",
-        list: "border-l-blue-500/50",
+        grid: "border-green-500/50 bg-green-500/5",
+        list: "border-l-green-500/50",
       };
     }
     return {
       grid: "border-white/5 bg-slate-900/40 hover:bg-slate-800/60 hover:border-white/10",
       list: "border-l-transparent",
     };
-  }, [fileDims]);
+  }, []);
 
   const handleRename = async (entry: FileEntry) => {
     if (!editName.trim() || editName === entry.name) {
@@ -1067,7 +1055,7 @@ export default function FileBrowser() {
                       }}
                       onClick={(e) => multiSelectMode ? handleMultiSelectClick(entry, e) : select(entry)}
                       onKeyDown={(e) => handleKeyDown(e, entry)}
-                      className={`group relative flex aspect-square flex-col overflow-hidden rounded-lg border transition focus:outline-none focus:ring-2 focus:ring-sky-500 ${selected?.id === entry.id && !multiSelectMode ? "ring-2 ring-yellow-500" : ""
+                      className={`group relative flex aspect-square flex-col overflow-hidden rounded-xl border transition focus:outline-none focus:ring-2 focus:ring-sky-500 ${selected?.id === entry.id && !multiSelectMode ? "ring-2 ring-yellow-500" : ""
                         } ${selectedIds.has(entry.id) ? "ring-2 ring-rose-400" : ""
                         } ${isPublished(published, entry.relPath) ? "ring-2 ring-violet-400/70 shadow-lg shadow-violet-500/40" : ""
                         } ${styles.grid}`}

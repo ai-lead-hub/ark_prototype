@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import EditorToolbar from "./EditorToolbar";
 import { uploadToFal } from "../lib/fal";
 
-export type AnnotationType = "rect" | "circle" | "text" | "brush";
-export type ToolType = "select" | "rect" | "circle" | "text" | "crop" | "brush";
+export type AnnotationType = "rect" | "circle" | "text" | "brush" | "arrow";
+export type ToolType = "select" | "rect" | "circle" | "arrow" | "text" | "crop" | "brush";
 
 export interface BrushPoint {
     x: number;
@@ -18,6 +18,8 @@ export interface Annotation {
     w?: number;
     h?: number;
     r?: number;
+    x2?: number; // Arrow end x
+    y2?: number; // Arrow end y
     text?: string;
     color: string;
     fontSize?: number;
@@ -177,6 +179,28 @@ export default function ImageEditor({
                     ctx.lineTo(offsetX + pt.x * zoom, offsetY + pt.y * zoom);
                 }
                 ctx.stroke();
+            } else if (ann.type === "arrow" && ann.x2 !== undefined && ann.y2 !== undefined) {
+                // Draw arrow line
+                const endX = offsetX + ann.x2 * zoom;
+                const endY = offsetY + ann.y2 * zoom;
+                ctx.beginPath();
+                ctx.moveTo(annX, annY);
+                ctx.lineTo(endX, endY);
+                ctx.stroke();
+                // Draw arrowhead - proportional to stroke width
+                const strokeW = (ann.strokeWidth || 2) * zoom;
+                const headLen = Math.max(15, strokeW * 4) * zoom / zoom; // Head length scales with stroke
+                const headLineW = Math.max(2, strokeW * 0.6); // Arrowhead line 60% of shaft
+                const savedLineWidth = ctx.lineWidth;
+                ctx.lineWidth = headLineW;
+                const angle = Math.atan2(endY - annY, endX - annX);
+                ctx.beginPath();
+                ctx.moveTo(endX, endY);
+                ctx.lineTo(endX - headLen * Math.cos(angle - Math.PI / 6), endY - headLen * Math.sin(angle - Math.PI / 6));
+                ctx.moveTo(endX, endY);
+                ctx.lineTo(endX - headLen * Math.cos(angle + Math.PI / 6), endY - headLen * Math.sin(angle + Math.PI / 6));
+                ctx.stroke();
+                ctx.lineWidth = savedLineWidth;
             }
         });
 
@@ -196,6 +220,28 @@ export default function ImageEditor({
                 ctx.beginPath();
                 ctx.arc(drawX, drawY, currentDraw.r * zoom, 0, Math.PI * 2);
                 ctx.stroke();
+                ctx.setLineDash([]);
+            } else if (currentDraw.type === "arrow" && currentDraw.x2 !== undefined && currentDraw.y2 !== undefined) {
+                const endX = offsetX + currentDraw.x2 * zoom;
+                const endY = offsetY + currentDraw.y2 * zoom;
+                ctx.setLineDash([5, 5]);
+                ctx.beginPath();
+                ctx.moveTo(drawX, drawY);
+                ctx.lineTo(endX, endY);
+                ctx.stroke();
+                // Arrowhead preview - proportional to brush size
+                const headLen = Math.max(15, brushSize * 4);
+                const headLineW = Math.max(2, brushSize * 0.6);
+                const savedLineWidth = ctx.lineWidth;
+                ctx.lineWidth = headLineW;
+                const angle = Math.atan2(endY - drawY, endX - drawX);
+                ctx.beginPath();
+                ctx.moveTo(endX, endY);
+                ctx.lineTo(endX - headLen * Math.cos(angle - Math.PI / 6), endY - headLen * Math.sin(angle - Math.PI / 6));
+                ctx.moveTo(endX, endY);
+                ctx.lineTo(endX - headLen * Math.cos(angle + Math.PI / 6), endY - headLen * Math.sin(angle + Math.PI / 6));
+                ctx.stroke();
+                ctx.lineWidth = savedLineWidth;
                 ctx.setLineDash([]);
             }
         }
@@ -292,7 +338,7 @@ export default function ImageEditor({
                 // Pan mode
                 setIsPanning(true);
                 setPanStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
-            } else if (tool === "rect" || tool === "circle") {
+            } else if (tool === "rect" || tool === "circle" || tool === "arrow") {
                 setIsDrawing(true);
                 setDrawStart(imgCoords);
                 setCurrentDraw({
@@ -302,6 +348,8 @@ export default function ImageEditor({
                     w: 0,
                     h: 0,
                     r: 0,
+                    x2: imgCoords.x,
+                    y2: imgCoords.y,
                 });
             } else if (tool === "text") {
                 // Calculate position relative to the canvas container
@@ -347,14 +395,23 @@ export default function ImageEditor({
                         h: Math.abs(imgCoords.y - drawStart.y),
                     });
                 } else if (tool === "circle") {
+                    // Circle scales from center - drawStart is center
                     const dx = imgCoords.x - drawStart.x;
                     const dy = imgCoords.y - drawStart.y;
                     const radius = Math.sqrt(dx * dx + dy * dy);
                     setCurrentDraw({
                         type: "circle",
+                        x: drawStart.x,  // Center x
+                        y: drawStart.y,  // Center y
+                        r: radius,
+                    });
+                } else if (tool === "arrow") {
+                    setCurrentDraw({
+                        type: "arrow",
                         x: drawStart.x,
                         y: drawStart.y,
-                        r: radius,
+                        x2: imgCoords.x,
+                        y2: imgCoords.y,
                     });
                 } else if (tool === "crop") {
                     let w = imgCoords.x - drawStart.x;
@@ -391,13 +448,20 @@ export default function ImageEditor({
             setIsPanning(false);
         }
 
-        if (isDrawing && currentDraw && (tool === "rect" || tool === "circle")) {
+        if (isDrawing && currentDraw && (tool === "rect" || tool === "circle" || tool === "arrow")) {
             // Only add if it has some size
             const minSize = 5;
-            const hasSize =
-                (currentDraw.w !== undefined && currentDraw.w > minSize) ||
-                (currentDraw.h !== undefined && currentDraw.h > minSize) ||
-                (currentDraw.r !== undefined && currentDraw.r > minSize);
+            let hasSize = false;
+            if (tool === "arrow" && currentDraw.x2 !== undefined && currentDraw.y2 !== undefined) {
+                const dx = currentDraw.x2 - (currentDraw.x || 0);
+                const dy = currentDraw.y2 - (currentDraw.y || 0);
+                hasSize = Math.sqrt(dx * dx + dy * dy) > minSize;
+            } else {
+                hasSize =
+                    (currentDraw.w !== undefined && currentDraw.w > minSize) ||
+                    (currentDraw.h !== undefined && currentDraw.h > minSize) ||
+                    (currentDraw.r !== undefined && currentDraw.r > minSize);
+            }
 
             if (hasSize) {
                 const imagePixelStrokeWidth = brushSize / zoom;
@@ -540,6 +604,28 @@ export default function ImageEditor({
                     ctx.lineTo(ann.points[i].x - cropArea.x, ann.points[i].y - cropArea.y);
                 }
                 ctx.stroke();
+            } else if (ann.type === "arrow" && ann.x2 !== undefined && ann.y2 !== undefined) {
+                ctx.lineWidth = ann.strokeWidth || 2;
+                const endX = ann.x2 - cropArea.x;
+                const endY = ann.y2 - cropArea.y;
+                ctx.beginPath();
+                ctx.moveTo(annX, annY);
+                ctx.lineTo(endX, endY);
+                ctx.stroke();
+                // Arrowhead - proportional to stroke width
+                const strokeW = ann.strokeWidth || 2;
+                const headLen = Math.max(15, strokeW * 4);
+                const headLineW = Math.max(2, strokeW * 0.6);
+                const savedLineWidth = ctx.lineWidth;
+                ctx.lineWidth = headLineW;
+                const angle = Math.atan2(endY - annY, endX - annX);
+                ctx.beginPath();
+                ctx.moveTo(endX, endY);
+                ctx.lineTo(endX - headLen * Math.cos(angle - Math.PI / 6), endY - headLen * Math.sin(angle - Math.PI / 6));
+                ctx.moveTo(endX, endY);
+                ctx.lineTo(endX - headLen * Math.cos(angle + Math.PI / 6), endY - headLen * Math.sin(angle + Math.PI / 6));
+                ctx.stroke();
+                ctx.lineWidth = savedLineWidth;
             }
         });
 
@@ -614,6 +700,26 @@ export default function ImageEditor({
                     ctx.lineTo(ann.points[i].x, ann.points[i].y);
                 }
                 ctx.stroke();
+            } else if (ann.type === "arrow" && ann.x2 !== undefined && ann.y2 !== undefined) {
+                ctx.lineWidth = ann.strokeWidth || 2;
+                ctx.beginPath();
+                ctx.moveTo(ann.x, ann.y);
+                ctx.lineTo(ann.x2, ann.y2);
+                ctx.stroke();
+                // Arrowhead - proportional to stroke width
+                const strokeW = ann.strokeWidth || 2;
+                const headLen = Math.max(15, strokeW * 4);
+                const headLineW = Math.max(2, strokeW * 0.6);
+                const savedLineWidth = ctx.lineWidth;
+                ctx.lineWidth = headLineW;
+                const angle = Math.atan2(ann.y2 - ann.y, ann.x2 - ann.x);
+                ctx.beginPath();
+                ctx.moveTo(ann.x2, ann.y2);
+                ctx.lineTo(ann.x2 - headLen * Math.cos(angle - Math.PI / 6), ann.y2 - headLen * Math.sin(angle - Math.PI / 6));
+                ctx.moveTo(ann.x2, ann.y2);
+                ctx.lineTo(ann.x2 - headLen * Math.cos(angle + Math.PI / 6), ann.y2 - headLen * Math.sin(angle + Math.PI / 6));
+                ctx.stroke();
+                ctx.lineWidth = savedLineWidth;
             }
         });
 

@@ -6,6 +6,7 @@ import {
   useState,
 } from "react";
 import { PromptStudio } from "./PromptStudio/PromptStudio";
+import { CameraMovementSelector } from "./ui/CameraMovementSelector";
 import type { ChangeEvent, FormEvent } from "react";
 import {
   DEFAULT_MODEL_ID,
@@ -230,6 +231,7 @@ export default function ControlsPane() {
   // const [busy, setBusy] = useState(false);
   const [isReferenceDragActive, setIsReferenceDragActive] = useState(false);
   const [showPromptStudio, setShowPromptStudio] = useState(false);
+  const [showCameraSelector, setShowCameraSelector] = useState(false);
 
   const referenceInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -1367,8 +1369,9 @@ export default function ControlsPane() {
     }
   };
 
-  const handleAlter = async () => {
-    if (!prompt.trim() || !alterInstruction.trim() || isAltering || isSubmitting) return;
+  const handleAlter = async (instructionOverride?: string) => {
+    const instruction = instructionOverride ?? alterInstruction;
+    if (!prompt.trim() || !instruction.trim() || isAltering || isSubmitting) return;
 
     try {
       setIsAltering(true);
@@ -1377,9 +1380,11 @@ export default function ControlsPane() {
       // Save current state before alteration
       addToHistory(prompt);
 
-      const altered = await alterPrompt(prompt, alterInstruction, mode, promptMode);
+      const altered = await alterPrompt(prompt, instruction, mode, promptMode);
       setPrompt(altered);
-      setAlterInstruction("");
+      if (!instructionOverride) {
+        setAlterInstruction("");
+      }
 
       // Save new state after alteration
       addToHistory(altered);
@@ -2173,6 +2178,36 @@ export default function ControlsPane() {
                     )}
                   </button>
                 </div>
+                {/* Camera Movement Selector Button (Bottom Left) */}
+                {/* Camera Movement Selector Button (Bottom Left) */}
+                <div className="absolute bottom-2 left-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowCameraSelector(!showCameraSelector)}
+                    disabled={isSubmitting || isExpanding}
+                    className={`flex h-7 w-9 items-center justify-center rounded-md border transition ${showCameraSelector
+                      ? "border-sky-500 bg-sky-500/40 text-white"
+                      : "border-sky-500/30 bg-sky-500/20 text-sky-200 hover:bg-sky-500/40 hover:text-white"
+                      } disabled:opacity-50`}
+                    title="Add Camera Movement"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m22 8-6 4 6 4V8Z" /><rect width="14" height="12" x="2" y="6" rx="2" ry="2" /></svg>
+                  </button>
+
+                  {/* Camera Selector Popover */}
+                  {showCameraSelector && (
+                    <div className="absolute bottom-full left-0 mb-2 z-50">
+                      <CameraMovementSelector
+                        onSelect={(text: string) => {
+                          const instruction = `Rewrite the prompt to completely REPLACE any existing camera movement with this one: "${text}". Keep the rest of the visual details intact.`;
+                          void handleAlter(instruction);
+                          setShowCameraSelector(false);
+                        }}
+                        onClose={() => setShowCameraSelector(false)}
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Alter Box */}
@@ -2279,7 +2314,8 @@ export default function ControlsPane() {
                     <select
                       value={aspectRatio}
                       onChange={(event) => setAspectRatio(event.target.value)}
-                      className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
+                      disabled={isSubmitting || isExpanding}
+                      className={`w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
                     >
                       {(selectedVideo?.params?.aspect_ratio?.values ?? selectedVideo?.params?.aspectRatio?.values ?? []).map((val) => (
                         <option key={String(val)} value={String(val)}>
@@ -2320,7 +2356,8 @@ export default function ControlsPane() {
                 <select
                   value={imageResolution}
                   onChange={(event) => setImageResolution(event.target.value)}
-                  className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
+                  disabled={isSubmitting || isExpanding}
+                  className={`w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
                 >
                   {selectedVideo?.params?.resolution?.values?.map((val) => (
                     <option key={String(val)} value={String(val)}>

@@ -1,65 +1,100 @@
-import { fal } from "@fal-ai/client";
 import { SYSTEM_PROMPTS } from "./prompts";
-import { getFalKey } from "./fal";
-const MODEL_ID = "google/gemini-2.5-flash";
 
-async function callFalLlm(
+// OpenRouter API configuration
+const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+const MODEL_ID = "google/gemini-3-flash-preview";
+
+function getOpenRouterKey(): string {
+    const key = import.meta.env.VITE_OPENROUTER_KEY;
+    if (!key) {
+        throw new Error("Missing VITE_OPENROUTER_KEY. Add it to .env.local and restart the app.");
+    }
+    return key;
+}
+
+interface OpenRouterMessage {
+    role: "system" | "user" | "assistant";
+    content: string | Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } }>;
+}
+
+interface OpenRouterResponse {
+    choices?: Array<{
+        message?: {
+            content?: string;
+        };
+    }>;
+    error?: {
+        message?: string;
+    };
+}
+
+async function callOpenRouter(
     prompt: string,
     systemPrompt: string,
     referenceImages: string[] = []
 ): Promise<string> {
-    const key = getFalKey();
-    if (!key) {
-        throw new Error("Missing VITE_FAL_KEY. Add it to .env.local and restart the app.");
+    const key = getOpenRouterKey();
+
+    // Build messages array
+    const messages: OpenRouterMessage[] = [
+        { role: "system", content: systemPrompt },
+    ];
+
+    // Build user content - text + optional images
+    if (referenceImages.length > 0) {
+        const userContent: Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } }> = [
+            { type: "text", text: prompt },
+        ];
+        for (const imageUrl of referenceImages) {
+            userContent.push({
+                type: "image_url",
+                image_url: { url: imageUrl },
+            });
+        }
+        messages.push({ role: "user", content: userContent });
+    } else {
+        messages.push({ role: "user", content: prompt });
     }
-
-    // Configure Fal client
-    fal.config({ credentials: key });
-
-    const hasImages = referenceImages.length > 0;
-    // Choose endpoint based on whether we have images
-    const endpoint = hasImages ? "openrouter/router/vision" : "openrouter/router";
-
-    const input: Record<string, unknown> = {
-        model: MODEL_ID,
-        prompt: prompt,
-        system_prompt: systemPrompt,
-        temperature: 1,
-    };
-
-    if (hasImages) {
-        input.image_urls = referenceImages;
-    }
-
-    // console.log(`Fal Request Payload (${endpoint}):`, JSON.stringify(input, null, 2));
 
     try {
-        const result = await fal.subscribe(endpoint, {
-            input,
-            logs: true,
-            onQueueUpdate: (update) => {
-                if (update.status === "IN_PROGRESS") {
-                    // update.logs.map((log) => log.message).forEach((msg) => console.log(`[Fal ${hasImages ? "VLM" : "LLM"}]`, msg));
-                }
+        const response = await fetch(OPENROUTER_URL, {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${key}`,
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://ai-scape.app",
+                "X-Title": "AI-Scape Studio",
             },
+            body: JSON.stringify({
+                model: MODEL_ID,
+                messages,
+                temperature: 1,
+            }),
         });
 
-        // console.log(`Fal Response (${endpoint}):`, result);
-
-        const content = result.data?.output;
-
-        if (typeof content !== "string") {
-            throw new Error(`Invalid or missing content received from Fal ${hasImages ? "VLM" : "LLM"}.`);
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`OpenRouter API error (${response.status}): ${errorText}`);
         }
 
-        let cleanContent = content.trim();
+        const data: OpenRouterResponse = await response.json();
 
-        // Remove markdown code blocks and bolding
+        if (data.error) {
+            throw new Error(`OpenRouter error: ${data.error.message || "Unknown error"}`);
+        }
+
+        const content = data.choices?.[0]?.message?.content;
+        if (typeof content !== "string") {
+            throw new Error("Invalid or missing content received from OpenRouter.");
+        }
+
+        // Clean up response - remove markdown code blocks and bolding
+        let cleanContent = content.trim();
         cleanContent = cleanContent.replace(/^```(?:yaml|json)?\s*/i, "").replace(/\s*```$/, "").replace(/\*\*/g, "");
 
         return cleanContent.trim();
     } catch (error) {
-        console.error(`Error with Fal ${hasImages ? "VLM" : "LLM"}:`, error);
+        console.error("Error with OpenRouter:", error);
         throw error;
     }
 }
@@ -71,8 +106,18 @@ export async function expandPrompt(
     referenceImages: string[] = [],
     promptMode: "general" | "photoreal" = "photoreal"
 ): Promise<string> {
-    const systemPrompt = SYSTEM_PROMPTS[mode][promptMode][type];
-    return callFalLlm(prompt, systemPrompt, referenceImages);
+    let systemPrompt: string;
+
+    if (mode === "video") {
+        const subMode = referenceImages.length > 0 ? "image_to_video" : "text_to_video";
+        // @ts-ignore - Dynamic access to new structure
+        systemPrompt = SYSTEM_PROMPTS.video[promptMode][subMode][type];
+    } else {
+        // @ts-ignore - Dynamic access
+        systemPrompt = SYSTEM_PROMPTS.image[promptMode][type];
+    }
+
+    return callOpenRouter(prompt, systemPrompt, referenceImages);
 }
 
 export async function expandPromptWithPresets(
@@ -163,7 +208,7 @@ export async function expandPromptWithPresets(
 `.trim();
 
     // Use the dedicated STUDIO_PROMPT with the structured input
-    return callFalLlm(structuredInput, STUDIO_PROMPT, referenceImages);
+    return callOpenRouter(structuredInput, STUDIO_PROMPT, referenceImages);
 }
 
 export async function alterPrompt(
@@ -174,5 +219,5 @@ export async function alterPrompt(
 ): Promise<string> {
     const systemPrompt = SYSTEM_PROMPTS.alteration[promptMode][mode];
     const userMessage = `CURRENT PROMPT: \n${currentPrompt}\n\nINSTRUCTION: \n${instruction}`;
-    return callFalLlm(userMessage, systemPrompt, []);
+    return callOpenRouter(userMessage, systemPrompt, []);
 }
