@@ -331,6 +331,12 @@ const jsonSpecs =
               }
             }
 
+            // Special handling for Sora 2 - map duration to n_frames for API
+            if (model.id === "sora-2" && input.duration !== undefined) {
+              input.n_frames = input.duration;
+              delete input.duration;
+            }
+
             // Special handling for Seedance 1.5 Pro - uses input_urls array (0-2 images)
             if (model.id === "seedance-1.5-pro") {
               const urls: string[] = [];

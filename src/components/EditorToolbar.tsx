@@ -181,7 +181,7 @@ export default function EditorToolbar({
                 />
                 <input
                     type="range"
-                    min="2"
+                    min="1"
                     max="100"
                     value={brushSize}
                     onChange={(e) => setBrushSize(Number(e.target.value))}

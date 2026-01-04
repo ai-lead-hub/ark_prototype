@@ -53,8 +53,8 @@ export default function ImageEditor({
     const [panStart, setPanStart] = useState({ x: 0, y: 0 });
 
     const [tool, setTool] = useState<ToolType>("select");
-    const [color, setColor] = useState<"white" | "red">("white");
-    const [brushSize, setBrushSize] = useState(8); // Default thick brush
+    const [color, setColor] = useState<"white" | "red">("red");
+    const [brushSize, setBrushSize] = useState(3); // Default brush thickness
     const [annotations, setAnnotations] = useState<Annotation[]>([]);
 
     const [isDrawing, setIsDrawing] = useState(false);
@@ -148,7 +148,8 @@ export default function ImageEditor({
         annotations.forEach((ann) => {
             ctx.strokeStyle = ann.color;
             ctx.fillStyle = ann.color;
-            ctx.lineWidth = 2 / zoom;
+            // Use stored strokeWidth if available (already in image pixels, multiply by zoom for display)
+            ctx.lineWidth = (ann.strokeWidth || 2) * zoom;
 
             const annX = offsetX + ann.x * zoom;
             const annY = offsetY + ann.y * zoom;
@@ -182,7 +183,7 @@ export default function ImageEditor({
         // Draw current drawing preview
         if (currentDraw) {
             ctx.strokeStyle = color === "white" ? "#ffffff" : "#ef4444";
-            ctx.lineWidth = 2;
+            ctx.lineWidth = brushSize;
             const drawX = offsetX + (currentDraw.x || 0) * zoom;
             const drawY = offsetY + (currentDraw.y || 0) * zoom;
 
@@ -399,6 +400,7 @@ export default function ImageEditor({
                 (currentDraw.r !== undefined && currentDraw.r > minSize);
 
             if (hasSize) {
+                const imagePixelStrokeWidth = brushSize / zoom;
                 setAnnotations((prev) => [
                     ...prev,
                     {
@@ -406,6 +408,7 @@ export default function ImageEditor({
                         id: crypto.randomUUID(),
                         type: tool as AnnotationType,
                         color: color === "white" ? "#ffffff" : "#ef4444",
+                        strokeWidth: imagePixelStrokeWidth,
                     } as Annotation,
                 ]);
             }
@@ -519,10 +522,10 @@ export default function ImageEditor({
             const annY = ann.y - cropArea.y;
 
             if (ann.type === "rect" && ann.w !== undefined && ann.h !== undefined) {
-                ctx.lineWidth = 2;
+                ctx.lineWidth = ann.strokeWidth || 3;
                 ctx.strokeRect(annX, annY, ann.w, ann.h);
             } else if (ann.type === "circle" && ann.r !== undefined) {
-                ctx.lineWidth = 2;
+                ctx.lineWidth = ann.strokeWidth || 3;
                 ctx.beginPath();
                 ctx.arc(annX, annY, ann.r, 0, Math.PI * 2);
                 ctx.stroke();
@@ -593,10 +596,10 @@ export default function ImageEditor({
             ctx.lineJoin = "round";
 
             if (ann.type === "rect" && ann.w !== undefined && ann.h !== undefined) {
-                ctx.lineWidth = 2;
+                ctx.lineWidth = ann.strokeWidth || 2;
                 ctx.strokeRect(ann.x, ann.y, ann.w, ann.h);
             } else if (ann.type === "circle" && ann.r !== undefined) {
-                ctx.lineWidth = 2;
+                ctx.lineWidth = ann.strokeWidth || 2;
                 ctx.beginPath();
                 ctx.arc(ann.x, ann.y, ann.r, 0, Math.PI * 2);
                 ctx.stroke();

@@ -2,6 +2,10 @@ import type {
   ModelProvider,
   TaskPollingConfig,
 } from "./providers";
+import {
+  parseKieResultUrls,
+  parseFalImageUrls,
+} from "./model-helpers";
 
 export type ImageSizePreset =
   | "square_hd"
@@ -157,18 +161,7 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
         },
       };
     },
-    getUrls: (output) => {
-      const resultJson = (output as { resultJson?: string } | undefined)?.resultJson;
-      if (typeof resultJson === "string") {
-        try {
-          const parsed = JSON.parse(resultJson) as { resultUrls?: string[] };
-          return (parsed.resultUrls ?? []).filter(Boolean) as string[];
-        } catch {
-          // fall through
-        }
-      }
-      return [];
-    },
+    getUrls: parseKieResultUrls,
   },
   {
     id: "nano-banana-edit",
@@ -215,16 +208,7 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
       responseDataPath: "data",
       pollIntervalMs: 4000,
     },
-    getUrls: (output) => {
-      const data = (output as { resultJson?: string } | undefined)?.resultJson;
-      if (typeof data !== "string") return [];
-      try {
-        const parsed = JSON.parse(data) as { resultUrls?: string[] };
-        return (parsed.resultUrls ?? []).filter(Boolean);
-      } catch {
-        return [];
-      }
-    },
+    getUrls: parseKieResultUrls,
   },
   {
     id: "flux-2-pro",
@@ -274,18 +258,7 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
         },
       };
     },
-    getUrls: (output) => {
-      const resultJson = (output as { resultJson?: string } | undefined)?.resultJson;
-      if (typeof resultJson === "string") {
-        try {
-          const parsed = JSON.parse(resultJson) as { resultUrls?: string[] };
-          return (parsed.resultUrls ?? []).filter(Boolean) as string[];
-        } catch {
-          // fall through
-        }
-      }
-      return [];
-    },
+    getUrls: parseKieResultUrls,
   },
   {
     id: "gpt-image-1-5",
@@ -333,18 +306,7 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
         },
       };
     },
-    getUrls: (output) => {
-      const resultJson = (output as { resultJson?: string } | undefined)?.resultJson;
-      if (typeof resultJson === "string") {
-        try {
-          const parsed = JSON.parse(resultJson) as { resultUrls?: string[] };
-          return (parsed.resultUrls ?? []).filter(Boolean) as string[];
-        } catch {
-          // fall through
-        }
-      }
-      return [];
-    },
+    getUrls: parseKieResultUrls,
   },
   {
     id: "seedream-v4-5",
@@ -391,18 +353,7 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
         },
       };
     },
-    getUrls: (output) => {
-      const resultJson = (output as { resultJson?: string } | undefined)?.resultJson;
-      if (typeof resultJson === "string") {
-        try {
-          const parsed = JSON.parse(resultJson) as { resultUrls?: string[] };
-          return (parsed.resultUrls ?? []).filter(Boolean) as string[];
-        } catch {
-          // fall through
-        }
-      }
-      return [];
-    },
+    getUrls: parseKieResultUrls,
   },
   {
     id: "qwen-image-edit-plus",
@@ -447,10 +398,7 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
         num_images: 1,
       };
     },
-    getUrls: (output) => {
-      const images = (output as { images?: Array<{ url: string }> })?.images;
-      return (images ?? []).map((img) => img.url).filter(Boolean);
-    },
+    getUrls: parseFalImageUrls,
   },
   {
     id: "kling-o1",
@@ -489,9 +437,6 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
         output_format: outputFormat ?? "png",
       };
     },
-    getUrls: (output) => {
-      const images = (output as { images?: Array<{ url: string }> })?.images;
-      return (images ?? []).map((img) => img.url).filter(Boolean);
-    },
+    getUrls: parseFalImageUrls,
   },
 ];
