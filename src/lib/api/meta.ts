@@ -186,3 +186,88 @@ export async function listPrompts(
   const payload = (await response.json()) as { entries?: PromptHistoryEntry[] };
   return Array.isArray(payload.entries) ? payload.entries : [];
 }
+
+// Pins API
+export type PinsMap = Record<string, number>;
+
+export async function listPins(
+  connection: WorkspaceConnection
+): Promise<PinsMap> {
+  const url = new URL("/meta/pins", connection.apiBase);
+  url.searchParams.set("workspace", connection.workspaceId);
+
+  const response = await fetch(url, { headers: authHeaders(connection.token) });
+  if (!response.ok) {
+    const message = await response.text().catch(() => "");
+    throw new Error(message || `Pins read failed: ${response.statusText}`);
+  }
+  const payload = (await response.json()) as { pins?: PinsMap };
+  return payload.pins && typeof payload.pins === "object" ? payload.pins : {};
+}
+
+export async function setPin(
+  connection: WorkspaceConnection,
+  relPath: string,
+  pinnedAt?: number
+): Promise<void> {
+  const response = await fetch(new URL("/meta/pins", connection.apiBase), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders(connection.token),
+    },
+    body: JSON.stringify({
+      workspaceId: connection.workspaceId,
+      relPath,
+      pinnedAt: pinnedAt ?? Date.now(),
+    }),
+  });
+  if (!response.ok) {
+    const message = await response.text().catch(() => "");
+    throw new Error(message || `Pin set failed: ${response.statusText}`);
+  }
+}
+
+export async function removePin(
+  connection: WorkspaceConnection,
+  relPath: string
+): Promise<void> {
+  const response = await fetch(new URL("/meta/pins", connection.apiBase), {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders(connection.token),
+    },
+    body: JSON.stringify({
+      workspaceId: connection.workspaceId,
+      relPath,
+    }),
+  });
+  if (!response.ok) {
+    const message = await response.text().catch(() => "");
+    throw new Error(message || `Pin remove failed: ${response.statusText}`);
+  }
+}
+
+export async function renamePin(
+  connection: WorkspaceConnection,
+  oldRelPath: string,
+  newRelPath: string
+): Promise<void> {
+  const response = await fetch(new URL("/meta/pins", connection.apiBase), {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders(connection.token),
+    },
+    body: JSON.stringify({
+      workspaceId: connection.workspaceId,
+      oldRelPath,
+      newRelPath,
+    }),
+  });
+  if (!response.ok) {
+    const message = await response.text().catch(() => "");
+    throw new Error(message || `Pin rename failed: ${response.statusText}`);
+  }
+}

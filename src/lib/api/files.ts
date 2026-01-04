@@ -143,6 +143,32 @@ export async function deleteFile(
   }
 }
 
+export type TrashResult = {
+  success: string[];
+  failed: { path: string; error: string }[];
+};
+
+export async function trashFiles(
+  connection: WorkspaceConnection,
+  relPaths: string[]
+): Promise<TrashResult> {
+  const response = await fetch(new URL("/files/trash", connection.apiBase), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders(connection.token),
+    },
+    body: JSON.stringify({
+      workspace: connection.workspaceId,
+      paths: relPaths,
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(`Trash failed: ${response.statusText}`);
+  }
+  return response.json();
+}
+
 export async function renameFile(
   connection: WorkspaceConnection,
   relPath: string,

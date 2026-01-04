@@ -39,6 +39,15 @@ const server = Fastify({
 
 await fs.mkdir(STORAGE_ROOT, { recursive: true });
 
+// Empty trash on startup
+const TRASH_DIR = path.join(STORAGE_ROOT, "_trash");
+try {
+  await fs.rm(TRASH_DIR, { recursive: true, force: true });
+  console.log("✓ Trash emptied");
+} catch {
+  // Ignore if trash doesn't exist
+}
+
 let metaDb = null;
 try {
   metaDb = await createMetaDb(META_DB_PATH);
@@ -142,6 +151,8 @@ async function readTree(baseDir, baseRel = "") {
   const entries = [];
   const dirents = await fs.readdir(baseDir, { withFileTypes: true });
   for (const dirent of dirents) {
+    // Skip hidden files and _trash folder
+    if (dirent.name.startsWith(".") || dirent.name === "_trash") continue;
     const relPath = baseRel ? `${baseRel}/${dirent.name}` : dirent.name;
     const fullPath = path.join(baseDir, dirent.name);
     if (dirent.isDirectory()) {
@@ -425,6 +436,58 @@ server.delete("/files", async (request, reply) => {
   } catch {
     reply.code(404).send({ error: "Not found" });
   }
+});
+
+// Move files to trash instead of permanent deletion
+server.post("/files/trash", async (request, reply) => {
+  const { workspace, paths } = request.body ?? {};
+
+  if (!Array.isArray(paths) || paths.length === 0) {
+    return reply.code(400).send({ error: "Missing or empty paths array" });
+  }
+
+  let safeWorkspace;
+  try {
+    safeWorkspace = sanitizeWorkspaceId(workspace);
+  } catch (error) {
+    return reply.code(400).send({ error: error.message ?? "Invalid workspace" });
+  }
+
+  const workspaceDir = await ensureWorkspaceDir(safeWorkspace);
+  const trashWorkspaceDir = path.join(TRASH_DIR, safeWorkspace);
+  await fs.mkdir(trashWorkspaceDir, { recursive: true });
+
+  const results = { success: [], failed: [] };
+
+  for (const relPath of paths) {
+    try {
+      const safePath = sanitizeRelPath(relPath);
+      const sourcePath = toSafePath(workspaceDir, safePath);
+      const trashPath = path.join(trashWorkspaceDir, safePath);
+      const trashDir = path.dirname(trashPath);
+
+      // Ensure trash subdirectory exists
+      await fs.mkdir(trashDir, { recursive: true });
+
+      // Move file to trash
+      await fs.rename(sourcePath, trashPath);
+
+      // Update metadata DB
+      if (metaDb) {
+        try {
+          metaDb.deletePathPrefix({ workspaceId: safeWorkspace, relPath: safePath });
+        } catch (error) {
+          request.log.warn(error, "Failed to update file index on trash");
+        }
+      }
+
+      results.success.push(relPath);
+    } catch (error) {
+      results.failed.push({ path: relPath, error: error.message ?? "Unknown error" });
+    }
+  }
+
+  return reply.send(results);
 });
 
 server.patch("/files", async (request, reply) => {
@@ -799,6 +862,102 @@ server.get("/meta/prompts", async (request, reply) => {
   } catch (error) {
     request.log.error(error);
     return reply.code(500).send({ error: "Failed to list prompt history" });
+  }
+});
+
+// Pins API endpoints
+server.get("/meta/pins", async (request, reply) => {
+  if (!metaDb) return reply.code(503).send({ error: "Metadata DB unavailable" });
+  const workspaceRaw =
+    request.query &&
+      typeof request.query === "object" &&
+      "workspace" in request.query
+      ? request.query.workspace
+      : undefined;
+
+  let workspaceId;
+  try {
+    workspaceId = sanitizeWorkspaceId(workspaceRaw);
+  } catch (error) {
+    return reply.code(400).send({ error: error.message ?? "Invalid workspace" });
+  }
+
+  try {
+    const pins = metaDb.listPins({ workspaceId });
+    return reply.send({ pins });
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ error: "Failed to list pins" });
+  }
+});
+
+server.post("/meta/pins", async (request, reply) => {
+  if (!metaDb) return reply.code(503).send({ error: "Metadata DB unavailable" });
+  const body = request.body ?? {};
+
+  let workspaceId;
+  let relPath;
+  try {
+    workspaceId = sanitizeWorkspaceId(body.workspace ?? body.workspaceId);
+    relPath = sanitizeRelPath(body.relPath ?? body.path);
+  } catch (error) {
+    return reply.code(400).send({ error: error.message ?? "Invalid input" });
+  }
+
+  const pinnedAt = typeof body.pinnedAt === "number" ? body.pinnedAt : Date.now();
+
+  try {
+    metaDb.setPin({ workspaceId, relPath, pinnedAt });
+    return reply.send({ ok: true, pinnedAt });
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ error: "Failed to set pin" });
+  }
+});
+
+server.delete("/meta/pins", async (request, reply) => {
+  if (!metaDb) return reply.code(503).send({ error: "Metadata DB unavailable" });
+  const body = request.body ?? {};
+
+  let workspaceId;
+  let relPath;
+  try {
+    workspaceId = sanitizeWorkspaceId(body.workspace ?? body.workspaceId);
+    relPath = sanitizeRelPath(body.relPath ?? body.path);
+  } catch (error) {
+    return reply.code(400).send({ error: error.message ?? "Invalid input" });
+  }
+
+  try {
+    metaDb.removePin({ workspaceId, relPath });
+    return reply.send({ ok: true });
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ error: "Failed to remove pin" });
+  }
+});
+
+server.patch("/meta/pins", async (request, reply) => {
+  if (!metaDb) return reply.code(503).send({ error: "Metadata DB unavailable" });
+  const body = request.body ?? {};
+
+  let workspaceId;
+  let oldRelPath;
+  let newRelPath;
+  try {
+    workspaceId = sanitizeWorkspaceId(body.workspace ?? body.workspaceId);
+    oldRelPath = sanitizeRelPath(body.oldPath ?? body.oldRelPath);
+    newRelPath = sanitizeRelPath(body.newPath ?? body.newRelPath);
+  } catch (error) {
+    return reply.code(400).send({ error: error.message ?? "Invalid input" });
+  }
+
+  try {
+    metaDb.renamePin({ workspaceId, oldRelPath, newRelPath });
+    return reply.send({ ok: true });
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ error: "Failed to rename pin" });
   }
 });
 

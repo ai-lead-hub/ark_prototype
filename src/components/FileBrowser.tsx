@@ -1,13 +1,13 @@
 import { useCallback, useMemo, useState, useEffect, useRef } from "react";
 import { useCatalog } from "../state/useCatalog";
 import { useQueue } from "../state/queue";
-import { type FileEntry, getFileUrl, publishFile, uploadFile } from "../lib/api/files";
+import { type FileEntry, getFileUrl, publishFile, uploadFile, trashFiles } from "../lib/api/files";
 import { FILE_ENTRY_MIME } from "../lib/drag-constants";
 import { Spinner } from "./ui/Spinner";
 import { PublishModal } from "./PublishModal";
 import { buildDatedMediaPath, mediaFolderFromMime } from "../lib/storage-paths";
 import { setControlsPrompt } from "../lib/controls-store";
-import { loadPins, removePin, renamePin, togglePin, savePins, type PinsMap } from "../lib/pins";
+import { type PinsMap } from "../lib/pins";
 import {
   loadPublished,
   addPublished,
@@ -25,6 +25,10 @@ import {
   listPrompts,
   recordFileMetadata,
   type PromptHistoryEntry,
+  listPins as fetchPins,
+  setPin as apiSetPin,
+  removePin as apiRemovePin,
+  renamePin as apiRenamePin,
 } from "../lib/api/meta";
 import { useHoverPlayVideos } from "../lib/useHoverPlayVideos";
 
@@ -34,7 +38,7 @@ const VIDEO_EXTS = ["mp4", "webm", "mov", "mkv"];
 export default function FileBrowser() {
   const {
     state: { entries, q, filterExt, selected, loading, connection },
-    actions: { setQuery, setFilters, select, refreshTree, rename, remove },
+    actions: { setQuery, setFilters, select, refreshTree, rename },
   } = useCatalog();
 
   const { jobs } = useQueue();
@@ -61,6 +65,12 @@ export default function FileBrowser() {
   const playingVideoRef = useRef<HTMLVideoElement | null>(null);
   const sentFileMetaRef = useRef<Set<string>>(new Set());
 
+  // Multi-select mode state
+  const [multiSelectMode, setMultiSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const lastClickedIdRef = useRef<string | null>(null);
+
   const [hoverPlayVideos] = useHoverPlayVideos();
 
   const iconButtonBase =
@@ -77,15 +87,59 @@ export default function FileBrowser() {
 
   const [pins, setPins] = useState<PinsMap>({});
 
+  // Load pins from server
+  const loadPinsFromServer = useCallback(async () => {
+    if (!connection) {
+      setPins({});
+      return;
+    }
+    try {
+      const serverPins = await fetchPins(connection);
+      setPins(serverPins);
+    } catch (error) {
+      console.error("Failed to load pins:", error);
+      setPins({});
+    }
+  }, [connection]);
+
   useEffect(() => {
     if (!workspaceKey) {
       setPins({});
       setPublished({});
       return;
     }
-    setPins(loadPins(workspaceKey));
+    void loadPinsFromServer();
     setPublished(loadPublished(workspaceKey));
-  }, [workspaceKey]);
+  }, [workspaceKey, loadPinsFromServer]);
+
+  // Toggle pin with server sync
+  const handleTogglePin = useCallback(async (relPath: string) => {
+    if (!connection) return;
+    const isPinned = Boolean(pins[relPath]);
+
+    // Optimistic update
+    setPins((prev) => {
+      const next = { ...prev };
+      if (isPinned) {
+        delete next[relPath];
+      } else {
+        next[relPath] = Date.now();
+      }
+      return next;
+    });
+
+    try {
+      if (isPinned) {
+        await apiRemovePin(connection, relPath);
+      } else {
+        await apiSetPin(connection, relPath);
+      }
+    } catch (error) {
+      console.error("Failed to toggle pin:", error);
+      // Revert on failure
+      void loadPinsFromServer();
+    }
+  }, [connection, pins, loadPinsFromServer]);
 
   const refreshReferences = useCallback(() => {
     if (!workspaceKey) return;
@@ -100,7 +154,7 @@ export default function FileBrowser() {
     return off;
   }, [workspaceKey]);
 
-  const getFileStyles = (entry: FileEntry) => {
+  const getFileStyles = useCallback((entry: FileEntry) => {
     if (entry.mime.startsWith("image/")) {
       return {
         grid: "border-red-500/50 bg-red-500/5",
@@ -129,7 +183,7 @@ export default function FileBrowser() {
       grid: "border-white/5 bg-slate-900/40 hover:bg-slate-800/60 hover:border-white/10",
       list: "border-l-transparent",
     };
-  };
+  }, [fileDims]);
 
   const handleRename = async (entry: FileEntry) => {
     if (!editName.trim() || editName === entry.name) {
@@ -141,8 +195,16 @@ export default function FileBrowser() {
     setOperationLoading(entry.id);
     try {
       await rename(entry, nextName);
-      if (workspaceKey && pins[entry.relPath]) {
-        setPins(renamePin(workspaceKey, entry.relPath, newPath));
+      if (connection && pins[entry.relPath]) {
+        // Update pin path on server
+        await apiRenamePin(connection, entry.relPath, newPath).catch(console.error);
+        setPins((prev) => {
+          const next = { ...prev };
+          const pinnedAt = next[entry.relPath];
+          delete next[entry.relPath];
+          if (pinnedAt) next[newPath] = pinnedAt;
+          return next;
+        });
       }
       if (workspaceKey) {
         setRecentReferences(
@@ -165,15 +227,31 @@ export default function FileBrowser() {
 
   const handleDelete = async (entry: FileEntry, e?: React.MouseEvent | React.KeyboardEvent) => {
     e?.stopPropagation();
-    if (!confirm(`Are you sure you want to delete "${entry.name}"?`)) return;
+    if (!connection) return;
+
     setOperationLoading(entry.id);
     try {
-      await remove(entry);
-      if (workspaceKey && pins[entry.relPath]) {
-        setPins(removePin(workspaceKey, entry.relPath));
-      }
-      if (workspaceKey) {
-        setRecentReferences(removeRecentReference(workspaceKey, entry.relPath));
+      // Use trash instead of permanent delete
+      const result = await trashFiles(connection, [entry.relPath]);
+
+      if (result.success.length > 0) {
+        // Remove from pins if pinned
+        if (pins[entry.relPath]) {
+          await apiRemovePin(connection, entry.relPath).catch(console.error);
+          setPins((prev) => {
+            const next = { ...prev };
+            delete next[entry.relPath];
+            return next;
+          });
+        }
+        // Remove from recent references
+        if (workspaceKey) {
+          setRecentReferences(removeRecentReference(workspaceKey, entry.relPath));
+        }
+        // Refresh file list
+        await refreshTree();
+      } else if (result.failed.length > 0) {
+        throw new Error(result.failed[0].error);
       }
     } catch (error) {
       console.error(error);
@@ -183,6 +261,72 @@ export default function FileBrowser() {
       setOperationLoading(null);
     }
   };
+
+  // Toggle selection for multi-select mode
+  const toggleSelection = useCallback((entry: FileEntry) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(entry.id)) {
+        next.delete(entry.id);
+      } else {
+        next.add(entry.id);
+      }
+      return next;
+    });
+    lastClickedIdRef.current = entry.id;
+  }, []);
+
+  // Bulk delete selected files
+  const handleBulkDelete = async () => {
+    if (!connection || selectedIds.size === 0) return;
+
+    setBulkDeleting(true);
+    try {
+      const paths = entries
+        .filter((e) => selectedIds.has(e.id))
+        .map((e) => e.relPath);
+
+      const result = await trashFiles(connection, paths);
+
+      // Remove pins and recent refs for trashed files
+      if (connection) {
+        for (const relPath of result.success) {
+          if (pins[relPath]) {
+            await apiRemovePin(connection, relPath).catch(console.error);
+          }
+          setRecentReferences(removeRecentReference(workspaceKey, relPath));
+        }
+        // Refresh pins from server
+        void loadPinsFromServer();
+      }
+
+      // Clear selection and refresh
+      setSelectedIds(new Set());
+      setMultiSelectMode(false);
+      await refreshTree();
+
+      if (result.failed.length > 0) {
+        alert(`Trashed ${result.success.length} files. ${result.failed.length} failed.`);
+      }
+    } catch (error) {
+      console.error(error);
+      alert(`Bulk delete failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
+  // Exit multi-select mode with Escape
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && multiSelectMode) {
+        setMultiSelectMode(false);
+        setSelectedIds(new Set());
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [multiSelectMode]);
 
   // Keyboard shortcuts
   const handleKeyDown = (e: React.KeyboardEvent, entry: FileEntry) => {
@@ -395,10 +539,10 @@ export default function FileBrowser() {
       setPublished(addPublished(workspaceKey, newPath));
 
       // Auto-pin the published file
-      const updatedPins = loadPins(workspaceKey);
-      updatedPins[newPath] = Date.now();
-      savePins(workspaceKey, updatedPins);
-      setPins(updatedPins);
+      if (connection) {
+        await apiSetPin(connection, newPath).catch(console.error);
+        setPins((prev) => ({ ...prev, [newPath]: Date.now() }));
+      }
 
       setPublishingEntry(null);
     } catch (error) {
@@ -498,6 +642,33 @@ export default function FileBrowser() {
   const visibleEntries = useMemo(() => {
     return orderedEntries.slice(0, visibleCount);
   }, [orderedEntries, visibleCount]);
+
+  // Handle multi-select click with shift support for range selection
+  const handleMultiSelectClick = useCallback((entry: FileEntry, event: React.MouseEvent) => {
+    if (event.shiftKey && lastClickedIdRef.current && lastClickedIdRef.current !== entry.id) {
+      // Shift-click: select range between last clicked and current
+      const lastIdx = visibleEntries.findIndex((e) => e.id === lastClickedIdRef.current);
+      const currentIdx = visibleEntries.findIndex((e) => e.id === entry.id);
+
+      if (lastIdx !== -1 && currentIdx !== -1) {
+        const start = Math.min(lastIdx, currentIdx);
+        const end = Math.max(lastIdx, currentIdx);
+        const rangeIds = visibleEntries.slice(start, end + 1).map((e) => e.id);
+
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          for (const id of rangeIds) {
+            next.add(id);
+          }
+          return next;
+        });
+        return;
+      }
+    }
+
+    // Regular click: toggle single selection
+    toggleSelection(entry);
+  }, [visibleEntries, toggleSelection]);
 
   // Cleanup fileDims for removed files
   useEffect(() => {
@@ -611,6 +782,18 @@ export default function FileBrowser() {
           aria-label="Toggle recent panel"
         >
           🕘
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setMultiSelectMode((v) => !v);
+            if (multiSelectMode) setSelectedIds(new Set());
+          }}
+          className={`${toolbarIconButtonBase} ${multiSelectMode ? "border-rose-400 text-rose-200 bg-rose-500/20" : ""}`}
+          title={multiSelectMode ? "Exit Multi-Select (Esc)" : "Multi-Select"}
+          aria-label="Toggle multi-select mode"
+        >
+          ☑
         </button>
         <button
           type="button"
@@ -882,12 +1065,19 @@ export default function FileBrowser() {
                           event.dataTransfer.setData("DownloadURL", `${entry.mime}:${entry.name}:${url}`);
                         }
                       }}
-                      onClick={() => select(entry)}
+                      onClick={(e) => multiSelectMode ? handleMultiSelectClick(entry, e) : select(entry)}
                       onKeyDown={(e) => handleKeyDown(e, entry)}
-                      className={`group relative flex aspect-square flex-col overflow-hidden rounded-lg border transition focus:outline-none focus:ring-2 focus:ring-sky-500 ${selected?.id === entry.id ? "ring-2 ring-yellow-500" : ""
+                      className={`group relative flex aspect-square flex-col overflow-hidden rounded-lg border transition focus:outline-none focus:ring-2 focus:ring-sky-500 ${selected?.id === entry.id && !multiSelectMode ? "ring-2 ring-yellow-500" : ""
+                        } ${selectedIds.has(entry.id) ? "ring-2 ring-rose-400" : ""
                         } ${isPublished(published, entry.relPath) ? "ring-2 ring-violet-400/70 shadow-lg shadow-violet-500/40" : ""
                         } ${styles.grid}`}
                     >
+                      {/* Multi-select checkbox */}
+                      {multiSelectMode && (
+                        <div className={`absolute top-1 left-1 z-20 h-5 w-5 rounded border-2 flex items-center justify-center transition ${selectedIds.has(entry.id) ? "bg-rose-500 border-rose-500" : "bg-black/50 border-white/50"}`}>
+                          {selectedIds.has(entry.id) && <span className="text-white text-xs font-bold">✓</span>}
+                        </div>
+                      )}
                       {/* Published star indicator */}
                       {isPublished(published, entry.relPath) && (
                         <div className="absolute top-1 left-1 z-10 rounded-full bg-violet-500/90 px-1.5 py-0.5 text-[10px] font-bold text-white shadow-lg shadow-violet-500/50">
@@ -1045,7 +1235,7 @@ export default function FileBrowser() {
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setPins(togglePin(workspaceKey, entry.relPath));
+                          void handleTogglePin(entry.relPath);
                         }}
                         className={`absolute top-1 right-14 ${iconButtonBase} hover:bg-yellow-500 hover:text-black ${pins[entry.relPath] ? iconButtonVisible : iconButtonHidden
                           }`}
@@ -1170,7 +1360,7 @@ export default function FileBrowser() {
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setPins(togglePin(workspaceKey, entry.relPath));
+                              void handleTogglePin(entry.relPath);
                             }}
                             className={`${iconButtonBase} hover:bg-yellow-500 hover:text-black ${pins[entry.relPath] ? iconButtonVisible : iconButtonHidden
                               }`}
@@ -1216,6 +1406,35 @@ export default function FileBrowser() {
                 </button>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Floating action bar for multi-select */}
+        {multiSelectMode && selectedIds.size > 0 && (
+          <div className="sticky bottom-4 mx-4 z-30 flex items-center justify-between rounded-xl border border-white/20 bg-black/90 px-4 py-3 shadow-2xl backdrop-blur-sm">
+            <div className="text-sm font-semibold text-white">
+              {selectedIds.size} file{selectedIds.size > 1 ? 's' : ''} selected
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedIds(new Set());
+                  setMultiSelectMode(false);
+                }}
+                className="rounded-lg border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/20"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleBulkDelete}
+                disabled={bulkDeleting}
+                className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-500 disabled:opacity-50"
+              >
+                {bulkDeleting ? 'Deleting...' : `Delete ${selectedIds.size}`}
+              </button>
+            </div>
           </div>
         )}
       </div>

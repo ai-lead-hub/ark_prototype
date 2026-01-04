@@ -88,6 +88,20 @@ export async function createMetaDb(dbPath) {
     ON prompt_history (created_at DESC);
   `);
 
+  // Pins table for server-side pin persistence
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS pins (
+      workspace_id TEXT NOT NULL,
+      rel_path TEXT NOT NULL,
+      pinned_at INTEGER NOT NULL,
+      PRIMARY KEY (workspace_id, rel_path)
+    );
+  `);
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_pins_workspace_pinned_at
+    ON pins (workspace_id, pinned_at DESC);
+  `);
+
   const insertGenerationStmt = db.prepare(`
     INSERT OR REPLACE INTO generations (
       id,
@@ -266,6 +280,32 @@ export async function createMetaDb(dbPath) {
     LIMIT $limit;
   `);
 
+  // Pins prepared statements
+  const listPinsStmt = db.prepare(`
+    SELECT rel_path, pinned_at
+    FROM pins
+    WHERE workspace_id = $workspace_id
+    ORDER BY pinned_at DESC;
+  `);
+
+  const upsertPinStmt = db.prepare(`
+    INSERT INTO pins (workspace_id, rel_path, pinned_at)
+    VALUES ($workspace_id, $rel_path, $pinned_at)
+    ON CONFLICT (workspace_id, rel_path) DO UPDATE SET
+      pinned_at = excluded.pinned_at;
+  `);
+
+  const deletePinStmt = db.prepare(`
+    DELETE FROM pins
+    WHERE workspace_id = $workspace_id AND rel_path = $rel_path;
+  `);
+
+  const renamePinStmt = db.prepare(`
+    UPDATE pins
+    SET rel_path = $new_rel_path
+    WHERE workspace_id = $workspace_id AND rel_path = $old_rel_path;
+  `);
+
   return {
     dbPath: resolved,
     insertGeneration(input) {
@@ -284,7 +324,7 @@ export async function createMetaDb(dbPath) {
         endpoint: input.endpoint ?? null,
         prompt: input.prompt ?? null,
         seed: input.seed ?? null,
-      payload_json: input.payloadJson ?? null,
+        payload_json: input.payloadJson ?? null,
       });
       return { id, createdAt };
     },
@@ -380,6 +420,35 @@ export async function createMetaDb(dbPath) {
       return listPromptsStmt.all({
         workspace_id: workspaceId,
         limit: safeLimit,
+      });
+    },
+    // Pins methods
+    listPins({ workspaceId }) {
+      const rows = listPinsStmt.all({ workspace_id: workspaceId });
+      const pins = {};
+      for (const row of rows) {
+        pins[row.rel_path] = row.pinned_at;
+      }
+      return pins;
+    },
+    setPin({ workspaceId, relPath, pinnedAt }) {
+      upsertPinStmt.run({
+        workspace_id: workspaceId,
+        rel_path: relPath,
+        pinned_at: pinnedAt ?? Date.now(),
+      });
+    },
+    removePin({ workspaceId, relPath }) {
+      deletePinStmt.run({
+        workspace_id: workspaceId,
+        rel_path: relPath,
+      });
+    },
+    renamePin({ workspaceId, oldRelPath, newRelPath }) {
+      renamePinStmt.run({
+        workspace_id: workspaceId,
+        old_rel_path: oldRelPath,
+        new_rel_path: newRelPath,
       });
     },
     transaction(fn) {
