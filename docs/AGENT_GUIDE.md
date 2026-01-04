@@ -18,20 +18,26 @@ server/                    # Fastify backend
 src/
 ├── app/page.tsx           # Main layout
 ├── components/
-│   ├── ProjectBar.tsx     # Header with settings dropdown
 │   ├── ControlsPane.tsx   # Model/prompt controls, generation
 │   ├── FileBrowser.tsx    # File tree display
-│   └── PreviewPane.tsx    # Media preview, upscale, compare
+│   ├── PreviewPane.tsx    # Media preview, upscale, compare
+│   ├── ProjectBar.tsx     # Header with settings dropdown
+│   ├── PromptStudio/      # Photography prompt builder modal
+│   └── studio/            # Live preview components
 ├── lib/
 │   ├── api/files.ts       # File API client
 │   ├── models.json        # Video model definitions
+│   ├── models.ts          # Model adapters & type system
 │   ├── image-models.ts    # Image model definitions
+│   ├── prompts.ts         # System prompts for LLM expansion
+│   ├── photography-presets.ts # Camera/lens/style presets
 │   ├── providers/         # KIE, FAL API clients
 │   └── useHoverPlayVideos.ts # Shared preferences hook
 └── state/
     ├── catalog.tsx        # Workspace connection, file tree
     └── queue.tsx          # Job queue management
 ```
+
 
 ## 🧩 Key Concepts
 

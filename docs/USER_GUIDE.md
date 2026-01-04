@@ -130,13 +130,16 @@ Click the gear icon to access:
 ### Model Selection
 
 **For Videos:**
-- **kling-2.5-pro** - Best quality, slower
+- **sora-2** - Best for cinematic quality (T2V & I2V)
+- **kling-2.6-pro** - Audio support, high quality
+- **seedance-1.5-pro** - Fastest, budget-friendly
 - **veo-3.1-fast** - Quick text-to-video
-- **kling-2.1-pro** - Cost-effective
 
 **For Images:**
+- **nano-banana-pro** - Best quality, multi-reference
 - **flux-2-pro** - Professional quality
-- **nano-banana-edit** - Creative/artistic
+- **gpt-image-1.5** - Detailed editing
+
 
 ---
 

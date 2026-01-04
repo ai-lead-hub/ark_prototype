@@ -21,11 +21,17 @@ Quick reference for adding and managing image/video generation models.
 | Model | Provider | Pricing | Capabilities |
 |-------|----------|---------|--------------|
 | Sora 2 | KIE | $0.15-$0.23 | T2V, I2V |
-| Kling 2.5/2.6 | KIE/FAL | $0.21-$0.55 | I2V, T2V |
-| Hailuo 2.3 | KIE | $0.22-$0.45 | I2V |
-| Wan 2.5/2.6 | KIE | $0.06-$1.58 | I2V, T2V, V2V |
-| Seedance 1.5 Pro | KIE | $0.07-$0.42 | T2V, I2V |
-| LTX-2 | FAL | ~$0.30 | T2V |
+| Kling 2.5 Turbo Pro | KIE | $0.21 | I2V |
+| Kling 2.6 Pro | KIE | $0.28-$0.55 | T2V, I2V, Audio |
+| Hailuo 2.3 Pro | KIE | $0.39 | I2V |
+| Hailuo 02 Pro | KIE | $0.29 | T2V, I2V |
+| Wan 2.5 (I2V) | KIE | $0.50 | I2V |
+| Wan 2.6 | KIE | $0.35-$0.53 | T2V, I2V |
+| Seedance V1 Pro | KIE | $0.35 | T2V, I2V |
+| Seedance 1.5 Pro | KIE | $0.14-$0.28 | T2V, I2V, Audio |
+| Veo 3.1 Fast | KIE | $0.30 | T2V, I2V |
+| LTX-2 | FAL | ~$0.30 | T2V, I2V, Audio |
+
 
 ---
 

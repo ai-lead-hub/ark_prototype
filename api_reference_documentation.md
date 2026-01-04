@@ -232,6 +232,50 @@ High-quality text-to-video generation with native audio support.
 
 ---
 
+### Hailuo 02 Pro
+**Provider**: KIE
+**Endpoint**: `/api/v1/jobs/createTask`
+**Pricing**: $0.29
+
+Supports both Text-to-Video (T2V) and Image-to-Video (I2V). When `image_url` is omitted, operates in T2V mode.
+
+#### Parameters
+| Parameter | Type | Required | Description | Example |
+| :--- | :--- | :--- | :--- | :--- |
+| `model` | string | Yes | Model ID. Use `"hailuo/02-image-to-video-pro"` for I2V, `"hailuo/02-text-to-video-pro"` for T2V. | `"hailuo/02-image-to-video-pro"` |
+| `input.prompt` | string | Yes | Text prompt. | `"A cinematic scene..."` |
+| `input.image_url` | string | No | Input image URL for I2V mode. Max 10MB. | `"https://..."` |
+| `input.end_image_url` | string | No | End frame image URL. Max 10MB. | `"https://..."` |
+| `input.prompt_optimizer` | boolean | No | Enable prompt optimization. Default: `true`. | `true` |
+| `callBackUrl` | string | No | Callback URL for notifications. | `"https://..."` |
+
+#### Request Example (I2V)
+```json
+{
+  "model": "hailuo/02-image-to-video-pro",
+  "callBackUrl": "https://your-domain.com/api/callback",
+  "input": {
+    "prompt": "A cinematic scene with the subject walking through rain...",
+    "image_url": "https://file.aiquickdraw.com/...",
+    "prompt_optimizer": true
+  }
+}
+```
+
+#### Request Example (T2V)
+```json
+{
+  "model": "hailuo/02-text-to-video-pro",
+  "callBackUrl": "https://your-domain.com/api/callback",
+  "input": {
+    "prompt": "A golden sunset over the ocean with waves gently crashing...",
+    "prompt_optimizer": true
+  }
+}
+```
+
+---
+
 ### Wan 2.5 (I2V)
 **Provider**: KIE
 **Endpoint**: `/api/v1/jobs/createTask`
@@ -856,7 +900,7 @@ curl -X POST "https://api.kie.ai/api/v1/jobs/createTask" \
 | :--- | :--- | :--- | :--- | :--- |
 | `prompt` | string | Yes | Text prompt. Reference images using `@Image1`, `@Image2`, etc. | `"Put @Image1 to the back seat..."` |
 | `image_urls` | array | Yes | List of reference images (max 10). | `["https://..."]` |
-| `resolution` | string | No | Resolution. Options: `"1K"`, `"2K"`. Default: `"1K"`. | `"1K"` |
+| `resolution` | string | No | Resolution. Options: `"1K"`, `"2K"`. Default: `"2K"`. | `"2K"` |
 | `num_images` | number | No | Number of images (1-9). Default: `1`. | `1` |
 | `aspect_ratio` | string | No | Aspect ratio. Options: `"auto"`, `"16:9"`, `"9:16"`, `"1:1"`, `"4:3"`, `"3:4"`, `"3:2"`, `"2:3"`, `"21:9"`. Default: `"auto"`. | `"auto"` |
 | `output_format` | string | No | Output format: `"png"`, `"jpeg"`, `"webp"`. Default: `"png"`. | `"png"` |
@@ -1073,11 +1117,14 @@ The following models support both Text-to-Video (T2V) and Image-to-Video (I2V) m
 
 | Model | T2V Endpoint | I2V Endpoint |
 | :--- | :--- | :--- |
+| Sora 2 | `sora-2-text-to-video` | `sora-2-image-to-video` |
 | Kling 2.6 | `kling-2.6/text-to-video` | `kling-2.6/image-to-video` |
 | Wan 2.5 | `wan/2-5-text-to-video` | `wan/2-5-image-to-video` |
-| Wan 2.6 | `wan/2-6-image-to-video` | `wan/2-6-image-to-video` |
-| Seedance Pro | `bytedance/v1-pro-text-to-video` | `bytedance/v1-pro-image-to-video` |
-| Hailuo 2.3 Pro | `hailuo/2-3-text-to-video-pro` | `hailuo/2-3-image-to-video-pro` |
+| Wan 2.6 | `wan/2-6-text-to-video` | `wan/2-6-image-to-video` |
+| Seedance V1 Pro | `bytedance/v1-pro-text-to-video` | `bytedance/v1-pro-image-to-video` |
+| Seedance 1.5 Pro | `bytedance/seedance-1.5-pro` | `bytedance/seedance-1.5-pro` |
+| Hailuo 2.3 Pro | — | `hailuo/2-3-image-to-video-pro` |
+| Hailuo 02 Pro | `hailuo/02-text-to-video-pro` | `hailuo/02-image-to-video-pro` |
 
 When using these models:
 - **With image**: Provide `image_url` or `image_urls` → uses I2V endpoint

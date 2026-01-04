@@ -83,17 +83,24 @@ The app has a compact header with:
 ## 🎬 Available Models
 
 ### Video Generation
-- **Kling 2.5 Pro** - High-quality video generation
+- **Sora 2** - OpenAI's video model (Text & I2V)
+- **Kling 2.6 Pro** - Kuaishou's newest with audio support
+- **Kling 2.5 Turbo Pro** - High-quality video generation
+- **Seedance 1.5 Pro** - ByteDance's latest with T2V & I2V
 - **Veo 3.1 Fast** - Google's video model (Text & I2V)
-- **Wan 2.5** - Alibaba's advanced video model
-- **Seedance V1 Pro** - ByteDance's video generation
+- **Wan 2.6** - Alibaba's advanced video model
+- **Hailuo 2.3 Pro / 02 Pro** - Minimax video generation
 
 ### Image Generation
-- **Nano Banana (Edit/Pro)** - Creative artistic images
-- **Seedream V4** - ByteDance image editing
+- **Nano Banana Pro** - Creative artistic images
+- **Flux 2 Pro** - High-quality T2I & I2I
+- **GPT Image 1.5** - OpenAI image generation
+- **Seedream 4.5** - ByteDance image editing
 - **Qwen Image Edit Plus** - Advanced image editing
+- **Kling O1** - Reference-based generation
 
 ### Video Upscaling
+
 - **Topaz Video Upscaler** - Industry standard
 - **FlashVSR** - High-quality upscaling
 - **ByteDance Upscaler** - Professional enhancement
