@@ -204,12 +204,22 @@ export default function ProjectBar() {
 
             {/* Settings Dropdown */}
             {settingsOpen && (
-              <div className="absolute right-0 top-full mt-2 w-80 rounded-lg border border-white/10 bg-slate-900 p-4 shadow-2xl z-50">
-                <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                  Workspace Connection
+              <div className="absolute right-0 top-full mt-2 w-80 rounded-xl border border-white/10 bg-slate-900/95 shadow-2xl backdrop-blur-xl z-50 overflow-hidden">
+                {/* Header */}
+                <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 bg-white/5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm">⚙️</span>
+                    <h3 className="font-semibold text-sm text-white">Workspace Settings</h3>
+                  </div>
+                  <button
+                    onClick={() => setSettingsOpen(false)}
+                    className="text-slate-400 hover:text-white transition"
+                  >
+                    ✕
+                  </button>
                 </div>
 
-                <div className="flex flex-col gap-3">
+                <div className="p-4">
                   <div>
                     <label className="mb-1 block text-[11px] font-medium text-slate-400">
                       API Base URL

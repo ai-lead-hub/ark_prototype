@@ -391,7 +391,7 @@ export function CameraMovementSelector({ onSelect, onClose }: CameraMovementSele
     const [hoveredId, setHoveredId] = useState<string | null>(null);
 
     return (
-        <div className="w-[320px] overflow-hidden rounded-xl border border-white/10 bg-[#121212] shadow-2xl shadow-black/50 animate-in zoom-in-95 duration-200">
+        <div className="w-[400px] overflow-hidden rounded-xl border border-white/10 bg-[#121212] shadow-2xl shadow-black/50 animate-in zoom-in-95 duration-200">
             {/* Header */}
             <div className="flex items-center justify-between border-b border-white/5 bg-white/5 px-3 py-2">
                 <div className="flex items-center gap-2">
@@ -411,7 +411,7 @@ export function CameraMovementSelector({ onSelect, onClose }: CameraMovementSele
             </div>
 
             {/* Grid */}
-            <div className="grid grid-cols-3 gap-1 p-2 max-h-[300px] overflow-y-auto custom-scrollbar">
+            <div className="grid grid-cols-4 gap-1 p-2 max-h-[180px] overflow-y-auto custom-scrollbar">
                 {MOVEMENTS.map((move) => (
                     <button
                         key={move.id}

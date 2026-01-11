@@ -53,3 +53,32 @@ a {
 .fade-mask {
   mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.12), #000 18%, #000 82%, rgba(0, 0, 0, 0));
 }
+
+/* Popup/Modal consistency */
+.popup-container {
+  @apply overflow-hidden rounded-xl border border-white/10 bg-slate-900/95 shadow-2xl backdrop-blur-xl;
+}
+
+.popup-header {
+  @apply flex items-center justify-between border-b border-white/10 px-4 py-3 bg-white/5;
+}
+
+/* Panel styling */
+.panel-container {
+  @apply rounded-xl border border-white/5 bg-slate-900/40;
+}
+
+/* Accent borders for focus */
+.accent-border-sky {
+  @apply border-sky-500/50 ring-1 ring-sky-500/30;
+}
+
+/* Subtle glow effects */
+.glow-sky {
+  box-shadow: 0 0 20px -5px rgba(14, 165, 233, 0.3);
+}
+
+.glow-violet {
+  box-shadow: 0 0 20px -5px rgba(139, 92, 246, 0.3);
+}
+

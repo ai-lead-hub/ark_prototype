@@ -16,26 +16,26 @@ export default function Page() {
           <div className="flex-shrink-0">
             <ProjectBar />
           </div>
-          <div className="flex flex-1 divide-x divide-white/10 overflow-hidden">
+          <div className="flex flex-1 gap-1.5 p-1.5 overflow-hidden bg-gradient-to-b from-slate-950 to-slate-900/50">
             {!isFullScreen && (
               <>
-                <aside className="flex w-[420px] min-h-0 flex-col bg-slate-950/60 border-r border-white/5">
-                  <div className="flex-1 min-h-0 overflow-y-auto p-2">
+                <aside className="flex w-[420px] min-h-0 flex-col rounded-xl border border-white/5 bg-slate-900/60 backdrop-blur-sm">
+                  <div className="flex-1 min-h-0 overflow-y-auto p-3">
                     <ControlsPane />
                   </div>
                 </aside>
-                <section className="flex min-h-0 min-w-[420px] flex-[1.1] flex-col bg-slate-950/55 border-r border-white/5">
-                  <div className="flex-1 min-h-0 overflow-y-auto p-2">
+                <section className="flex min-h-0 min-w-[420px] flex-[1.1] flex-col rounded-xl border border-white/5 bg-slate-900/50 backdrop-blur-sm">
+                  <div className="flex-1 min-h-0 overflow-y-auto p-3">
                     <FileBrowser />
                   </div>
                 </section>
               </>
             )}
             <main
-              className={`flex min-h-0 flex-shrink-0 flex-col bg-slate-950/40 ${isFullScreen ? "flex-1 w-full" : "w-[420px]"
+              className={`flex min-h-0 flex-shrink-0 flex-col rounded-xl border border-white/5 bg-slate-900/40 backdrop-blur-sm ${isFullScreen ? "flex-1 w-full" : "w-[420px]"
                 }`}
             >
-              <div className="flex-1 min-h-0 overflow-y-auto p-2">
+              <div className="flex-1 min-h-0 overflow-y-auto p-3">
                 <PreviewPane
                   isFullScreen={isFullScreen}
                   onToggleFullScreen={() => setIsFullScreen(!isFullScreen)}

@@ -1017,7 +1017,7 @@ export default function FileBrowser() {
                 {activeJobs.map((job) => (
                   <div
                     key={job.id}
-                    className="relative flex aspect-square flex-col overflow-hidden rounded-lg border border-white/10 bg-black/40 animate-pulse"
+                    className="relative flex aspect-square flex-col overflow-hidden rounded-xl border border-white/10 bg-black/40 animate-pulse"
                   >
                     <div className="flex h-full items-center justify-center">
                       <Spinner size="lg" />
@@ -1072,7 +1072,7 @@ export default function FileBrowser() {
                           ⭐
                         </div>
                       )}
-                      <div className="flex-1 w-full overflow-hidden bg-white/5">
+                      <div className="flex-1 w-full overflow-hidden rounded-t-xl bg-white/5">
                         {entry.kind === "dir" ? (
                           <div className="flex h-full items-center justify-center text-4xl">
                             📁
@@ -1185,7 +1185,7 @@ export default function FileBrowser() {
                           />
                         )}
                       </div>
-                      <div className="absolute inset-x-0 bottom-0 bg-black/60 p-2 backdrop-blur-sm">
+                      <div className="absolute inset-x-0 bottom-0 rounded-b-xl bg-black/60 p-2 backdrop-blur-sm">
                         {editingId === entry.id ? (
                           <input
                             autoFocus

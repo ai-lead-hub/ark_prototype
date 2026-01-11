@@ -2072,7 +2072,7 @@ export default function ControlsPane() {
 
         {/* VIDEO CONTROLS */}
         {modelKind === "video" ? (
-          <div className="space-y-4">
+          <div className="space-y-2">
             {/* Start/End Frames */}
             {supportsStartFrame ? (
               <div className="grid grid-cols-2 gap-2">
@@ -2108,9 +2108,9 @@ export default function ControlsPane() {
                   value={prompt}
                   onChange={(event) => setPrompt(event.target.value)}
                   onBlur={() => addToHistory(prompt)}
-                  rows={6}
+                  rows={4}
                   disabled={isSubmitting || isExpanding}
-                  className={`w-full rounded-2xl border border-white/10 bg-black/40 px-3 py-3 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 pb-10 ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
+                  className={`w-full rounded-2xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 pb-10 ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
                 />
                 <div className="absolute bottom-2 right-2 flex gap-1">
                   <button
@@ -2196,7 +2196,7 @@ export default function ControlsPane() {
 
                   {/* Camera Selector Popover */}
                   {showCameraSelector && (
-                    <div className="absolute bottom-full left-0 mb-2 z-50">
+                    <div className="absolute top-full left-0 mt-2 z-50">
                       <CameraMovementSelector
                         onSelect={(text: string) => {
                           const instruction = `Rewrite the prompt to completely REPLACE any existing camera movement with this one: "${text}". Keep the rest of the visual details intact.`;
