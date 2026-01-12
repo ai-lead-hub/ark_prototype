@@ -1,11 +1,207 @@
 {
   "models": [
     {
+      "id": "kling-2.5-pro",
+      "label": "Kling 2.5 Turbo Pro",
+      "endpoint": "/api/v1/jobs/createTask",
+      "provider": "kie",
+      "pricing": "$0.21",
+      "supports": {
+        "startFrame": true,
+        "endFrame": true,
+        "audio": false,
+        "resolution": false,
+        "aspectRatio": false,
+        "fps": false
+      },
+      "taskConfig": {
+        "statusEndpoint": "/api/v1/jobs/recordInfo",
+        "statePath": "data.state",
+        "successStates": [
+          "success"
+        ],
+        "failureStates": [
+          "fail"
+        ],
+        "responseDataPath": "data",
+        "pollIntervalMs": 4000
+      },
+      "params": {
+        "prompt": {
+          "type": "string",
+          "required": true
+        },
+        "image_url": {
+          "type": "string",
+          "required": true,
+          "uiKey": "start_frame_url"
+        },
+        "tail_image_url": {
+          "type": "string",
+          "required": false,
+          "uiKey": "end_frame_url"
+        },
+        "duration": {
+          "type": "enum",
+          "required": true,
+          "values": [
+            "5",
+            "10"
+          ]
+        },
+        "negative_prompt": {
+          "type": "string",
+          "default": "",
+          "hidden": true
+        },
+        "cfg_scale": {
+          "type": "number",
+          "default": 0.5
+        }
+      },
+      "output": {
+        "videoPath": "video.url"
+      }
+    },
+    {
+      "id": "kling-v2-6-pro",
+      "label": "Kling V2.6 Pro",
+      "endpoint": "/api/v1/jobs/createTask",
+      "provider": "kie",
+      "pricing": "$0.28",
+      "supports": {
+        "startFrame": true,
+        "endFrame": false,
+        "audio": true,
+        "resolution": false,
+        "aspectRatio": true,
+        "fps": false
+      },
+      "taskConfig": {
+        "statusEndpoint": "/api/v1/jobs/recordInfo",
+        "statePath": "data.state",
+        "successStates": [
+          "success"
+        ],
+        "failureStates": [
+          "fail"
+        ],
+        "responseDataPath": "data",
+        "pollIntervalMs": 4000
+      },
+      "params": {
+        "prompt": {
+          "type": "string",
+          "required": true
+        },
+        "image_urls": {
+          "type": "string",
+          "required": false,
+          "uiKey": "start_frame_url"
+        },
+        "duration": {
+          "type": "enum",
+          "required": true,
+          "values": [
+            "5",
+            "10"
+          ]
+        },
+        "aspect_ratio": {
+          "type": "enum",
+          "required": false,
+          "values": [
+            "1:1",
+            "16:9",
+            "9:16"
+          ],
+          "default": "16:9"
+        },
+        "sound": {
+          "type": "boolean",
+          "default": false,
+          "uiKey": "generate_audio"
+        }
+      },
+      "output": {
+        "videoPath": "video.url"
+      }
+    },
+    {
+      "id": "veo-3.1-fast",
+      "label": "Veo 3.1 Fast",
+      "endpoint": "/api/v1/veo/generate",
+      "provider": "kie",
+      "pricing": "$0.30",
+      "supports": {
+        "startFrame": true,
+        "endFrame": true,
+        "audio": false,
+        "resolution": false,
+        "aspectRatio": true,
+        "fps": false
+      },
+      "taskConfig": {
+        "statusEndpoint": "/api/v1/veo/record-info",
+        "method": "GET",
+        "taskIdLocation": "query",
+        "taskIdParam": "taskId",
+        "statePath": "data.successFlag",
+        "successStates": [
+          1
+        ],
+        "failureStates": [
+          2,
+          3
+        ],
+        "responseDataPath": "data",
+        "pollIntervalMs": 5000
+      },
+      "params": {
+        "prompt": {
+          "type": "string",
+          "required": true
+        },
+        "model": {
+          "type": "enum",
+          "values": [
+            "veo3_fast"
+          ],
+          "default": "veo3_fast",
+          "hidden": true
+        },
+        "seeds": {
+          "type": "number",
+          "default": 15690,
+          "hidden": true
+        },
+        "aspectRatio": {
+          "type": "enum",
+          "values": [
+            "16:9",
+            "9:16",
+            "Auto"
+          ],
+          "default": "16:9",
+          "uiKey": "aspect_ratio"
+        },
+        "enableTranslation": {
+          "type": "boolean",
+          "default": true
+        },
+        "watermark": {
+          "type": "string",
+          "hidden": true
+        }
+      },
+      "output": {}
+    },
+    {
       "id": "seedance-1.5-pro",
       "label": "Seedance 1.5 Pro",
       "endpoint": "/api/v1/jobs/createTask",
       "provider": "kie",
-      "pricing": "$0.14 / $0.28 🔊",
+      "pricing": "$0.14",
       "supports": {
         "startFrame": true,
         "endFrame": true,
@@ -75,133 +271,6 @@
         "generate_audio": {
           "type": "boolean",
           "default": false
-        }
-      },
-      "output": {
-        "videoPath": "video.url"
-      }
-    },
-    {
-      "id": "kling-2.5-pro",
-      "label": "Kling 2.5 Turbo Pro",
-      "endpoint": "/api/v1/jobs/createTask",
-      "provider": "kie",
-      "pricing": "$0.21",
-      "supports": {
-        "startFrame": true,
-        "endFrame": true,
-        "audio": false,
-        "resolution": false,
-        "aspectRatio": false,
-        "fps": false
-      },
-      "taskConfig": {
-        "statusEndpoint": "/api/v1/jobs/recordInfo",
-        "statePath": "data.state",
-        "successStates": [
-          "success"
-        ],
-        "failureStates": [
-          "fail"
-        ],
-        "responseDataPath": "data",
-        "pollIntervalMs": 4000
-      },
-      "params": {
-        "prompt": {
-          "type": "string",
-          "required": true
-        },
-        "image_url": {
-          "type": "string",
-          "required": true,
-          "uiKey": "start_frame_url"
-        },
-        "tail_image_url": {
-          "type": "string",
-          "required": false,
-          "uiKey": "end_frame_url"
-        },
-        "duration": {
-          "type": "enum",
-          "required": true,
-          "values": [
-            "5",
-            "10"
-          ]
-        },
-        "negative_prompt": {
-          "type": "string",
-          "default": "",
-          "hidden": true
-        },
-        "cfg_scale": {
-          "type": "number",
-          "default": 0.5
-        }
-      },
-      "output": {
-        "videoPath": "video.url"
-      }
-    },
-    {
-      "id": "kling-v2-6-pro",
-      "label": "Kling V2.6 Pro",
-      "endpoint": "/api/v1/jobs/createTask",
-      "provider": "kie",
-      "pricing": "$0.28 / $0.55 🔊",
-      "supports": {
-        "startFrame": true,
-        "endFrame": false,
-        "audio": true,
-        "resolution": false,
-        "aspectRatio": true,
-        "fps": false
-      },
-      "taskConfig": {
-        "statusEndpoint": "/api/v1/jobs/recordInfo",
-        "statePath": "data.state",
-        "successStates": [
-          "success"
-        ],
-        "failureStates": [
-          "fail"
-        ],
-        "responseDataPath": "data",
-        "pollIntervalMs": 4000
-      },
-      "params": {
-        "prompt": {
-          "type": "string",
-          "required": true
-        },
-        "image_urls": {
-          "type": "string",
-          "required": false,
-          "uiKey": "start_frame_url"
-        },
-        "duration": {
-          "type": "enum",
-          "required": true,
-          "values": [
-            "5",
-            "10"
-          ]
-        },
-        "aspect_ratio": {
-          "type": "enum",
-          "required": false,
-          "values": [
-            "1:1",
-            "16:9",
-            "9:16"
-          ],
-          "default": "16:9"
-        },
-        "sound": {
-          "type": "boolean",
-          "default": false,
-          "uiKey": "generate_audio"
         }
       },
       "output": {
@@ -462,7 +531,7 @@
       "label": "Wan 2.6",
       "endpoint": "/api/v1/jobs/createTask",
       "provider": "kie",
-      "pricing": "$0.35 (720p) / $0.53 (1080p)",
+      "pricing": "$0.53",
       "supports": {
         "startFrame": true,
         "endFrame": false,
@@ -643,139 +712,6 @@
         "enable_safety_checker": {
           "type": "boolean",
           "default": false,
-          "hidden": true
-        }
-      },
-      "output": {
-        "videoPath": "video.url"
-      }
-    },
-    {
-      "id": "veo-3.1-fast",
-      "label": "Veo 3.1 Fast",
-      "endpoint": "/api/v1/veo/generate",
-      "provider": "kie",
-      "pricing": "$0.30",
-      "supports": {
-        "startFrame": true,
-        "endFrame": true,
-        "audio": false,
-        "resolution": false,
-        "aspectRatio": true,
-        "fps": false
-      },
-      "taskConfig": {
-        "statusEndpoint": "/api/v1/veo/record-info",
-        "method": "GET",
-        "taskIdLocation": "query",
-        "taskIdParam": "taskId",
-        "statePath": "data.successFlag",
-        "successStates": [
-          1
-        ],
-        "failureStates": [
-          2,
-          3
-        ],
-        "responseDataPath": "data",
-        "pollIntervalMs": 5000
-      },
-      "params": {
-        "prompt": {
-          "type": "string",
-          "required": true
-        },
-        "model": {
-          "type": "enum",
-          "values": [
-            "veo3_fast"
-          ],
-          "default": "veo3_fast",
-          "hidden": true
-        },
-        "seeds": {
-          "type": "number",
-          "default": 15690,
-          "hidden": true
-        },
-        "aspectRatio": {
-          "type": "enum",
-          "values": [
-            "16:9",
-            "9:16",
-            "Auto"
-          ],
-          "default": "16:9",
-          "uiKey": "aspect_ratio"
-        },
-        "enableTranslation": {
-          "type": "boolean",
-          "default": true
-        },
-        "watermark": {
-          "type": "string",
-          "hidden": true
-        }
-      },
-      "output": {}
-    },
-    {
-      "id": "sora-2",
-      "label": "Sora 2",
-      "endpoint": "/api/v1/jobs/createTask",
-      "provider": "kie",
-      "pricing": "$0.15 (10s) / $0.23 (15s)",
-      "supports": {
-        "startFrame": true,
-        "endFrame": false,
-        "audio": false,
-        "resolution": false,
-        "aspectRatio": true,
-        "fps": false
-      },
-      "taskConfig": {
-        "statusEndpoint": "/api/v1/jobs/recordInfo",
-        "statePath": "data.state",
-        "successStates": [
-          "success"
-        ],
-        "failureStates": [
-          "fail"
-        ],
-        "responseDataPath": "data",
-        "pollIntervalMs": 4000
-      },
-      "params": {
-        "prompt": {
-          "type": "string",
-          "required": true
-        },
-        "image_urls": {
-          "type": "string",
-          "required": false,
-          "uiKey": "start_frame_url"
-        },
-        "aspect_ratio": {
-          "type": "enum",
-          "required": false,
-          "values": [
-            "portrait",
-            "landscape"
-          ],
-          "default": "landscape"
-        },
-        "duration": {
-          "type": "enum",
-          "required": false,
-          "values": [
-            "10",
-            "15"
-          ],
-          "default": "10"
-        },
-        "remove_watermark": {
-          "type": "boolean",
-          "default": true,
           "hidden": true
         }
       },

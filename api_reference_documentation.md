@@ -390,6 +390,52 @@ Transforms existing videos based on a text prompt. Supports up to 3 reference vi
 
 ---
 
+### Kling 2.6 Motion Control
+**Provider**: KIE
+**Endpoint**: `/api/v1/jobs/createTask`
+**Pricing**: $0.045 (1080p)
+
+Transfers motion from a reference video onto a person in an image. Requires both an image and a video input.
+
+#### Parameters
+| Parameter | Type | Required | Description | Example |
+| :--- | :--- | :--- | :--- | :--- |
+| `model` | string | Yes | Model ID | `"kling-2.6/motion-control"` |
+| `input.prompt` | string | No | Optional text description. Max 2500 chars. | `"The cartoon character is dancing."` |
+| `input.input_urls` | array(URL) | Yes | Image URL with the person. Must clearly show head, shoulders, and torso. Max 10MB. Accepts: jpeg, png, webp. | `["https://..."]` |
+| `input.video_urls` | array(URL) | Yes | Motion reference video URL. Duration 3-30 seconds. Min resolution 720p. Max 100MB. Accepts: mp4, mov, mkv. | `["https://..."]` |
+| `input.character_orientation` | string | Yes | Character orientation source. `"image"`: match image (max 10s output). `"video"`: match video (max 30s output). | `"video"` |
+| `input.mode` | string | Yes | Output resolution. Options: `"720p"`, `"1080p"`. | `"1080p"` |
+| `callBackUrl` | string | No | Callback URL for notifications. | `"https://..."` |
+
+#### Request Example
+```json
+{
+  "model": "kling-2.6/motion-control",
+  "callBackUrl": "https://your-domain.com/api/callback",
+  "input": {
+    "prompt": "The cartoon character is dancing.",
+    "input_urls": ["https://static.aiquickdraw.com/tools/example/1767694885407_pObJoMcy.png"],
+    "video_urls": ["https://static.aiquickdraw.com/tools/example/1767525918769_QyvTNib2.mp4"],
+    "character_orientation": "video",
+    "mode": "1080p"
+  }
+}
+```
+
+#### Response Example
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "taskId": "task_12345678"
+  }
+}
+```
+
+---
+
 ### Kling 2.1 Pro
 **Provider**: KIE
 **Endpoint**: `/api/v1/jobs/createTask`

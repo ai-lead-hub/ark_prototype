@@ -6,6 +6,7 @@ import {
   useState,
 } from "react";
 import { PromptStudio } from "./PromptStudio/PromptStudio";
+import { BatchPromptModal } from "./BatchPromptModal";
 import { CameraMovementSelector } from "./ui/CameraMovementSelector";
 import type { ChangeEvent, FormEvent } from "react";
 import {
@@ -54,6 +55,7 @@ import {
   type ControlsAction,
   type ControlsFileRef,
 } from "../lib/controls-store";
+import { recordRecentReference } from "../lib/recent-references";
 
 import { type UploadSlot } from "./UpscaleControls";
 import { UploadZone } from "./UploadZone";
@@ -66,12 +68,51 @@ type ReferenceUpload = {
   uploading: boolean;
   createdAt?: number;
   error?: string;
+  /** File object for deferred upload - uploaded at generation time */
+  file?: File;
+  /** True if restored from saved generation payload (may be expired) */
+  restoredFromUrl?: boolean;
 };
 
 const UPLOAD_URL_TTL_MS = 30 * 60 * 1000;
 const IMAGE_REFERENCE_UPLOADS_KEY = "controls_imageReferenceUploads_v1";
 const VIDEO_START_FRAME_KEY = "controls_videoStartFrame_v1";
 const VIDEO_END_FRAME_KEY = "controls_videoEndFrame_v1";
+const IMAGE_HISTORY_KEY = "controls_imageHistory_v1";
+const VIDEO_HISTORY_KEY = "controls_videoHistory_v1";
+const HISTORY_MAX_SIZE = 50;
+
+type PersistedHistory = {
+  entries: string[];
+  index: number;
+};
+
+function loadHistoryFromStorage(tab: "image" | "video"): PersistedHistory {
+  if (typeof localStorage === "undefined") return { entries: [], index: -1 };
+  try {
+    const key = tab === "image" ? IMAGE_HISTORY_KEY : VIDEO_HISTORY_KEY;
+    const raw = localStorage.getItem(key);
+    if (!raw) return { entries: [], index: -1 };
+    const parsed = JSON.parse(raw) as PersistedHistory;
+    if (!Array.isArray(parsed.entries)) return { entries: [], index: -1 };
+    return {
+      entries: parsed.entries.slice(-HISTORY_MAX_SIZE),
+      index: Math.min(parsed.index, parsed.entries.length - 1),
+    };
+  } catch {
+    return { entries: [], index: -1 };
+  }
+}
+
+function saveHistoryToStorage(tab: "image" | "video", entries: string[], index: number): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    const key = tab === "image" ? IMAGE_HISTORY_KEY : VIDEO_HISTORY_KEY;
+    localStorage.setItem(key, JSON.stringify({ entries: entries.slice(-HISTORY_MAX_SIZE), index }));
+  } catch {
+    // Ignore storage errors
+  }
+}
 
 type PersistedReferenceUpload = {
   id: string;
@@ -86,7 +127,11 @@ type PersistedUploadSlot = {
   createdAt: number;
 };
 
-type UploadSlotState = UploadSlot & { createdAt?: number };
+type UploadSlotState = UploadSlot & {
+  createdAt?: number;
+  /** File object for deferred upload - uploaded at generation time */
+  file?: File;
+};
 
 
 
@@ -224,6 +269,7 @@ export default function ControlsPane() {
   const [videoInputUploads, setVideoInputUploads] = useState<ReferenceUpload[]>([]);
 
   const [aspectRatio, setAspectRatio] = usePersistentState("aspectRatio", "16:9");
+  const [randomizeSeed, setRandomizeSeed] = usePersistentState("randomizeSeed", false);
   const [imageResolution, setImageResolution] = useState("1K");
   const [status, setStatus] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -232,8 +278,16 @@ export default function ControlsPane() {
   const [isReferenceDragActive, setIsReferenceDragActive] = useState(false);
   const [showPromptStudio, setShowPromptStudio] = useState(false);
   const [showCameraSelector, setShowCameraSelector] = useState(false);
+  const [showBatchModal, setShowBatchModal] = useState(false);
+  const [batchQueue, setBatchQueue] = useState<string[]>([]);
+  const [batchIndex, setBatchIndex] = useState(0);
+  const isBatchProcessing = batchQueue.length > 0;
 
   const referenceInputRef = useRef<HTMLInputElement | null>(null);
+  const formRef = useRef<HTMLFormElement | null>(null);
+
+  // Was previous submission complete? Track to detect completion
+  const wasSubmittingRef = useRef(false);
 
 
   const previewRegistry = useRef(new Set<string>());
@@ -255,7 +309,7 @@ export default function ControlsPane() {
   }, [historyIndex]);
 
   const [paramValues, setParamValues] = usePersistentState<
-    Record<string, string | number | boolean | undefined>
+    Record<string, string | number | boolean | string[] | undefined>
   >("paramValues", {});
 
   const connectionRef = useRef(connection);
@@ -351,6 +405,39 @@ export default function ControlsPane() {
     }, 30_000);
     return () => clearInterval(intervalId);
   }, []);
+
+  // Batch processing: auto-submit when batch starts or after each job completes
+  useEffect(() => {
+    // Detect when submission completes (was submitting, now not)
+    if (wasSubmittingRef.current && !isSubmitting && isBatchProcessing) {
+      // Previous job completed, move to next prompt
+      const nextIndex = batchIndex + 1;
+      if (nextIndex < batchQueue.length) {
+        setBatchIndex(nextIndex);
+        setPrompt(batchQueue[nextIndex]);
+        // Trigger form submission after a short delay to allow state to update
+        setTimeout(() => {
+          formRef.current?.requestSubmit();
+        }, 500);
+      } else {
+        // All done
+        setBatchQueue([]);
+        setBatchIndex(0);
+        setStatus(`Batch complete: ${batchQueue.length} images generated`);
+        setTimeout(() => setStatus(null), 5000);
+      }
+    }
+    wasSubmittingRef.current = isSubmitting;
+  }, [isSubmitting, isBatchProcessing, batchIndex, batchQueue]);
+
+  // When batch queue is first set, trigger initial submission
+  useEffect(() => {
+    if (batchQueue.length > 0 && batchIndex === 0 && !isSubmitting) {
+      setTimeout(() => {
+        formRef.current?.requestSubmit();
+      }, 300);
+    }
+  }, [batchQueue]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (typeof localStorage === "undefined") return;
@@ -570,35 +657,20 @@ export default function ControlsPane() {
       });
       if (!file) return;
 
-      // Register preview immediately with original file for responsiveness
-      const preview = registerPreview(URL.createObjectURL(file));
+      // Compress the image for later upload
+      const compressed = await compressImage(file);
+
+      // Register preview immediately for responsiveness - keep blob URL for display
+      const preview = registerPreview(URL.createObjectURL(compressed));
+
+      // Store compressed file for deferred upload at generation time
       setStartFrame({
-        uploading: true,
+        uploading: false,
         preview,
         name: file.name,
+        file: compressed,
+        // No url yet - will be uploaded when Generate is pressed
       });
-
-      try {
-        const compressed = await compressImage(file);
-        const url = await uploadToFal(compressed);
-        setStartFrame((prev) => ({
-          ...prev,
-          uploading: false,
-          url,
-          preview: url,
-          createdAt: Date.now(),
-          error: null,
-        }));
-        setTimeout(() => {
-          releasePreviewRef.current(preview);
-        }, 0);
-      } catch (error) {
-        setStartFrame((prev) => ({
-          ...prev,
-          uploading: false,
-          error: error instanceof Error ? error.message : "Upload failed.",
-        }));
-      }
     },
     [registerPreview, releasePreview]
   );
@@ -613,34 +685,20 @@ export default function ControlsPane() {
       });
       if (!file) return;
 
-      const preview = registerPreview(URL.createObjectURL(file));
+      // Compress the image for later upload
+      const compressed = await compressImage(file);
+
+      // Register preview immediately for responsiveness
+      const preview = registerPreview(URL.createObjectURL(compressed));
+
+      // Store compressed file for deferred upload at generation time
       setEndFrame({
-        uploading: true,
+        uploading: false,
         preview,
         name: file.name,
+        file: compressed,
+        // No url yet - will be uploaded when Generate is pressed
       });
-
-      try {
-        const compressed = await compressImage(file);
-        const url = await uploadToFal(compressed);
-        setEndFrame((prev) => ({
-          ...prev,
-          uploading: false,
-          url,
-          preview: url,
-          createdAt: Date.now(),
-          error: null,
-        }));
-        setTimeout(() => {
-          releasePreviewRef.current(preview);
-        }, 0);
-      } catch (error) {
-        setEndFrame((prev) => ({
-          ...prev,
-          uploading: false,
-          error: error instanceof Error ? error.message : "Upload failed.",
-        }));
-      }
     },
     [registerPreview, releasePreview]
   );
@@ -663,63 +721,28 @@ export default function ControlsPane() {
         return;
       }
 
-      const filesToUpload = newFiles.slice(0, availableSlots);
+      const filesToAdd = newFiles.slice(0, availableSlots);
       if (newFiles.length > availableSlots) {
         setStatus(`Only adding ${availableSlots} images (max 5).`);
         setTimeout(() => setStatus(null), 3000);
       }
 
-      const newEntries = filesToUpload.map((file) => ({
-        id: Math.random().toString(36).slice(2),
-        preview: URL.createObjectURL(file),
-        name: file.name,
-        uploading: true,
-      }));
-
-      // Register previews
-      newEntries.forEach((entry) => registerPreview(entry.preview));
-
-      setReferenceUploads((prev) => [...prev, ...newEntries]);
-
-      // Upload each file
-      for (let i = 0; i < filesToUpload.length; i++) {
-        const file = filesToUpload[i];
-        const entry = newEntries[i];
-        try {
-          const compressed = await compressImage(file);
-          const url = await uploadToFal(compressed);
-          setReferenceUploads((prev) =>
-            prev.map((item) =>
-              item.id === entry.id
-                ? {
-                  ...item,
-                  uploading: false,
-                  url,
-                  preview: url,
-                  createdAt: Date.now(),
-                  error: undefined,
-                }
-                : item
-            )
-          );
-          setTimeout(() => {
-            releasePreviewRef.current(entry.preview);
-          }, 0);
-        } catch (error) {
-          console.error("Ref upload error:", error);
-          setReferenceUploads((prev) =>
-            prev.map((item) =>
-              item.id === entry.id
-                ? {
-                  ...item,
-                  uploading: false,
-                  error: "Upload failed",
-                }
-                : item
-            )
-          );
-        }
+      // Compress and store files for deferred upload
+      const entries: ReferenceUpload[] = [];
+      for (const file of filesToAdd) {
+        const compressed = await compressImage(file);
+        const preview = registerPreview(URL.createObjectURL(compressed));
+        entries.push({
+          id: Math.random().toString(36).slice(2),
+          preview,
+          name: file.name,
+          uploading: false,
+          file: compressed,
+          // No url yet - will be uploaded when Generate is pressed
+        });
       }
+
+      setReferenceUploads((prev) => [...prev, ...entries]);
     },
     [referenceUploads.length, registerPreview, setReferenceUploads, setStatus]
   );
@@ -800,6 +823,12 @@ export default function ControlsPane() {
           setActiveTab("video");
           const file = await fetchWorkspaceFile(action.file);
           await handleStartFrameSelectRef.current(file);
+          // Record as recent reference for quick access
+          const conn = connectionRef.current;
+          if (conn) {
+            const wk = `${conn.apiBase}|${conn.workspaceId}`;
+            recordRecentReference(wk, { relPath: action.file.relPath, name: action.file.name, mime: action.file.mime }, "startFrame");
+          }
           return;
         }
 
@@ -820,6 +849,12 @@ export default function ControlsPane() {
           setActiveTab("video");
           const file = await fetchWorkspaceFile(action.file);
           await handleEndFrameSelectRef.current(file);
+          // Record as recent reference for quick access
+          const conn = connectionRef.current;
+          if (conn) {
+            const wk = `${conn.apiBase}|${conn.workspaceId}`;
+            recordRecentReference(wk, { relPath: action.file.relPath, name: action.file.name, mime: action.file.mime }, "endFrame");
+          }
           return;
         }
 
@@ -851,6 +886,12 @@ export default function ControlsPane() {
           const dt = new DataTransfer();
           dt.items.add(file);
           await handleReferenceFilesRef.current(dt.files);
+          // Record as recent reference for quick access
+          const conn = connectionRef.current;
+          if (conn) {
+            const wk = `${conn.apiBase}|${conn.workspaceId}`;
+            recordRecentReference(wk, { relPath: action.file.relPath, name: action.file.name, mime: action.file.mime }, "reference");
+          }
           return;
         }
 
@@ -918,6 +959,61 @@ export default function ControlsPane() {
             setPrompt(promptValue);
           }
 
+          // === RESTORE REFERENCES FROM SAVED PAYLOAD (graceful fallback) ===
+          try {
+            const payload = (meta.payload ?? {}) as Record<string, unknown>;
+
+            // Try to restore start frame (FAL URLs may be expired)
+            const savedStartFrame = payload.start_frame_url || payload.image_url || payload.first_frame_image;
+            if (savedStartFrame && typeof savedStartFrame === "string") {
+              setStartFrame({
+                url: savedStartFrame,
+                preview: savedStartFrame,
+                uploading: false,
+                createdAt: Date.now(),
+              });
+            }
+
+            // Try to restore end frame
+            const savedEndFrame = payload.end_frame_url || payload.last_frame_image;
+            if (savedEndFrame && typeof savedEndFrame === "string") {
+              setEndFrame({
+                url: savedEndFrame,
+                preview: savedEndFrame,
+                uploading: false,
+                createdAt: Date.now(),
+              });
+            }
+
+            // Try to restore reference images - use correct setter based on category
+            const savedRefs = payload.reference_image_urls || payload.image_urls || payload.control_images || [];
+            if (Array.isArray(savedRefs) && savedRefs.length > 0) {
+              const restoredRefs: ReferenceUpload[] = savedRefs
+                .filter((url: unknown): url is string => typeof url === "string" && url.length > 0)
+                .slice(0, 5)
+                .map((url: string) => ({
+                  id: Math.random().toString(36).slice(2),
+                  url,
+                  preview: url,
+                  name: "restored",
+                  uploading: false,
+                  createdAt: Date.now(),
+                  restoredFromUrl: true,
+                }));
+              if (restoredRefs.length > 0) {
+                // Use correct setter based on category, not modelKind (which hasn't updated yet)
+                if (category === "image") {
+                  setImageReferenceUploads(restoredRefs);
+                } else {
+                  setVideoReferenceUploads(restoredRefs);
+                }
+              }
+            }
+          } catch (e) {
+            // Payload parsing failed - proceed with just prompt (graceful fallback)
+            console.warn("Failed to restore references from payload:", e);
+          }
+
           setStatus("Loaded settings. Review and click Generate.");
           setTimeout(() => setStatus(null), 3000);
         }
@@ -954,37 +1050,18 @@ export default function ControlsPane() {
     [processControlsActions]
   );
 
-  const imageReferenceUrls =
-    modelKind === "image" && (selectedImage?.maxRefs ?? 0) !== 0
-      ? imageReferenceUploads
-        .filter(
-          (entry) =>
-            Boolean(entry.url) &&
-            typeof entry.createdAt === "number" &&
-            Date.now() - entry.createdAt <= UPLOAD_URL_TTL_MS
-        )
-        .map((entry) => entry.url as string)
-        .slice(0, Math.min(selectedImage?.maxRefs ?? 5, 5))
-      : [];
+  // Count valid references (those with file or url - will be uploaded at generation time)
+  const validImageRefCount = modelKind === "image" && (selectedImage?.maxRefs ?? 0) !== 0
+    ? referenceUploads.filter((e) => e.file || e.url).length
+    : 0;
 
-  const videoReferenceUrls =
-    modelKind === "video" && referenceLimit > 0
-      ? videoReferenceUploads
-        .filter(
-          (entry) =>
-            Boolean(entry.url) &&
-            typeof entry.createdAt === "number" &&
-            Date.now() - entry.createdAt <= UPLOAD_URL_TTL_MS
-        )
-        .map((entry) => entry.url as string)
-        .slice(0, referenceLimit)
-      : [];
+  // Note: validVideoRefCount could be computed similarly if video reference validation is needed
 
 
   const imageRequiresReference =
     modelKind === "image" && selectedImage?.requireReference === true;
   const isMissingImageReference =
-    imageRequiresReference && imageReferenceUrls.length === 0;
+    imageRequiresReference && validImageRefCount === 0;
 
 
 
@@ -995,6 +1072,30 @@ export default function ControlsPane() {
 
   const handleReferenceDrop = useCallback(
     async (dataTransfer: DataTransfer | null) => {
+      if (!dataTransfer) return;
+
+      // Check if this is a workspace file (has FILE_ENTRY_MIME data)
+      const payloadRaw = dataTransfer.getData(FILE_ENTRY_MIME);
+      if (payloadRaw && connection) {
+        try {
+          const payload = JSON.parse(payloadRaw) as {
+            workspaceId: string;
+            path: string;
+            name?: string;
+            mime?: string;
+          };
+          if (payload.workspaceId === connection.workspaceId) {
+            // Record as recent reference for workspace files
+            const wk = `${connection.apiBase}|${connection.workspaceId}`;
+            const name = payload.name ?? payload.path.split("/").filter(Boolean).pop() ?? "file";
+            recordRecentReference(wk, { relPath: payload.path, name, mime: payload.mime ?? "image/png" }, "reference");
+          }
+        } catch {
+          // Ignore parsing errors
+        }
+      }
+
+      // Continue with normal file extraction and handling
       const files = await extractFilesFromDataTransfer(dataTransfer);
       if (files.length) {
         const dt = new DataTransfer();
@@ -1002,7 +1103,7 @@ export default function ControlsPane() {
         await handleReferenceFiles(dt.files);
       }
     },
-    [extractFilesFromDataTransfer, handleReferenceFiles]
+    [connection, extractFilesFromDataTransfer, handleReferenceFiles]
   );
 
   const pendingUploads =
@@ -1074,7 +1175,7 @@ export default function ControlsPane() {
 
   const handleParamChange = (
     key: string,
-    value: string | number | boolean | undefined
+    value: string | number | boolean | string[] | undefined
   ) => {
     setParamValues((prev) => ({
       ...prev,
@@ -1152,6 +1253,37 @@ export default function ControlsPane() {
         </label>
       );
     }
+    if (definition.type === "array") {
+      // Render text input for array values (comma-separated)
+      const arrayValue = Array.isArray(value) ? value.join(", ") : "";
+      return (
+        <div
+          key={key}
+          className="space-y-1"
+        >
+          <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+            {key.replace(/_/g, " ")}
+          </label>
+          <input
+            type="text"
+            placeholder="Enter comma-separated values"
+            value={arrayValue}
+            onChange={(event) => {
+              const inputValue = event.target.value;
+              if (inputValue.trim() === "") {
+                handleParamChange(uiKey as string, undefined);
+              } else {
+                const values = inputValue.split(",").map((v) => v.trim()).filter(Boolean);
+                handleParamChange(uiKey as string, values);
+              }
+            }}
+            disabled={isSubmitting || isExpanding}
+            className={`w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
+          />
+          <p className="text-[10px] text-slate-500">Comma-separated list (max 5)</p>
+        </div>
+      );
+    }
     const isNumber = definition.type === "number";
     return (
       <div
@@ -1192,7 +1324,7 @@ export default function ControlsPane() {
 
       const nextHistory = currentHistory.slice(0, currentIndex + 1);
       nextHistory.push(newPrompt);
-      if (nextHistory.length > 50) nextHistory.shift();
+      if (nextHistory.length > HISTORY_MAX_SIZE) nextHistory.shift();
 
       const nextIndex = nextHistory.length - 1;
       historyRef.current = nextHistory;
@@ -1200,6 +1332,10 @@ export default function ControlsPane() {
 
       setHistory(nextHistory);
       setHistoryIndex(nextIndex);
+
+      // Persist history to localStorage
+      const tab = activeTab === "image" ? "image" : "video";
+      saveHistoryToStorage(tab, nextHistory, nextIndex);
 
       if (connection && newPrompt.trim()) {
         const modelId = modelKey.replace(/^(image:|video:|special:|upscale:)/, "");
@@ -1213,7 +1349,7 @@ export default function ControlsPane() {
         });
       }
     },
-    [connection, modelKey, modelKind]
+    [activeTab, connection, modelKey, modelKind]
   );
 
   useEffect(() => {
@@ -1252,15 +1388,50 @@ export default function ControlsPane() {
     }
   }, [historyIndex, history, setPrompt]);
 
-  // Initialize/reset history when tab changes to prevent cross-tab pollution
+  // Store tab before it changes so we can save history for it
+  const prevTabRef = useRef<"image" | "video" | "special" | "upscale">(activeTab);
+
+  // Load history from localStorage when tab changes, save current tab's history before switching
   useEffect(() => {
-    // Reset history for the new tab's prompt
-    const initialHistory = prompt ? [prompt] : [];
-    historyRef.current = initialHistory;
-    historyIndexRef.current = initialHistory.length - 1;
-    setHistory(initialHistory);
-    setHistoryIndex(initialHistory.length - 1);
-  }, [activeTab]); // Reset when switching tabs
+    const prevTab = prevTabRef.current;
+    prevTabRef.current = activeTab;
+
+    // Save current history for previous tab (if it was image or video)
+    if ((prevTab === "image" || prevTab === "video") && prevTab !== activeTab) {
+      saveHistoryToStorage(prevTab, historyRef.current, historyIndexRef.current);
+    }
+
+    // Load history for new tab
+    if (activeTab === "image" || activeTab === "video") {
+      const loaded = loadHistoryFromStorage(activeTab);
+      // If we have stored history, use it; otherwise start fresh with current prompt
+      if (loaded.entries.length > 0) {
+        historyRef.current = loaded.entries;
+        historyIndexRef.current = loaded.index >= 0 ? loaded.index : loaded.entries.length - 1;
+        setHistory(loaded.entries);
+        setHistoryIndex(historyIndexRef.current);
+      } else if (prompt) {
+        const initialHistory = [prompt];
+        historyRef.current = initialHistory;
+        historyIndexRef.current = 0;
+        setHistory(initialHistory);
+        setHistoryIndex(0);
+      } else {
+        historyRef.current = [];
+        historyIndexRef.current = -1;
+        setHistory([]);
+        setHistoryIndex(-1);
+      }
+    } else {
+      // For special/upscale tabs, just reset with current prompt
+      const initialHistory = prompt ? [prompt] : [];
+      historyRef.current = initialHistory;
+      historyIndexRef.current = initialHistory.length - 1;
+      setHistory(initialHistory);
+      setHistoryIndex(initialHistory.length - 1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]); // Only react to tab changes
 
   // Sync activeTab with modelKey to ensure consistency
   useEffect(() => {
@@ -1416,6 +1587,71 @@ export default function ControlsPane() {
     if (!isMounted.current) return;
 
     try {
+      // === DEFERRED UPLOADS: Upload files that haven't been uploaded yet ===
+      setStatus("Preparing files...");
+
+      // Upload start frame if it has a file but no URL
+      let uploadedStartFrameUrl = startFrame.url;
+      if (startFrame.file && !startFrame.url) {
+        try {
+          uploadedStartFrameUrl = await uploadToFal(startFrame.file);
+          setStartFrame((prev) => ({
+            ...prev,
+            url: uploadedStartFrameUrl,
+            createdAt: Date.now(),
+          }));
+        } catch (error) {
+          console.error("Failed to upload start frame:", error);
+          setStatus("Failed to upload start frame. Please try again.");
+          setIsSubmitting(false);
+          setTimeout(() => setStatus(null), 3000);
+          return;
+        }
+      }
+
+      // Upload end frame if it has a file but no URL
+      let uploadedEndFrameUrl = endFrame.url;
+      if (endFrame.file && !endFrame.url) {
+        try {
+          uploadedEndFrameUrl = await uploadToFal(endFrame.file);
+          setEndFrame((prev) => ({
+            ...prev,
+            url: uploadedEndFrameUrl,
+            createdAt: Date.now(),
+          }));
+        } catch (error) {
+          console.error("Failed to upload end frame:", error);
+          setStatus("Failed to upload end frame. Please try again.");
+          setIsSubmitting(false);
+          setTimeout(() => setStatus(null), 3000);
+          return;
+        }
+      }
+
+      // Upload reference images that have files but no URLs
+      const uploadedReferenceUrls: string[] = [];
+      for (const ref of referenceUploads) {
+        if (ref.file && !ref.url) {
+          try {
+            const uploadedUrl = await uploadToFal(ref.file);
+            uploadedReferenceUrls.push(uploadedUrl);
+            setReferenceUploads((prev) =>
+              prev.map((item) =>
+                item.id === ref.id
+                  ? { ...item, url: uploadedUrl, createdAt: Date.now() }
+                  : item
+              )
+            );
+          } catch (error) {
+            console.error(`Failed to upload reference ${ref.name}:`, error);
+            // Continue with other references, skip failed ones
+          }
+        } else if (ref.url) {
+          uploadedReferenceUrls.push(ref.url);
+        }
+      }
+
+      setStatus(null);
       const modelId = modelKey.replace(/^(image:|video:|special:|upscale:)/, "");
       const modelSpec = MODEL_SPECS.find((m) => m.id === modelId);
       const imageModelSpec = IMAGE_MODELS.find((m) => m.id === modelId);
@@ -1434,24 +1670,15 @@ export default function ControlsPane() {
         category = "video";
         provider = modelSpec.provider ?? "fal";
         callOptions = modelSpec.taskConfig ? { taskConfig: modelSpec.taskConfig } : undefined;
-        const startFrameUrl =
-          startFrame.url &&
-            supportsStartFrame !== false &&
-            !(
-              typeof startFrame.createdAt === "number" &&
-              Date.now() - startFrame.createdAt > UPLOAD_URL_TTL_MS
-            )
-            ? startFrame.url
-            : undefined;
-        const endFrameUrl =
-          endFrame.url &&
-            supportsEndFrame === true &&
-            !(
-              typeof endFrame.createdAt === "number" &&
-              Date.now() - endFrame.createdAt > UPLOAD_URL_TTL_MS
-            )
-            ? endFrame.url
-            : undefined;
+
+        // Use freshly uploaded URLs (deferred upload)
+        const startFrameUrl = supportsStartFrame !== false ? uploadedStartFrameUrl : undefined;
+        const endFrameUrl = supportsEndFrame === true ? uploadedEndFrameUrl : undefined;
+
+        // For video models, use uploaded video reference URLs
+        const videoRefUrls = modelKind === "video" && referenceLimit > 0
+          ? uploadedReferenceUrls.slice(0, referenceLimit)
+          : [];
 
         const unifiedPayload: UnifiedPayload = {
           modelId,
@@ -1460,10 +1687,11 @@ export default function ControlsPane() {
           resolution: imageResolution,
           start_frame_url: startFrameUrl,
           end_frame_url: endFrameUrl,
-          reference_image_urls: videoReferenceUrls,
-          seed: 1569,
+          reference_image_urls: videoRefUrls,
+          seed: randomizeSeed ? Math.floor(Math.random() * 100000) : 1569,
           duration: paramValues.duration as string | number | undefined,
           generate_audio: paramValues.generate_audio as boolean | undefined,
+          character_id_list: paramValues.character_id_list as string[] | undefined,
         };
 
         payload = buildModelInput(modelSpec, unifiedPayload);
@@ -1483,11 +1711,16 @@ export default function ControlsPane() {
           ? maxImagesConfig.default ?? maxImagesConfig.min ?? 1
           : undefined;
 
+        // Use freshly uploaded reference URLs for image models
+        const imageRefUrls = modelKind === "image" && (selectedImage?.maxRefs ?? 0) !== 0
+          ? uploadedReferenceUrls.slice(0, Math.min(selectedImage?.maxRefs ?? 5, 5))
+          : [];
+
         const imageJob = {
           prompt: prompt.trim(),
-          imageUrls: imageReferenceUrls,
+          imageUrls: imageRefUrls,
           aspectRatio,
-          seed: 1569,
+          seed: randomizeSeed ? Math.floor(Math.random() * 100000) : 1569,
           imageResolution: imageModelSpec.ui?.resolutions ? imageResolution : undefined,
           maxImages: parsedMaxImages,
           numImages: parsedMaxImages,
@@ -1496,35 +1729,120 @@ export default function ControlsPane() {
         payload = imageModelSpec.mapInput(imageJob);
 
       } else if (selectedSpecial) {
-        // Handle special models (e.g., V2V)
+        // Handle special models (V2V, T2V/I2V like Sora 2)
         endpoint = selectedSpecial.endpoint;
-        category = "video"; // V2V outputs video
+        category = "video"; // All special models output video
         provider = selectedSpecial.provider as ModelProvider;
         callOptions = selectedSpecial.taskConfig ? { taskConfig: selectedSpecial.taskConfig } : undefined;
 
-        // Get valid video URLs
-        const validVideoUrls = videoInputUploads
-          .filter(
-            (entry) =>
-              entry.url &&
-              typeof entry.createdAt === "number" &&
-              Date.now() - entry.createdAt <= UPLOAD_URL_TTL_MS
-          )
-          .map((entry) => entry.url as string);
+        if (selectedSpecial.inputType === "video") {
+          // V2V models - require video input
+          const validVideoUrls = videoInputUploads
+            .filter(
+              (entry) =>
+                entry.url &&
+                typeof entry.createdAt === "number" &&
+                Date.now() - entry.createdAt <= UPLOAD_URL_TTL_MS
+            )
+            .map((entry) => entry.url as string);
 
-        if (validVideoUrls.length === 0) {
-          throw new Error("Please upload at least one video file.");
+          if (validVideoUrls.length === 0) {
+            throw new Error("Please upload at least one video file.");
+          }
+
+          const specialPayload = buildSpecialModelInput(selectedSpecial, {
+            modelId: selectedSpecial.id,
+            prompt: prompt.trim(),
+            video_urls: validVideoUrls,
+            duration: paramValues.duration as string | undefined,
+            resolution: paramValues.resolution as string | undefined,
+          });
+
+          payload = specialPayload;
+        } else if (selectedSpecial.inputType === "image") {
+          // T2V/I2V models like Sora 2 - optional image input
+
+          // Upload start frame if present but not yet uploaded
+          let uploadedStartFrameUrl = startFrame.url;
+          if (startFrame.file && !startFrame.url) {
+            try {
+              uploadedStartFrameUrl = await uploadToFal(startFrame.file);
+              setStartFrame((prev) => ({
+                ...prev,
+                url: uploadedStartFrameUrl,
+                createdAt: Date.now(),
+              }));
+            } catch (error) {
+              console.error("Failed to upload start frame:", error);
+              setStatus("Failed to upload start frame. Please try again.");
+              setIsSubmitting(false);
+              setTimeout(() => setStatus(null), 3000);
+              return;
+            }
+          }
+
+          const specialPayload = buildSpecialModelInput(selectedSpecial, {
+            modelId: selectedSpecial.id,
+            prompt: prompt.trim(),
+            start_frame_url: uploadedStartFrameUrl,
+            duration: paramValues.duration as string | undefined,
+            aspect_ratio: paramValues.aspect_ratio as string | undefined,
+            character_id_list: paramValues.character_id_list as string[] | undefined,
+          });
+
+          payload = specialPayload;
+        } else if (selectedSpecial.inputType === "both") {
+          // Models that require both image and video (e.g., Motion Control)
+
+          // Upload start frame if present but not yet uploaded
+          let uploadedStartFrameUrl = startFrame.url;
+          if (startFrame.file && !startFrame.url) {
+            try {
+              uploadedStartFrameUrl = await uploadToFal(startFrame.file);
+              setStartFrame((prev) => ({
+                ...prev,
+                url: uploadedStartFrameUrl,
+                createdAt: Date.now(),
+              }));
+            } catch (error) {
+              console.error("Failed to upload image:", error);
+              setStatus("Failed to upload image. Please try again.");
+              setIsSubmitting(false);
+              setTimeout(() => setStatus(null), 3000);
+              return;
+            }
+          }
+
+          if (!uploadedStartFrameUrl) {
+            throw new Error("Please upload an image.");
+          }
+
+          // Get valid video URLs
+          const validVideoUrls = videoInputUploads
+            .filter(
+              (entry) =>
+                entry.url &&
+                typeof entry.createdAt === "number" &&
+                Date.now() - entry.createdAt <= UPLOAD_URL_TTL_MS
+            )
+            .map((entry) => entry.url as string);
+
+          if (validVideoUrls.length === 0) {
+            throw new Error("Please upload a video.");
+          }
+
+          const specialPayload = buildSpecialModelInput(selectedSpecial, {
+            modelId: selectedSpecial.id,
+            prompt: prompt.trim(),
+            start_frame_url: uploadedStartFrameUrl,
+            video_urls: validVideoUrls,
+            character_orientation: paramValues.character_orientation as string | undefined,
+            mode: paramValues.mode as string | undefined,
+          });
+
+          payload = specialPayload;
         }
 
-        const specialPayload = buildSpecialModelInput(selectedSpecial, {
-          modelId: selectedSpecial.id,
-          prompt: prompt.trim(),
-          video_urls: validVideoUrls,
-          duration: paramValues.duration as string | undefined,
-          resolution: paramValues.resolution as string | undefined,
-        });
-
-        payload = specialPayload;
 
       } else {
         throw new Error("Model not found");
@@ -1679,7 +1997,7 @@ export default function ControlsPane() {
   };
 
   return (
-    <form className="flex h-full flex-col text-sm" onSubmit={handleGenerate}>
+    <form ref={formRef} className="flex h-full flex-col text-sm" onSubmit={handleGenerate}>
       <div className="flex-1 space-y-3 pb-32">
         <div className="space-y-3">
           <div className="flex rounded-lg bg-white/5 p-1">
@@ -1895,7 +2213,7 @@ export default function ControlsPane() {
                   disabled={isSubmitting || isExpanding}
                   className={`w-full rounded-2xl border border-white/10 bg-black/40 px-3 py-3 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 pb-10 ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
                 />
-                <div className="absolute bottom-2 left-2">
+                <div className="absolute bottom-2 left-2 flex gap-1">
                   <button
                     type="button"
                     onClick={() => setShowPromptStudio(true)}
@@ -1904,6 +2222,18 @@ export default function ControlsPane() {
                     title="Open Photography Prompt Studio"
                   >
                     <span className="text-lg">🔭</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowBatchModal(true)}
+                    disabled={isExpanding || isSubmitting || isBatchProcessing}
+                    className="flex h-7 w-9 items-center justify-center rounded-md border border-amber-500/30 bg-amber-500/20 text-amber-200 transition hover:bg-amber-500/40 hover:text-white disabled:opacity-50"
+                    title="Batch Prompt Input"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" />
+                      <line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
+                    </svg>
                   </button>
                 </div>
                 <div className="absolute bottom-2 right-2 flex gap-1">
@@ -2063,9 +2393,24 @@ export default function ControlsPane() {
                   </select>
                 </div>
               ) : null}
-            </div>
 
-            {/* 4. Seed */}
+              {/* Randomize Seed Toggle */}
+              <div className="flex items-center justify-between py-1">
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Randomize Seed
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setRandomizeSeed(!randomizeSeed)}
+                  disabled={isSubmitting || isExpanding}
+                  className={`relative h-5 w-9 rounded-full transition-colors ${randomizeSeed ? "bg-sky-500" : "bg-white/20"} ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
+                >
+                  <span
+                    className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${randomizeSeed ? "translate-x-4" : "translate-x-0"}`}
+                  />
+                </button>
+              </div>
+            </div>
 
           </div>
         ) : null}
@@ -2368,6 +2713,23 @@ export default function ControlsPane() {
               </div>
             )}
 
+            {/* Randomize Seed Toggle */}
+            <div className="flex items-center justify-between py-1">
+              <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Randomize Seed
+              </label>
+              <button
+                type="button"
+                onClick={() => setRandomizeSeed(!randomizeSeed)}
+                disabled={isSubmitting || isExpanding}
+                className={`relative h-5 w-9 rounded-full transition-colors ${randomizeSeed ? "bg-sky-500" : "bg-white/20"} ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${randomizeSeed ? "translate-x-4" : "translate-x-0"}`}
+                />
+              </button>
+            </div>
+
             {/* Reference Images (for video models that support it) */}
             {referenceLimit > 0 ? (
               <div className="space-y-1">
@@ -2478,105 +2840,47 @@ export default function ControlsPane() {
         {/* SPECIAL CONTROLS */}
         {modelKind === "special" && selectedSpecial ? (
           <div className="space-y-4">
-            {/* Video Input Uploads */}
-            <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                  Reference Videos (required)
-                </label>
-                <span className="text-[10px] text-slate-500">
-                  Max {selectedSpecial.videoInputConfig?.max ?? 3}
-                </span>
-              </div>
+            {/* Video Input for V2V models */}
+            {selectedSpecial.inputType === "video" && (
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Reference Videos (required)
+                  </label>
+                  <span className="text-[10px] text-slate-500">
+                    Max {selectedSpecial.videoInputConfig?.max ?? 3}
+                  </span>
+                </div>
 
-              <div
-                className={`relative flex min-h-[100px] flex-col justify-center rounded-2xl border border-white/10 bg-gradient-to-br from-white/10 to-transparent p-3 transition ${isReferenceDragActive
-                  ? "border-sky-400 shadow-lg shadow-sky-500/20"
-                  : "hover:border-white/20"
-                  } ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
-                onDragEnter={(event) => {
-                  if (isSubmitting || isExpanding) return;
-                  event.preventDefault();
-                  setIsReferenceDragActive(true);
-                }}
-                onDragLeave={(event) => {
-                  if (isSubmitting || isExpanding) return;
-                  event.preventDefault();
-                  setIsReferenceDragActive(false);
-                }}
-                onDragOver={(event) => {
-                  if (isSubmitting || isExpanding) return;
-                  event.preventDefault();
-                  setIsReferenceDragActive(true);
-                }}
-                onDrop={async (event) => {
-                  if (isSubmitting || isExpanding) return;
-                  event.preventDefault();
-                  setIsReferenceDragActive(false);
+                <div
+                  className={`relative flex min-h-[100px] flex-col justify-center rounded-2xl border border-white/10 bg-gradient-to-br from-white/10 to-transparent p-3 transition ${isReferenceDragActive
+                    ? "border-sky-400 shadow-lg shadow-sky-500/20"
+                    : "hover:border-white/20"
+                    } ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
+                  onDragEnter={(event) => {
+                    if (isSubmitting || isExpanding) return;
+                    event.preventDefault();
+                    setIsReferenceDragActive(true);
+                  }}
+                  onDragLeave={(event) => {
+                    if (isSubmitting || isExpanding) return;
+                    event.preventDefault();
+                    setIsReferenceDragActive(false);
+                  }}
+                  onDragOver={(event) => {
+                    if (isSubmitting || isExpanding) return;
+                    event.preventDefault();
+                    setIsReferenceDragActive(true);
+                  }}
+                  onDrop={async (event) => {
+                    if (isSubmitting || isExpanding) return;
+                    event.preventDefault();
+                    setIsReferenceDragActive(false);
 
-                  // Use the same file extraction as image uploads (handles both OS and app file browser)
-                  const allFiles = await extractFilesFromDataTransfer(event.dataTransfer);
-                  console.log("Dropped files:", allFiles.map(f => ({ name: f.name, type: f.type, size: f.size })));
+                    // Use the same file extraction as image uploads (handles both OS and app file browser)
+                    const allFiles = await extractFilesFromDataTransfer(event.dataTransfer);
+                    console.log("Dropped files:", allFiles.map(f => ({ name: f.name, type: f.type, size: f.size })));
 
-                  // Check MIME type OR file extension for video detection
-                  const isVideoFile = (f: File) => {
-                    if (f.type.startsWith("video/")) return true;
-                    const ext = f.name.toLowerCase().split(".").pop();
-                    return ["mp4", "mov", "mkv", "webm", "avi"].includes(ext ?? "");
-                  };
-
-                  const files = allFiles.filter(isVideoFile);
-                  console.log("Filtered video files:", files.length);
-
-                  if (files.length === 0) {
-                    setStatus("Please drop video files (mp4, mov, mkv).");
-                    setTimeout(() => setStatus(null), 3000);
-                    return;
-                  }
-                  const maxVideos = selectedSpecial.videoInputConfig?.max ?? 3;
-                  const availableSlots = maxVideos - videoInputUploads.length;
-                  if (availableSlots <= 0) {
-                    setStatus(`Maximum ${maxVideos} videos allowed.`);
-                    setTimeout(() => setStatus(null), 3000);
-                    return;
-                  }
-                  const filesToUpload = files.slice(0, availableSlots);
-                  for (const file of filesToUpload) {
-                    const id = Math.random().toString(36).slice(2);
-                    const preview = URL.createObjectURL(file);
-                    setVideoInputUploads((prev) => [
-                      ...prev,
-                      { id, preview, name: file.name, uploading: true },
-                    ]);
-                    try {
-                      const url = await uploadToFal(file);
-                      setVideoInputUploads((prev) =>
-                        prev.map((item) =>
-                          item.id === id
-                            ? { ...item, uploading: false, url, createdAt: Date.now() }
-                            : item
-                        )
-                      );
-                    } catch {
-                      setVideoInputUploads((prev) =>
-                        prev.map((item) =>
-                          item.id === id
-                            ? { ...item, uploading: false, error: "Upload failed" }
-                            : item
-                        )
-                      );
-                    }
-                  }
-                }}
-              >
-                <input
-                  type="file"
-                  accept="video/mp4,video/quicktime,video/x-matroska"
-                  multiple
-                  className="hidden"
-                  id="video-input-upload"
-                  disabled={isSubmitting || isExpanding}
-                  onChange={async (event) => {
                     // Check MIME type OR file extension for video detection
                     const isVideoFile = (f: File) => {
                       if (f.type.startsWith("video/")) return true;
@@ -2584,9 +2888,14 @@ export default function ControlsPane() {
                       return ["mp4", "mov", "mkv", "webm", "avi"].includes(ext ?? "");
                     };
 
-                    const files = Array.from(event.target.files ?? []).filter(isVideoFile);
-                    event.target.value = "";
-                    if (!files.length) return;
+                    const files = allFiles.filter(isVideoFile);
+                    console.log("Filtered video files:", files.length);
+
+                    if (files.length === 0) {
+                      setStatus("Please drop video files (mp4, mov, mkv).");
+                      setTimeout(() => setStatus(null), 3000);
+                      return;
+                    }
                     const maxVideos = selectedSpecial.videoInputConfig?.max ?? 3;
                     const availableSlots = maxVideos - videoInputUploads.length;
                     if (availableSlots <= 0) {
@@ -2622,81 +2931,314 @@ export default function ControlsPane() {
                       }
                     }
                   }}
-                />
+                >
+                  <input
+                    type="file"
+                    accept="video/mp4,video/quicktime,video/x-matroska"
+                    multiple
+                    className="hidden"
+                    id="video-input-upload"
+                    disabled={isSubmitting || isExpanding}
+                    onChange={async (event) => {
+                      // Check MIME type OR file extension for video detection
+                      const isVideoFile = (f: File) => {
+                        if (f.type.startsWith("video/")) return true;
+                        const ext = f.name.toLowerCase().split(".").pop();
+                        return ["mp4", "mov", "mkv", "webm", "avi"].includes(ext ?? "");
+                      };
 
-                {videoInputUploads.length === 0 ? (
-                  <label
-                    htmlFor="video-input-upload"
-                    className="flex flex-col items-center justify-center py-2 text-center cursor-pointer"
-                  >
-                    <div className="mb-2 rounded-full bg-white/5 p-2 text-slate-400">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="m22 8-6 4 6 4V8Z" />
-                        <rect width="14" height="12" x="2" y="6" rx="2" ry="2" />
-                      </svg>
-                    </div>
-                    <div className="text-xs text-slate-400">
-                      <span className="font-medium text-slate-300">Click to upload</span> or drag videos
-                    </div>
-                    <div className="mt-1 text-[10px] text-slate-500">
-                      MP4, MOV, MKV (max 10MB each)
-                    </div>
-                  </label>
-                ) : (
-                  <div className="flex flex-wrap items-center gap-2">
-                    {videoInputUploads.map((entry) => (
-                      <div
-                        key={entry.id}
-                        className="relative h-16 w-24 shrink-0 overflow-hidden rounded-md border border-white/10 bg-black/20 group"
-                        title={entry.name}
-                      >
-                        <video
-                          src={entry.preview}
-                          className="h-full w-full object-cover"
-                          muted
-                        />
-                        {entry.uploading && (
-                          <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-                            <Spinner size="sm" />
-                          </div>
-                        )}
-                        {entry.error && (
-                          <div className="absolute inset-0 flex items-center justify-center bg-red-500/20 text-[10px] text-red-300">
-                            Error
-                          </div>
-                        )}
-                        <button
-                          type="button"
-                          className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity hover:bg-rose-500 group-hover:opacity-100"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setVideoInputUploads((prev) => prev.filter((item) => item.id !== entry.id));
-                          }}
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M18 6 6 18" />
-                            <path d="m6 6 12 12" />
-                          </svg>
-                        </button>
-                      </div>
-                    ))}
+                      const files = Array.from(event.target.files ?? []).filter(isVideoFile);
+                      event.target.value = "";
+                      if (!files.length) return;
+                      const maxVideos = selectedSpecial.videoInputConfig?.max ?? 3;
+                      const availableSlots = maxVideos - videoInputUploads.length;
+                      if (availableSlots <= 0) {
+                        setStatus(`Maximum ${maxVideos} videos allowed.`);
+                        setTimeout(() => setStatus(null), 3000);
+                        return;
+                      }
+                      const filesToUpload = files.slice(0, availableSlots);
+                      for (const file of filesToUpload) {
+                        const id = Math.random().toString(36).slice(2);
+                        const preview = URL.createObjectURL(file);
+                        setVideoInputUploads((prev) => [
+                          ...prev,
+                          { id, preview, name: file.name, uploading: true },
+                        ]);
+                        try {
+                          const url = await uploadToFal(file);
+                          setVideoInputUploads((prev) =>
+                            prev.map((item) =>
+                              item.id === id
+                                ? { ...item, uploading: false, url, createdAt: Date.now() }
+                                : item
+                            )
+                          );
+                        } catch {
+                          setVideoInputUploads((prev) =>
+                            prev.map((item) =>
+                              item.id === id
+                                ? { ...item, uploading: false, error: "Upload failed" }
+                                : item
+                            )
+                          );
+                        }
+                      }
+                    }}
+                  />
 
-                    {videoInputUploads.length < (selectedSpecial.videoInputConfig?.max ?? 3) && (
-                      <label
-                        htmlFor="video-input-upload"
-                        className="flex h-16 w-16 shrink-0 items-center justify-center rounded-md border border-dashed border-white/20 bg-white/5 text-slate-400 transition hover:border-sky-400 hover:text-sky-200 cursor-pointer"
-                        title="Add more videos"
-                      >
+                  {videoInputUploads.length === 0 ? (
+                    <label
+                      htmlFor="video-input-upload"
+                      className="flex flex-col items-center justify-center py-2 text-center cursor-pointer"
+                    >
+                      <div className="mb-2 rounded-full bg-white/5 p-2 text-slate-400">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M5 12h14" />
-                          <path d="M12 5v14" />
+                          <path d="m22 8-6 4 6 4V8Z" />
+                          <rect width="14" height="12" x="2" y="6" rx="2" ry="2" />
                         </svg>
-                      </label>
-                    )}
+                      </div>
+                      <div className="text-xs text-slate-400">
+                        <span className="font-medium text-slate-300">Click to upload</span> or drag videos
+                      </div>
+                      <div className="mt-1 text-[10px] text-slate-500">
+                        MP4, MOV, MKV (max 10MB each)
+                      </div>
+                    </label>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {videoInputUploads.map((entry) => (
+                        <div
+                          key={entry.id}
+                          className="relative h-16 w-24 shrink-0 overflow-hidden rounded-md border border-white/10 bg-black/20 group"
+                          title={entry.name}
+                        >
+                          <video
+                            src={entry.preview}
+                            className="h-full w-full object-cover"
+                            muted
+                          />
+                          {entry.uploading && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                              <Spinner size="sm" />
+                            </div>
+                          )}
+                          {entry.error && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-red-500/20 text-[10px] text-red-300">
+                              Error
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity hover:bg-rose-500 group-hover:opacity-100"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setVideoInputUploads((prev) => prev.filter((item) => item.id !== entry.id));
+                            }}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M18 6 6 18" />
+                              <path d="m6 6 12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      ))}
+
+                      {videoInputUploads.length < (selectedSpecial.videoInputConfig?.max ?? 3) && (
+                        <label
+                          htmlFor="video-input-upload"
+                          className="flex h-16 w-16 shrink-0 items-center justify-center rounded-md border border-dashed border-white/20 bg-white/5 text-slate-400 transition hover:border-sky-400 hover:text-sky-200 cursor-pointer"
+                          title="Add more videos"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M5 12h14" />
+                            <path d="M12 5v14" />
+                          </svg>
+                        </label>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Image Input for Sora 2 and similar T2V/I2V models */}
+            {selectedSpecial.inputType === "image" && (
+              <div className="space-y-3">
+                {/* Start Frame Upload */}
+                {selectedSpecial.imageInputConfig?.startFrame && (
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      Start Frame (optional)
+                    </label>
+                    <UploadZone
+                      label="Start frame"
+                      accept="image/*"
+                      slot={startFrame}
+                      onFile={handleStartFrameSelect}
+                      extractFiles={extractFilesFromDataTransfer}
+                    />
+                  </div>
+                )}
+
+                {/* Aspect Ratio (for Sora 2) */}
+                {selectedSpecial.params.aspect_ratio && selectedSpecial.params.aspect_ratio.values && (
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      Aspect Ratio
+                    </label>
+                    <select
+                      value={paramValues.aspect_ratio === undefined ? String(selectedSpecial.params.aspect_ratio.default ?? selectedSpecial.params.aspect_ratio.values[0]) : String(paramValues.aspect_ratio)}
+                      onChange={(event) => handleParamChange("aspect_ratio", event.target.value)}
+                      disabled={isSubmitting || isExpanding}
+                      className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
+                    >
+                      {selectedSpecial.params.aspect_ratio.values.map((val) => (
+                        <option key={String(val)} value={String(val)}>
+                          {String(val)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Character IDs (for Sora 2) */}
+                {selectedSpecial.params.character_id_list && (
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      Character IDs
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Enter comma-separated character IDs (max 5)"
+                      value={Array.isArray(paramValues.character_id_list) ? (paramValues.character_id_list as string[]).join(", ") : ""}
+                      onChange={(event) => {
+                        const inputValue = event.target.value;
+                        if (inputValue.trim() === "") {
+                          handleParamChange("character_id_list", undefined);
+                        } else {
+                          const values = inputValue.split(",").map((v) => v.trim()).filter(Boolean);
+                          handleParamChange("character_id_list", values);
+                        }
+                      }}
+                      disabled={isSubmitting || isExpanding}
+                      className={`w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
+                    />
+                    <p className="text-[10px] text-slate-500">Create characters at kie.ai/sora-2?model=sora-2-characters</p>
                   </div>
                 )}
               </div>
-            </div>
+            )}
+
+            {/* Both Image + Video Input (e.g., Kling Motion Control) */}
+            {selectedSpecial.inputType === "both" && (
+              <div className="space-y-3">
+                {/* Image Upload */}
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Person Image (required)
+                  </label>
+                  <UploadZone
+                    label="Upload image"
+                    accept="image/*"
+                    slot={startFrame}
+                    onFile={handleStartFrameSelect}
+                    extractFiles={extractFilesFromDataTransfer}
+                  />
+                </div>
+
+                {/* Video Upload */}
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Motion Video (required)
+                  </label>
+                  <div
+                    className={`relative flex min-h-[80px] flex-col justify-center rounded-2xl border border-white/10 bg-gradient-to-br from-white/10 to-transparent p-3 transition ${isReferenceDragActive ? "border-sky-400 shadow-lg shadow-sky-500/20" : "hover:border-white/20"}`}
+                    onDragEnter={(e) => { e.preventDefault(); setIsReferenceDragActive(true); }}
+                    onDragLeave={(e) => { e.preventDefault(); setIsReferenceDragActive(false); }}
+                    onDragOver={(e) => { e.preventDefault(); setIsReferenceDragActive(true); }}
+                    onDrop={async (e) => {
+                      e.preventDefault();
+                      setIsReferenceDragActive(false);
+                      const files = await extractFilesFromDataTransfer(e.dataTransfer);
+                      const videoFile = files.find((f) => f.type.startsWith("video/"));
+                      if (videoFile && videoInputUploads.length < 1) {
+                        const entryId = crypto.randomUUID();
+                        const preview = URL.createObjectURL(videoFile);
+                        setVideoInputUploads([{ id: entryId, name: videoFile.name, preview, uploading: true }]);
+                        try {
+                          const url = await uploadToFal(videoFile);
+                          setVideoInputUploads((prev) => prev.map((item) => item.id === entryId ? { ...item, url, uploading: false, createdAt: Date.now() } : item));
+                        } catch {
+                          setVideoInputUploads((prev) => prev.map((item) => item.id === entryId ? { ...item, uploading: false, error: "Upload failed" } : item));
+                        }
+                      }
+                    }}
+                  >
+                    {videoInputUploads.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-2 text-center">
+                        <div className="mb-1 text-xl">🎬</div>
+                        <div className="text-xs text-slate-400">
+                          Drag and drop a video file
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        {videoInputUploads.map((entry) => (
+                          <div key={entry.id} className="relative h-12 w-16 overflow-hidden rounded bg-black/30 group">
+                            <video src={entry.preview} className="h-full w-full object-cover" muted />
+                            {entry.uploading && (
+                              <div className="absolute inset-0 flex items-center justify-center bg-black/50"><Spinner size="sm" /></div>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setVideoInputUploads([])}
+                              className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white opacity-0 hover:bg-rose-500 group-hover:opacity-100"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Character Orientation */}
+                {selectedSpecial.params.character_orientation && selectedSpecial.params.character_orientation.values && (
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">Orientation</label>
+                    <select
+                      value={paramValues.character_orientation === undefined ? String(selectedSpecial.params.character_orientation.default) : String(paramValues.character_orientation)}
+                      onChange={(event) => handleParamChange("character_orientation", event.target.value)}
+                      disabled={isSubmitting || isExpanding}
+                      className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
+                    >
+                      {selectedSpecial.params.character_orientation.values.map((val) => (
+                        <option key={String(val)} value={String(val)}>{String(val)}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Mode (720p/1080p) */}
+                {selectedSpecial.params.mode && selectedSpecial.params.mode.values && (
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">Resolution</label>
+                    <select
+                      value={paramValues.mode === undefined ? String(selectedSpecial.params.mode.default) : String(paramValues.mode)}
+                      onChange={(event) => handleParamChange("mode", event.target.value)}
+                      disabled={isSubmitting || isExpanding}
+                      className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
+                    >
+                      {selectedSpecial.params.mode.values.map((val) => (
+                        <option key={String(val)} value={String(val)}>{String(val)}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Prompt */}
             <div className="space-y-1">
@@ -2707,8 +3249,109 @@ export default function ControlsPane() {
                   onBlur={() => addToHistory(prompt)}
                   placeholder="Describe what should happen in the video..."
                   rows={4}
-                  className="w-full rounded-2xl border border-white/10 bg-black/40 px-3 py-3 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
+                  disabled={isSubmitting || isExpanding}
+                  className={`w-full rounded-2xl border border-white/10 bg-black/40 px-3 py-3 pr-10 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
                 />
+
+                {/* Undo/Redo buttons */}
+                <div className="absolute right-2 top-2 flex flex-col gap-1">
+                  <button
+                    type="button"
+                    onClick={undo}
+                    disabled={historyIndex <= 0 || isExpanding || isSubmitting}
+                    className="flex h-6 w-6 items-center justify-center rounded bg-white/5 text-slate-400 transition hover:bg-white/10 hover:text-white disabled:opacity-30"
+                    title="Undo (previous prompt)"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 14 4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11" /></svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={redo}
+                    disabled={historyIndex >= history.length - 1 || isExpanding || isSubmitting}
+                    className="flex h-6 w-6 items-center justify-center rounded bg-white/5 text-slate-400 transition hover:bg-white/10 hover:text-white disabled:opacity-30"
+                    title="Redo (next prompt)"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 14 5-5-5-5" /><path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5A5.5 5.5 0 0 0 9.5 20H13" /></svg>
+                  </button>
+                </div>
+
+                {/* Prompt tools */}
+                <div className="mt-2 flex items-center gap-1">
+                  {/* Prompt Mode Toggle */}
+                  <button
+                    type="button"
+                    onClick={() => setPromptMode(prev => prev === "photoreal" ? "general" : "photoreal")}
+                    disabled={isExpanding}
+                    className={`flex h-7 w-7 items-center justify-center rounded-md border transition disabled:opacity-50 ${promptMode === "photoreal"
+                      ? "border-emerald-500/30 bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/40 hover:text-white"
+                      : "border-amber-500/30 bg-amber-500/20 text-amber-200 hover:bg-amber-500/40 hover:text-white"
+                      }`}
+                    title={`Current Mode: ${promptMode === "photoreal" ? "Photorealistic (Camera Aware)" : "General (Creative Description)"}`}
+                  >
+                    {promptMode === "photoreal" ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" /><circle cx="12" cy="13" r="3" /></svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>
+                    )}
+                  </button>
+                  <div className="w-px bg-white/10 mx-1" />
+                  <button
+                    type="button"
+                    onClick={() => handleExpandPrompt("natural")}
+                    disabled={isExpanding || isSubmitting || !prompt.trim()}
+                    className="flex h-7 w-7 items-center justify-center rounded-md border border-indigo-500/30 bg-indigo-500/20 text-indigo-200 transition hover:bg-indigo-500/40 hover:text-white disabled:opacity-50"
+                    title="Expand with Natural Language"
+                  >
+                    {isExpanding ? (
+                      <Spinner size="sm" />
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" /><path d="M5 3v4" /><path d="M9 3v4" /><path d="M3 5h4" /><path d="M3 9h4" /></svg>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleExpandPrompt("yaml")}
+                    disabled={isExpanding || isSubmitting || !prompt.trim()}
+                    className="flex h-7 w-7 items-center justify-center rounded-md border border-indigo-500/30 bg-indigo-500/20 text-indigo-200 transition hover:bg-indigo-500/40 hover:text-white disabled:opacity-50"
+                    title="Expand to YAML"
+                  >
+                    {isExpanding ? (
+                      <Spinner size="sm" />
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" /><path d="M12 13v6" /><path d="M12 13h-2" /><path d="M12 13h2" /></svg>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Alter Box */}
+              <div className="flex gap-2 pt-2">
+                <input
+                  type="text"
+                  value={alterInstruction}
+                  onChange={(event) => setAlterInstruction(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && alterInstruction.trim() && prompt.trim() && !isAltering && !isSubmitting) {
+                      void handleAlter();
+                    }
+                  }}
+                  placeholder="Alter: e.g. 'make it more cinematic'"
+                  disabled={isAltering || isSubmitting || !prompt.trim()}
+                  className={`flex-1 rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 ${isAltering || isSubmitting || !prompt.trim() ? "opacity-50 cursor-not-allowed" : ""}`}
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleAlter()}
+                  disabled={isAltering || isSubmitting || !alterInstruction.trim() || !prompt.trim()}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-violet-500/30 bg-violet-500/20 text-violet-200 transition hover:bg-violet-500/40 hover:text-white disabled:opacity-50"
+                  title="Apply alteration"
+                >
+                  {isAltering ? (
+                    <Spinner size="sm" />
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>
+                  )}
+                </button>
               </div>
             </div>
 
@@ -2781,21 +3424,28 @@ export default function ControlsPane() {
             </span>
           ) : null}
         </div>
-        {status ? (
-          <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200">
-            {status}
+
+        {/* Floating Status Toast */}
+        {status && (
+          <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 animate-in fade-in slide-in-from-bottom-2 duration-200">
+            <div className="rounded-full border border-white/20 bg-slate-900/95 px-4 py-2 text-xs font-medium text-slate-200 shadow-lg backdrop-blur-sm">
+              {status}
+            </div>
           </div>
-        ) : isMissingImageReference ? (
+        )}
+
+        {/* Missing Reference Warning */}
+        {isMissingImageReference && (
           <div className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
             Add at least one reference image to generate with this model.
           </div>
-        ) : null}
+        )}
       </div>
 
       {showPromptStudio && (
         <PromptStudio
           currentPrompt={prompt}
-          initialImages={imageReferenceUrls}
+          initialImages={referenceUploads.map((r) => r.url || r.preview).filter(Boolean)}
           onClose={() => setShowPromptStudio(false)}
           onApply={(newPrompt) => {
             setPrompt(newPrompt);
@@ -2804,6 +3454,20 @@ export default function ControlsPane() {
           }}
         />
       )}
+
+      <BatchPromptModal
+        isOpen={showBatchModal}
+        onClose={() => setShowBatchModal(false)}
+        onStart={(prompts) => {
+          setShowBatchModal(false);
+          setBatchQueue(prompts);
+          setBatchIndex(0);
+          // Set the first prompt immediately
+          if (prompts.length > 0) {
+            setPrompt(prompts[0]);
+          }
+        }}
+      />
     </form >
   );
 }

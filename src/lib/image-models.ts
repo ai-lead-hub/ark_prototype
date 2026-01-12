@@ -215,7 +215,7 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
     label: "Flux 2 Pro",
     endpoint: "/api/v1/jobs/createTask",
     provider: "kie",
-    pricing: "$0.025/image (1K), $0.035/image (2K)",
+    pricing: "$0.035/image",
     taskConfig: {
       statusEndpoint: "/api/v1/jobs/recordInfo",
       statePath: "data.state",
@@ -265,7 +265,7 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
     label: "GPT Image 1.5",
     endpoint: "/api/v1/jobs/createTask",
     provider: "kie",
-    pricing: "$0.04/image (medium), $0.11/image (high)",
+    pricing: "$0.04/image",
     taskConfig: {
       statusEndpoint: "/api/v1/jobs/recordInfo",
       statePath: "data.state",

@@ -7,7 +7,7 @@ import { extractUrl } from "./providers/shared";
 
 type SupportFlag = boolean | "unstable" | "unspecified";
 
-export type ParamType = "string" | "enum" | "number" | "boolean";
+export type ParamType = "string" | "enum" | "number" | "boolean" | "array";
 
 export type ParamDefinition = {
   type: ParamType;
@@ -69,6 +69,7 @@ export type UnifiedPayload = {
   camera_fixed?: boolean;
   enable_safety_checker?: boolean;
   acceleration?: string;
+  character_id_list?: string[];
 };
 
 // Helper function to extract video URL from KIE response
@@ -127,12 +128,27 @@ const jsonSpecs =
       model.adapter = {
         mapInput: (unified) => {
           const hasImage = !!unified.start_frame_url;
+
+          // Ensure duration is a number (API expects 6, 8, or 10 as integers)
+          let duration: number = 6;
+          if (unified.duration !== undefined) {
+            duration = typeof unified.duration === "string"
+              ? parseInt(unified.duration, 10)
+              : unified.duration;
+          }
+
+          // Ensure fps is a number
+          let fps: number = 25;
+          if (unified.fps !== undefined) {
+            fps = typeof unified.fps === "number" ? unified.fps : parseInt(String(unified.fps), 10);
+          }
+
           const input: Record<string, FalInputValue> = {
             prompt: unified.prompt,
-            duration: unified.duration ?? 6,
+            duration,
             resolution: unified.resolution ?? "1080p",
             aspect_ratio: unified.aspect_ratio ?? "16:9",
-            fps: unified.fps ?? 25,
+            fps,
             generate_audio: unified.generate_audio ?? true,
           };
 
@@ -257,10 +273,6 @@ const jsonSpecs =
             // Determine the KIE model name based on model ID
             // Models with both T2V and I2V endpoints - switch based on whether image is provided
             const kieModelMap: Record<string, { i2v: string; t2v?: string }> = {
-              "sora-2": {
-                i2v: "sora-2-image-to-video",
-                t2v: "sora-2-text-to-video"
-              },
               "kling-2.5-pro": { i2v: "kling/v2-5-turbo-image-to-video-pro" },
               "hailuo-2.3-pro": { i2v: "hailuo/2-3-image-to-video-pro" }, // T2V unavailable
               "hailuo-02-pro": {
@@ -321,20 +333,6 @@ const jsonSpecs =
               if (typeof imageUrl === "string") {
                 input.image_urls = [imageUrl];
               }
-            }
-
-            // Special handling for Sora 2 I2V - image_urls must be an array
-            if (model.id === "sora-2" && hasImage) {
-              const imageUrl = input.image_urls ?? unified.start_frame_url;
-              if (typeof imageUrl === "string") {
-                input.image_urls = [imageUrl];
-              }
-            }
-
-            // Special handling for Sora 2 - map duration to n_frames for API
-            if (model.id === "sora-2" && input.duration !== undefined) {
-              input.n_frames = input.duration;
-              delete input.duration;
             }
 
             // Special handling for Seedance 1.5 Pro - uses input_urls array (0-2 images)
