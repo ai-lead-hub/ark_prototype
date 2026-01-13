@@ -46,7 +46,7 @@ import {
 } from "../lib/api/files";
 import { getGenerationByOutput, recordGeneration, recordPrompt } from "../lib/api/meta";
 import { useQueue } from "../state/queue";
-import { expandPrompt, alterPrompt } from "../lib/llm";
+import { expandPrompt, alterPrompt, expandKlingO1ReferencePrompt } from "../lib/llm";
 import { buildDatedMediaPath } from "../lib/storage-paths";
 import {
   consumeControlsActions,
@@ -282,6 +282,36 @@ export default function ControlsPane() {
   const [batchQueue, setBatchQueue] = useState<string[]>([]);
   const [batchIndex, setBatchIndex] = useState(0);
   const isBatchProcessing = batchQueue.length > 0;
+  // Reference model state (Kling O1 Reference)
+  // Images are stored locally (blob URLs) until Generate is pressed for speed
+  type ElementUpload = {
+    id: string;
+    frontalPreview: string;
+    frontalFile?: File;  // Store file for deferred upload
+    frontalUrl?: string;
+    frontalUploading: boolean;
+    referenceImages: Array<{
+      id: string;
+      preview: string;
+      file?: File;  // Store file for deferred upload
+      url?: string;
+      uploading: boolean;
+    }>;
+  };
+  const [referenceStyleImages, setReferenceStyleImages] = useState<Array<{
+    id: string;
+    preview: string;
+    file?: File;  // Store file for deferred upload
+    url?: string;
+    uploading: boolean;
+  }>>([]);
+  const [elements, setElements] = useState<ElementUpload[]>([]);
+
+  // Autocomplete state for @Image/@Element references
+  const [showAutocomplete, setShowAutocomplete] = useState(false);
+  const [autocompleteIndex, setAutocompleteIndex] = useState(0);
+  const promptTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const imagePromptTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const referenceInputRef = useRef<HTMLInputElement | null>(null);
   const formRef = useRef<HTMLFormElement | null>(null);
@@ -1841,6 +1871,86 @@ export default function ControlsPane() {
           });
 
           payload = specialPayload;
+        } else if (selectedSpecial.inputType === "references") {
+          // Reference models like Kling O1 Reference - multi-ref + elements
+          // Files are stored locally until Generate is pressed, now upload them
+
+          setStatus("Uploading reference images...");
+
+          // Upload reference style images that have files but no URLs
+          const uploadedImageUrls: string[] = [];
+          for (const img of referenceStyleImages) {
+            if (img.file && !img.url) {
+              try {
+                const uploadedUrl = await uploadToFal(img.file);
+                uploadedImageUrls.push(uploadedUrl);
+                setReferenceStyleImages((prev) => prev.map((i) => i.id === img.id ? { ...i, url: uploadedUrl, uploading: false } : i));
+              } catch (error) {
+                console.error(`Failed to upload reference image:`, error);
+                // Skip failed uploads
+              }
+            } else if (img.url) {
+              uploadedImageUrls.push(img.url);
+            }
+          }
+
+          setStatus("Uploading elements...");
+
+          // Upload element images that have files but no URLs
+          const uploadedElements: Array<{ frontal_image_url: string; reference_image_urls: string[] }> = [];
+          for (const el of elements) {
+            // Upload frontal image
+            let frontalUrl = el.frontalUrl;
+            if (el.frontalFile && !el.frontalUrl) {
+              try {
+                frontalUrl = await uploadToFal(el.frontalFile);
+                setElements((prev) => prev.map((e) => e.id === el.id ? { ...e, frontalUrl, frontalUploading: false } : e));
+              } catch (error) {
+                console.error(`Failed to upload element frontal:`, error);
+                continue; // Skip this element entirely
+              }
+            }
+
+            if (!frontalUrl) continue;
+
+            // Upload element reference images
+            const refUrls: string[] = [];
+            for (const ref of el.referenceImages) {
+              if (ref.file && !ref.url) {
+                try {
+                  const uploadedUrl = await uploadToFal(ref.file);
+                  refUrls.push(uploadedUrl);
+                  setElements((prev) => prev.map((e) => e.id === el.id ? {
+                    ...e,
+                    referenceImages: e.referenceImages.map((r) => r.id === ref.id ? { ...r, url: uploadedUrl, uploading: false } : r)
+                  } : e));
+                } catch (error) {
+                  console.error(`Failed to upload element reference:`, error);
+                  // Skip failed reference
+                }
+              } else if (ref.url) {
+                refUrls.push(ref.url);
+              }
+            }
+
+            uploadedElements.push({
+              frontal_image_url: frontalUrl,
+              reference_image_urls: refUrls,
+            });
+          }
+
+          setStatus(null);
+
+          const specialPayload = buildSpecialModelInput(selectedSpecial, {
+            modelId: selectedSpecial.id,
+            prompt: prompt.trim(),
+            image_urls: uploadedImageUrls,
+            elements: uploadedElements,
+            duration: paramValues.duration as string | undefined,
+            aspect_ratio: paramValues.aspect_ratio as string | undefined,
+          });
+
+          payload = specialPayload;
         }
 
 
@@ -2206,13 +2316,121 @@ export default function ControlsPane() {
 
               <div className="relative">
                 <textarea
+                  ref={imagePromptTextareaRef}
                   value={prompt}
-                  onChange={(event) => setPrompt(event.target.value)}
-                  onBlur={() => addToHistory(prompt)}
+                  onChange={(event) => {
+                    const newValue = event.target.value;
+                    setPrompt(newValue);
+
+                    // Check if we should show autocomplete (typing @)
+                    const cursorPos = event.target.selectionStart;
+                    const textBefore = newValue.slice(0, cursorPos);
+                    const atMatch = textBefore.match(/@([a-zA-Z0-9]*)$/);
+
+                    if (atMatch && referenceUploads.filter(r => r.file || r.url).length > 0) {
+                      setShowAutocomplete(true);
+                      setAutocompleteIndex(0);
+                    } else {
+                      setShowAutocomplete(false);
+                    }
+                  }}
+                  onBlur={() => {
+                    addToHistory(prompt);
+                    setTimeout(() => setShowAutocomplete(false), 150);
+                  }}
+                  onKeyDown={(event) => {
+                    if (showAutocomplete) {
+                      const imgCount = referenceUploads.filter(r => r.file || r.url).length;
+                      const options: string[] = [];
+                      for (let i = 1; i <= imgCount; i++) options.push(`@Img${i}`);
+
+                      if (options.length > 0) {
+                        if (event.key === "ArrowDown") {
+                          event.preventDefault();
+                          setAutocompleteIndex((prev) => (prev + 1) % options.length);
+                          return;
+                        }
+                        if (event.key === "ArrowUp") {
+                          event.preventDefault();
+                          setAutocompleteIndex((prev) => (prev - 1 + options.length) % options.length);
+                          return;
+                        }
+                        if (event.key === "Enter" || event.key === "Tab") {
+                          event.preventDefault();
+                          const selected = options[autocompleteIndex];
+                          const textarea = event.target as HTMLTextAreaElement;
+                          const cursorPos = textarea.selectionStart;
+                          const textBefore = prompt.slice(0, cursorPos);
+                          const atMatch = textBefore.match(/@([a-zA-Z0-9]*)$/);
+                          if (atMatch) {
+                            const before = textBefore.slice(0, -atMatch[0].length);
+                            const after = prompt.slice(cursorPos);
+                            const newPrompt = before + selected + " " + after;
+                            setPrompt(newPrompt);
+                            setShowAutocomplete(false);
+                            setTimeout(() => {
+                              const newPos = before.length + selected.length + 1;
+                              textarea.setSelectionRange(newPos, newPos);
+                            }, 0);
+                          }
+                          return;
+                        }
+                        if (event.key === "Escape") {
+                          event.preventDefault();
+                          setShowAutocomplete(false);
+                          return;
+                        }
+                      }
+                    }
+                  }}
+                  placeholder="Type @ to reference uploaded images (e.g., @Img1)..."
                   rows={6}
                   disabled={isSubmitting || isExpanding}
                   className={`w-full rounded-2xl border border-white/10 bg-black/40 px-3 py-3 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 pb-10 ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
                 />
+
+                {/* Autocomplete popup for image references */}
+                {showAutocomplete && (() => {
+                  const imgCount = referenceUploads.filter(r => r.file || r.url).length;
+                  if (imgCount === 0) return null;
+
+                  const options = referenceUploads.filter(r => r.file || r.url).map((r, idx) => ({
+                    label: `@Img${idx + 1}`,
+                    preview: r.preview,
+                    name: r.name
+                  }));
+
+                  return (
+                    <div className="absolute left-3 top-full mt-1 z-50 rounded-lg border border-white/20 bg-slate-900 shadow-xl overflow-hidden max-w-[280px]">
+                      {options.map((opt, idx) => (
+                        <button
+                          key={opt.label}
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            const textarea = imagePromptTextareaRef.current;
+                            if (!textarea) return;
+                            const cursorPos = textarea.selectionStart;
+                            const textBefore = prompt.slice(0, cursorPos);
+                            const atMatch = textBefore.match(/@([a-zA-Z0-9]*)$/);
+                            if (atMatch) {
+                              const before = textBefore.slice(0, -atMatch[0].length);
+                              const after = prompt.slice(cursorPos);
+                              const newPrompt = before + opt.label + " " + after;
+                              setPrompt(newPrompt);
+                              setShowAutocomplete(false);
+                            }
+                          }}
+                          className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition ${idx === autocompleteIndex ? "bg-sky-500/30 text-white" : "text-slate-300 hover:bg-white/10"}`}
+                        >
+                          <img src={opt.preview} alt={opt.name} className="h-6 w-6 rounded object-cover" />
+                          <span className="font-medium text-sky-300">{opt.label}</span>
+                          <span className="truncate text-xs text-slate-500">{opt.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()}
                 <div className="absolute bottom-2 left-2 flex gap-1">
                   <button
                     type="button"
@@ -3240,89 +3458,460 @@ export default function ControlsPane() {
               </div>
             )}
 
+            {/* References Input (Kling O1 Reference) */}
+            {selectedSpecial.inputType === "references" && (
+              <div className="space-y-4">
+                {/* Reference Images for Style */}
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Reference Images (style/appearance)
+                  </label>
+                  <p className="text-[10px] text-slate-500">Use @Image1, @Image2, etc. in prompt</p>
+                  <div
+                    className={`flex flex-wrap gap-2 min-h-[56px] rounded-lg p-1 transition ${isReferenceDragActive ? "bg-sky-500/10 ring-1 ring-sky-400" : ""}`}
+                    onDragEnter={(e) => { e.preventDefault(); setIsReferenceDragActive(true); }}
+                    onDragLeave={(e) => { e.preventDefault(); setIsReferenceDragActive(false); }}
+                    onDragOver={(e) => { e.preventDefault(); setIsReferenceDragActive(true); }}
+                    onDrop={async (e) => {
+                      e.preventDefault();
+                      setIsReferenceDragActive(false);
+                      const files = await extractFilesFromDataTransfer(e.dataTransfer);
+                      const imageFiles = files.filter((f) => f.type.startsWith("image/"));
+                      for (const file of imageFiles) {
+                        if (referenceStyleImages.length >= 7) break;
+                        const id = crypto.randomUUID();
+                        const preview = URL.createObjectURL(file);
+                        // Store file locally - upload on Generate
+                        setReferenceStyleImages((prev) => [...prev, { id, preview, file, uploading: false }]);
+                      }
+                    }}
+                  >
+                    {referenceStyleImages.map((img, idx) => (
+                      <div key={img.id} className="relative h-12 w-12 overflow-hidden rounded border border-white/10 group">
+                        <img src={img.preview} alt={`Image ${idx + 1}`} className="h-full w-full object-cover" />
+                        {img.uploading && <div className="absolute inset-0 flex items-center justify-center bg-black/50"><Spinner size="sm" /></div>}
+                        <div className="absolute bottom-0 left-0 bg-black/70 px-1 text-[9px] text-white">@Image{idx + 1}</div>
+                        <button
+                          type="button"
+                          onClick={() => setReferenceStyleImages((prev) => prev.filter((i) => i.id !== img.id))}
+                          className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white opacity-0 hover:bg-rose-500 group-hover:opacity-100"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+                        </button>
+                      </div>
+                    ))}
+                    {referenceStyleImages.length < 7 && (
+                      <label className="flex h-12 w-12 cursor-pointer items-center justify-center rounded border border-dashed border-white/20 text-slate-400 hover:border-sky-400 hover:text-sky-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14" /><path d="M5 12h14" /></svg>
+                        <input type="file" accept="image/*" className="hidden" onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const id = crypto.randomUUID();
+                          const preview = URL.createObjectURL(file);
+                          // Store file locally - upload on Generate
+                          setReferenceStyleImages((prev) => [...prev, { id, preview, file, uploading: false }]);
+                          e.target.value = "";
+                        }} />
+                      </label>
+                    )}
+                  </div>
+                </div>
+
+                {/* Elements */}
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Elements (characters/objects)
+                  </label>
+                  <p className="text-[10px] text-slate-500">Use @Element1, @Element2, etc. in prompt. Each needs a frontal image.</p>
+                  {elements.map((el, elIdx) => (
+                    <div key={el.id} className="rounded-lg border border-white/10 bg-white/5 p-2 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-slate-300">@Element{elIdx + 1}</span>
+                        <button type="button" onClick={() => setElements((prev) => prev.filter((e) => e.id !== el.id))} className="text-xs text-rose-400 hover:text-rose-300">Remove</button>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        {/* Frontal */}
+                        {el.frontalUrl ? (
+                          <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded border border-white/10 group">
+                            <img src={el.frontalPreview} className="h-full w-full object-cover" alt="Frontal" />
+                            {el.frontalUploading && <div className="absolute inset-0 flex items-center justify-center bg-black/50"><Spinner size="sm" /></div>}
+                            <div className="absolute bottom-0 left-0 bg-black/70 px-1 text-[8px] text-white">Frontal</div>
+                            <button
+                              type="button"
+                              onClick={() => setElements((prev) => prev.map((elem) => elem.id === el.id ? { ...elem, frontalUrl: undefined, frontalFile: undefined, frontalPreview: "" } : elem))}
+                              className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white opacity-0 hover:bg-rose-500 group-hover:opacity-100"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+                            </button>
+                          </div>
+                        ) : (
+                          <div
+                            className="flex h-14 w-14 shrink-0 cursor-pointer flex-col items-center justify-center rounded border border-dashed border-white/20 text-[9px] text-slate-400 hover:border-sky-400 transition"
+                            onDragEnter={(e) => e.preventDefault()}
+                            onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("border-sky-400", "bg-sky-500/10"); }}
+                            onDragLeave={(e) => { e.preventDefault(); e.currentTarget.classList.remove("border-sky-400", "bg-sky-500/10"); }}
+                            onDrop={async (e) => {
+                              e.preventDefault();
+                              e.currentTarget.classList.remove("border-sky-400", "bg-sky-500/10");
+                              const files = await extractFilesFromDataTransfer(e.dataTransfer);
+                              const imageFile = files.find((f) => f.type.startsWith("image/"));
+                              if (imageFile) {
+                                const preview = URL.createObjectURL(imageFile);
+                                // Store file locally - upload on Generate
+                                setElements((prev) => prev.map((elem) => elem.id === el.id ? { ...elem, frontalPreview: preview, frontalFile: imageFile, frontalUploading: false } : elem));
+                              }
+                            }}
+                            onClick={() => {
+                              const input = document.createElement("input");
+                              input.type = "file";
+                              input.accept = "image/*";
+                              input.onchange = (e) => {
+                                const file = (e.target as HTMLInputElement).files?.[0];
+                                if (!file) return;
+                                const preview = URL.createObjectURL(file);
+                                // Store file locally - upload on Generate
+                                setElements((prev) => prev.map((elem) => elem.id === el.id ? { ...elem, frontalPreview: preview, frontalFile: file, frontalUploading: false } : elem));
+                              };
+                              input.click();
+                            }}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14" /><path d="M5 12h14" /></svg>
+                            <span>Frontal</span>
+                          </div>
+                        )}
+                        {/* Reference images for this element */}
+                        <div className="flex flex-wrap gap-1">
+                          {el.referenceImages.map((ref) => (
+                            <div key={ref.id} className="relative h-10 w-10 overflow-hidden rounded border border-white/10 group">
+                              <img src={ref.preview} className="h-full w-full object-cover" alt="Ref" />
+                              {ref.uploading && <div className="absolute inset-0 flex items-center justify-center bg-black/50"><Spinner size="sm" /></div>}
+                              <button type="button" onClick={() => setElements((prev) => prev.map((elem) => elem.id === el.id ? { ...elem, referenceImages: elem.referenceImages.filter((r) => r.id !== ref.id) } : elem))} className="absolute right-0 top-0 flex h-3 w-3 items-center justify-center rounded-full bg-rose-500 text-white opacity-0 group-hover:opacity-100">×</button>
+                            </div>
+                          ))}
+                          {el.referenceImages.length < 3 && (
+                            <div
+                              className="flex h-10 w-10 cursor-pointer items-center justify-center rounded border border-dashed border-white/10 text-slate-500 hover:border-sky-400 hover:text-sky-400 transition"
+                              onDragEnter={(e) => e.preventDefault()}
+                              onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("border-sky-400", "bg-sky-500/10"); }}
+                              onDragLeave={(e) => { e.preventDefault(); e.currentTarget.classList.remove("border-sky-400", "bg-sky-500/10"); }}
+                              onDrop={async (e) => {
+                                e.preventDefault();
+                                e.currentTarget.classList.remove("border-sky-400", "bg-sky-500/10");
+                                const files = await extractFilesFromDataTransfer(e.dataTransfer);
+                                const imageFile = files.find((f) => f.type.startsWith("image/"));
+                                if (imageFile && el.referenceImages.length < 3) {
+                                  const refId = crypto.randomUUID();
+                                  const preview = URL.createObjectURL(imageFile);
+                                  // Store file locally - upload on Generate
+                                  setElements((prev) => prev.map((elem) => elem.id === el.id ? { ...elem, referenceImages: [...elem.referenceImages, { id: refId, preview, file: imageFile, uploading: false }] } : elem));
+                                }
+                              }}
+                              onClick={() => {
+                                const input = document.createElement("input");
+                                input.type = "file";
+                                input.accept = "image/*";
+                                input.onchange = (e) => {
+                                  const file = (e.target as HTMLInputElement).files?.[0];
+                                  if (!file) return;
+                                  const refId = crypto.randomUUID();
+                                  const preview = URL.createObjectURL(file);
+                                  // Store file locally - upload on Generate
+                                  setElements((prev) => prev.map((elem) => elem.id === el.id ? { ...elem, referenceImages: [...elem.referenceImages, { id: refId, preview, file, uploading: false }] } : elem));
+                                };
+                                input.click();
+                              }}
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14" /><path d="M5 12h14" /></svg>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {elements.length < 5 && (
+                    <button type="button" onClick={() => setElements((prev) => [...prev, { id: crypto.randomUUID(), frontalPreview: "", frontalUploading: false, referenceImages: [] }])} className="w-full rounded-lg border border-dashed border-white/20 py-2 text-xs text-slate-400 hover:border-sky-400 hover:text-sky-400">
+                      + Add Element
+                    </button>
+                  )}
+                </div>
+
+                {/* Duration */}
+                {selectedSpecial.params.duration && selectedSpecial.params.duration.values && (
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">Duration</label>
+                    <select
+                      value={paramValues.duration === undefined ? String(selectedSpecial.params.duration.default) : String(paramValues.duration)}
+                      onChange={(event) => handleParamChange("duration", event.target.value)}
+                      disabled={isSubmitting || isExpanding}
+                      className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
+                    >
+                      {selectedSpecial.params.duration.values.map((val) => (
+                        <option key={String(val)} value={String(val)}>{String(val)}s</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Aspect Ratio */}
+                {selectedSpecial.params.aspect_ratio && selectedSpecial.params.aspect_ratio.values && (
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">Aspect Ratio</label>
+                    <select
+                      value={paramValues.aspect_ratio === undefined ? String(selectedSpecial.params.aspect_ratio.default) : String(paramValues.aspect_ratio)}
+                      onChange={(event) => handleParamChange("aspect_ratio", event.target.value)}
+                      disabled={isSubmitting || isExpanding}
+                      className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
+                    >
+                      {selectedSpecial.params.aspect_ratio.values.map((val) => (
+                        <option key={String(val)} value={String(val)}>{String(val)}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Prompt */}
             <div className="space-y-1">
-              <div className="relative">
-                <textarea
-                  value={prompt}
-                  onChange={(event) => setPrompt(event.target.value)}
-                  onBlur={() => addToHistory(prompt)}
-                  placeholder="Describe what should happen in the video..."
-                  rows={4}
-                  disabled={isSubmitting || isExpanding}
-                  className={`w-full rounded-2xl border border-white/10 bg-black/40 px-3 py-3 pr-10 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
-                />
+              {/* For references models, prompt with autocomplete popup */}
+              {selectedSpecial.inputType === "references" ? (
+                <div className="relative">
+                  <textarea
+                    ref={promptTextareaRef}
+                    value={prompt}
+                    onChange={(event) => {
+                      const newValue = event.target.value;
+                      setPrompt(newValue);
 
-                {/* Undo/Redo buttons */}
-                <div className="absolute right-2 top-2 flex flex-col gap-1">
-                  <button
-                    type="button"
-                    onClick={undo}
-                    disabled={historyIndex <= 0 || isExpanding || isSubmitting}
-                    className="flex h-6 w-6 items-center justify-center rounded bg-white/5 text-slate-400 transition hover:bg-white/10 hover:text-white disabled:opacity-30"
-                    title="Undo (previous prompt)"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 14 4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11" /></svg>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={redo}
-                    disabled={historyIndex >= history.length - 1 || isExpanding || isSubmitting}
-                    className="flex h-6 w-6 items-center justify-center rounded bg-white/5 text-slate-400 transition hover:bg-white/10 hover:text-white disabled:opacity-30"
-                    title="Redo (next prompt)"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 14 5-5-5-5" /><path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5A5.5 5.5 0 0 0 9.5 20H13" /></svg>
-                  </button>
-                </div>
+                      // Check if we should show autocomplete (typing @)
+                      const cursorPos = event.target.selectionStart;
+                      const textBefore = newValue.slice(0, cursorPos);
+                      const atMatch = textBefore.match(/@([a-zA-Z]*)$/);
 
-                {/* Prompt tools */}
-                <div className="mt-2 flex items-center gap-1">
-                  {/* Prompt Mode Toggle */}
+                      if (atMatch) {
+                        setShowAutocomplete(true);
+                        setAutocompleteIndex(0);
+                      } else {
+                        setShowAutocomplete(false);
+                      }
+                    }}
+                    onBlur={() => {
+                      addToHistory(prompt);
+                      // Delay hiding to allow click on autocomplete item
+                      setTimeout(() => setShowAutocomplete(false), 150);
+                    }}
+                    onKeyDown={(event) => {
+                      if (showAutocomplete) {
+                        // Build options list
+                        const imageCount = referenceStyleImages.filter(i => i.file || i.url).length;
+                        const elementCount = elements.filter(e => e.frontalFile || e.frontalUrl).length;
+                        const options: string[] = [];
+                        for (let i = 1; i <= imageCount; i++) options.push(`@Image${i}`);
+                        for (let i = 1; i <= elementCount; i++) options.push(`@Element${i}`);
+
+                        if (options.length > 0) {
+                          if (event.key === "ArrowDown") {
+                            event.preventDefault();
+                            setAutocompleteIndex((prev) => (prev + 1) % options.length);
+                            return;
+                          }
+                          if (event.key === "ArrowUp") {
+                            event.preventDefault();
+                            setAutocompleteIndex((prev) => (prev - 1 + options.length) % options.length);
+                            return;
+                          }
+                          if (event.key === "Enter" || event.key === "Tab") {
+                            event.preventDefault();
+                            const selected = options[autocompleteIndex];
+                            const textarea = event.target as HTMLTextAreaElement;
+                            const cursorPos = textarea.selectionStart;
+                            const textBefore = prompt.slice(0, cursorPos);
+                            const atMatch = textBefore.match(/@([a-zA-Z]*)$/);
+                            if (atMatch) {
+                              const before = textBefore.slice(0, -atMatch[0].length);
+                              const after = prompt.slice(cursorPos);
+                              const newPrompt = before + selected + " " + after;
+                              setPrompt(newPrompt);
+                              setShowAutocomplete(false);
+                              setTimeout(() => {
+                                const newPos = before.length + selected.length + 1;
+                                textarea.setSelectionRange(newPos, newPos);
+                              }, 0);
+                            }
+                            return;
+                          }
+                          if (event.key === "Escape") {
+                            event.preventDefault();
+                            setShowAutocomplete(false);
+                            return;
+                          }
+                        }
+                      }
+                    }}
+                    placeholder="Type @ to insert references (e.g., @Image1, @Element1)..."
+                    rows={5}
+                    disabled={isSubmitting || isExpanding}
+                    className={`w-full rounded-2xl border border-white/10 bg-black/40 px-3 py-3 pr-10 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
+                  />
+
+                  {/* Autocomplete popup */}
+                  {showAutocomplete && (() => {
+                    const imageCount = referenceStyleImages.filter(i => i.file || i.url).length;
+                    const elementCount = elements.filter(e => e.frontalFile || e.frontalUrl).length;
+                    const options: Array<{ label: string; type: "image" | "element" }> = [];
+                    for (let i = 1; i <= imageCount; i++) options.push({ label: `@Image${i}`, type: "image" });
+                    for (let i = 1; i <= elementCount; i++) options.push({ label: `@Element${i}`, type: "element" });
+
+                    if (options.length === 0) return null;
+
+                    return (
+                      <div className="absolute left-3 top-full mt-1 z-50 rounded-lg border border-white/20 bg-slate-900 shadow-xl overflow-hidden">
+                        {options.map((opt, idx) => (
+                          <button
+                            key={opt.label}
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              const textarea = promptTextareaRef.current;
+                              if (!textarea) return;
+                              const cursorPos = textarea.selectionStart;
+                              const textBefore = prompt.slice(0, cursorPos);
+                              const atMatch = textBefore.match(/@([a-zA-Z]*)$/);
+                              if (atMatch) {
+                                const before = textBefore.slice(0, -atMatch[0].length);
+                                const after = prompt.slice(cursorPos);
+                                const newPrompt = before + opt.label + " " + after;
+                                setPrompt(newPrompt);
+                                setShowAutocomplete(false);
+                              }
+                            }}
+                            className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition ${idx === autocompleteIndex ? "bg-sky-500/30 text-white" : "text-slate-300 hover:bg-white/10"}`}
+                          >
+                            <span className={`flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold ${opt.type === "image" ? "bg-sky-500/30 text-sky-300" : "bg-amber-500/30 text-amber-300"}`}>
+                              {opt.type === "image" ? "I" : "E"}
+                            </span>
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                  {/* Expand button for references */}
                   <button
                     type="button"
-                    onClick={() => setPromptMode(prev => prev === "photoreal" ? "general" : "photoreal")}
-                    disabled={isExpanding}
-                    className={`flex h-7 w-7 items-center justify-center rounded-md border transition disabled:opacity-50 ${promptMode === "photoreal"
-                      ? "border-emerald-500/30 bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/40 hover:text-white"
-                      : "border-amber-500/30 bg-amber-500/20 text-amber-200 hover:bg-amber-500/40 hover:text-white"
-                      }`}
-                    title={`Current Mode: ${promptMode === "photoreal" ? "Photorealistic (Camera Aware)" : "General (Creative Description)"}`}
-                  >
-                    {promptMode === "photoreal" ? (
-                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" /><circle cx="12" cy="13" r="3" /></svg>
-                    ) : (
-                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>
-                    )}
-                  </button>
-                  <div className="w-px bg-white/10 mx-1" />
-                  <button
-                    type="button"
-                    onClick={() => handleExpandPrompt("natural")}
-                    disabled={isExpanding || isSubmitting || !prompt.trim()}
-                    className="flex h-7 w-7 items-center justify-center rounded-md border border-indigo-500/30 bg-indigo-500/20 text-indigo-200 transition hover:bg-indigo-500/40 hover:text-white disabled:opacity-50"
-                    title="Expand with Natural Language"
+                    onClick={async () => {
+                      if (!prompt.trim()) return;
+                      setIsExpanding(true);
+                      try {
+                        const expanded = await expandKlingO1ReferencePrompt(
+                          prompt,
+                          referenceStyleImages.filter(i => i.url).length,
+                          elements.filter(e => e.frontalUrl).length
+                        );
+                        setPrompt(expanded);
+                        addToHistory(expanded);
+                      } catch (err) {
+                        console.error("Failed to expand prompt:", err);
+                        setStatus("Failed to expand prompt");
+                        setTimeout(() => setStatus(null), 3000);
+                      } finally {
+                        setIsExpanding(false);
+                      }
+                    }}
+                    disabled={isSubmitting || isExpanding || !prompt.trim()}
+                    className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-lg border border-purple-500/30 bg-purple-500/20 text-purple-200 transition hover:bg-purple-500/40 disabled:opacity-30"
+                    title="Expand prompt with AI (adds @Image/@Element references)"
                   >
                     {isExpanding ? (
                       <Spinner size="sm" />
                     ) : (
-                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" /><path d="M5 3v4" /><path d="M9 3v4" /><path d="M3 5h4" /><path d="M3 9h4" /></svg>
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleExpandPrompt("yaml")}
-                    disabled={isExpanding || isSubmitting || !prompt.trim()}
-                    className="flex h-7 w-7 items-center justify-center rounded-md border border-indigo-500/30 bg-indigo-500/20 text-indigo-200 transition hover:bg-indigo-500/40 hover:text-white disabled:opacity-50"
-                    title="Expand to YAML"
-                  >
-                    {isExpanding ? (
-                      <Spinner size="sm" />
-                    ) : (
-                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" /><path d="M12 13v6" /><path d="M12 13h-2" /><path d="M12 13h2" /></svg>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 3v18" /><path d="m9 6-3 3 3 3" /><path d="m15 12 3 3-3 3" /></svg>
                     )}
                   </button>
                 </div>
-              </div>
+              ) : (
+                <div className="relative">
+                  <textarea
+                    value={prompt}
+                    onChange={(event) => setPrompt(event.target.value)}
+                    onBlur={() => addToHistory(prompt)}
+                    placeholder="Describe what should happen in the video..."
+                    rows={4}
+                    disabled={isSubmitting || isExpanding}
+                    className={`w-full rounded-2xl border border-white/10 bg-black/40 px-3 py-3 pr-10 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
+                  />
+
+                  {/* Undo/Redo buttons */}
+                  <div className="absolute right-2 top-2 flex flex-col gap-1">
+                    <button
+                      type="button"
+                      onClick={undo}
+                      disabled={historyIndex <= 0 || isExpanding || isSubmitting}
+                      className="flex h-6 w-6 items-center justify-center rounded bg-white/5 text-slate-400 transition hover:bg-white/10 hover:text-white disabled:opacity-30"
+                      title="Undo (previous prompt)"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 14 4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11" /></svg>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={redo}
+                      disabled={historyIndex >= history.length - 1 || isExpanding || isSubmitting}
+                      className="flex h-6 w-6 items-center justify-center rounded bg-white/5 text-slate-400 transition hover:bg-white/10 hover:text-white disabled:opacity-30"
+                      title="Redo (next prompt)"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 14 5-5-5-5" /><path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5A5.5 5.5 0 0 0 9.5 20H13" /></svg>
+                    </button>
+                  </div>
+
+                  {/* Prompt tools */}
+                  <div className="mt-2 flex items-center gap-1">
+                    {/* Prompt Mode Toggle */}
+                    <button
+                      type="button"
+                      onClick={() => setPromptMode(prev => prev === "photoreal" ? "general" : "photoreal")}
+                      disabled={isExpanding}
+                      className={`flex h-7 w-7 items-center justify-center rounded-md border transition disabled:opacity-50 ${promptMode === "photoreal"
+                        ? "border-emerald-500/30 bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/40 hover:text-white"
+                        : "border-amber-500/30 bg-amber-500/20 text-amber-200 hover:bg-amber-500/40 hover:text-white"
+                        }`}
+                      title={`Current Mode: ${promptMode === "photoreal" ? "Photorealistic (Camera Aware)" : "General (Creative Description)"}`}
+                    >
+                      {promptMode === "photoreal" ? (
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" /><circle cx="12" cy="13" r="3" /></svg>
+                      ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>
+                      )}
+                    </button>
+                    <div className="w-px bg-white/10 mx-1" />
+                    <button
+                      type="button"
+                      onClick={() => handleExpandPrompt("natural")}
+                      disabled={isExpanding || isSubmitting || !prompt.trim()}
+                      className="flex h-7 w-7 items-center justify-center rounded-md border border-indigo-500/30 bg-indigo-500/20 text-indigo-200 transition hover:bg-indigo-500/40 hover:text-white disabled:opacity-50"
+                      title="Expand with Natural Language"
+                    >
+                      {isExpanding ? (
+                        <Spinner size="sm" />
+                      ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" /><path d="M5 3v4" /><path d="M9 3v4" /><path d="M3 5h4" /><path d="M3 9h4" /></svg>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleExpandPrompt("yaml")}
+                      disabled={isExpanding || isSubmitting || !prompt.trim()}
+                      className="flex h-7 w-7 items-center justify-center rounded-md border border-indigo-500/30 bg-indigo-500/20 text-indigo-200 transition hover:bg-indigo-500/40 hover:text-white disabled:opacity-50"
+                      title="Expand to YAML"
+                    >
+                      {isExpanding ? (
+                        <Spinner size="sm" />
+                      ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" /><path d="M12 13v6" /><path d="M12 13h-2" /><path d="M12 13h2" /></svg>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Alter Box */}
               <div className="flex gap-2 pt-2">

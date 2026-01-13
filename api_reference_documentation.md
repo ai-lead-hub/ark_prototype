@@ -66,6 +66,64 @@ Supports both Text-to-Video (T2V) and Image-to-Video (I2V). When `image_urls` is
 ---
 
 
+### Kling O1 Reference-to-Video
+**Provider**: FAL
+**Endpoint**: `fal-ai/kling-video/o1/reference-to-video`
+**Pricing**: ~$0.04 per video
+
+Generate video from a start frame with optional reference images for style and elements (characters/objects). References are accessed in the prompt using `@Image1`, `@Element1` syntax.
+
+#### Parameters
+| Parameter | Type | Required | Description | Example |
+| :--- | :--- | :--- | :--- | :--- |
+| `prompt` | string | Yes | Text prompt using @Image1, @Element1 references. | `"Take @Image1 as the start frame..."` |
+| `image_urls` | array | No | Reference images for style (up to 7 total). Reference as @Image1, @Image2. | `["https://..."]` |
+| `elements` | array | No | Character/object elements. Each has frontal + reference images. Reference as @Element1. | See below |
+| `duration` | string | No | Duration: `"5"` or `"10"`. Default: `"5"`. | `"5"` |
+| `aspect_ratio` | string | No | Aspect ratio: `"16:9"`, `"9:16"`, `"1:1"`. Default: `"16:9"`. | `"16:9"` |
+
+**Element Structure:**
+```json
+{
+  "frontal_image_url": "https://...",
+  "reference_image_urls": ["https://..."]
+}
+```
+
+#### Request Example
+```json
+{
+  "prompt": "Take @Image1 as the start frame. The camera swoops down revealing the character from @Element1 standing in the center. Make sure to keep it as the style of @Image2.",
+  "image_urls": [
+    "https://example.com/start-frame.png",
+    "https://example.com/style-reference.png"
+  ],
+  "elements": [
+    {
+      "frontal_image_url": "https://example.com/character-frontal.png",
+      "reference_image_urls": ["https://example.com/character-side.png"]
+    }
+  ],
+  "duration": "5",
+  "aspect_ratio": "16:9"
+}
+```
+
+#### Response Example
+```json
+{
+  "video": {
+    "file_size": 47359974,
+    "file_name": "output.mp4",
+    "content_type": "video/mp4",
+    "url": "https://v3b.fal.media/files/b/panda/output.mp4"
+  }
+}
+```
+
+---
+
+
 ### Kling 2.5 Turbo Pro
 **Provider**: KIE
 **Endpoint**: `/api/v1/jobs/createTask`

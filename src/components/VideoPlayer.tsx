@@ -5,6 +5,8 @@ interface VideoPlayerProps {
     videoName: string;
     onSave: (blob: Blob, filename: string) => Promise<void>;
     onClose: () => void;
+    onPrevious?: () => void;
+    onNext?: () => void;
 }
 
 const MIN_ZOOM = 0.1;
@@ -17,6 +19,8 @@ export default function VideoPlayer({
     videoName,
     onSave,
     onClose,
+    onPrevious,
+    onNext,
 }: VideoPlayerProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -185,6 +189,12 @@ export default function VideoPlayer({
             } else if (e.key === "ArrowRight") {
                 e.preventDefault();
                 stepFrame(1);
+            } else if (e.key === "ArrowUp" && onPrevious) {
+                e.preventDefault();
+                onPrevious();
+            } else if (e.key === "ArrowDown" && onNext) {
+                e.preventDefault();
+                onNext();
             } else if ((e.metaKey || e.ctrlKey) && e.key === "0") {
                 e.preventDefault();
                 resetZoom();
@@ -193,7 +203,7 @@ export default function VideoPlayer({
 
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [onClose]);
+    }, [onClose, onPrevious, onNext]);
 
     // Zoom handler
     const handleWheel = useCallback((e: React.WheelEvent) => {
@@ -575,6 +585,33 @@ export default function VideoPlayer({
                         </button>
 
                         <div className="w-px h-6 bg-white/20 mx-1" />
+
+                        {/* File navigation */}
+                        {(onPrevious || onNext) && (
+                            <>
+                                <button
+                                    onClick={onPrevious}
+                                    disabled={!onPrevious}
+                                    className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-300 transition hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                                    title="Previous file (↑)"
+                                >
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <polyline points="15 18 9 12 15 6" />
+                                    </svg>
+                                </button>
+                                <button
+                                    onClick={onNext}
+                                    disabled={!onNext}
+                                    className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-300 transition hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                                    title="Next file (↓)"
+                                >
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <polyline points="9 18 15 12 9 6" />
+                                    </svg>
+                                </button>
+                                <div className="w-px h-6 bg-white/20 mx-1" />
+                            </>
+                        )}
 
                         {/* Close */}
                         <button

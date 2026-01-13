@@ -110,10 +110,8 @@ export async function expandPrompt(
 
     if (mode === "video") {
         const subMode = referenceImages.length > 0 ? "image_to_video" : "text_to_video";
-        // @ts-ignore - Dynamic access to new structure
         systemPrompt = SYSTEM_PROMPTS.video[promptMode][subMode][type];
     } else {
-        // @ts-ignore - Dynamic access
         systemPrompt = SYSTEM_PROMPTS.image[promptMode][type];
     }
 
@@ -219,5 +217,28 @@ export async function alterPrompt(
 ): Promise<string> {
     const systemPrompt = SYSTEM_PROMPTS.alteration[promptMode][mode];
     const userMessage = `CURRENT PROMPT: \n${currentPrompt}\n\nINSTRUCTION: \n${instruction}`;
+    return callOpenRouter(userMessage, systemPrompt, []);
+}
+
+export async function expandKlingO1ReferencePrompt(
+    userPrompt: string,
+    imageCount: number,
+    elementCount: number
+): Promise<string> {
+    const systemPrompt = SYSTEM_PROMPTS.klingO1Reference;
+
+    // Build context about available references
+    const availableRefs: string[] = [];
+    for (let i = 1; i <= imageCount; i++) {
+        availableRefs.push(`@Image${i}${i === 1 ? ' (start frame)' : ' (style reference)'}`);
+    }
+    for (let i = 1; i <= elementCount; i++) {
+        availableRefs.push(`@Element${i}`);
+    }
+
+    const userMessage = availableRefs.length > 0
+        ? `User prompt: "${userPrompt}"\n\nAvailable references: ${availableRefs.join(', ')}`
+        : `User prompt: "${userPrompt}"`;
+
     return callOpenRouter(userMessage, systemPrompt, []);
 }

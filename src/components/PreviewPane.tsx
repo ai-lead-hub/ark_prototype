@@ -27,8 +27,8 @@ export default function PreviewPane({
   onToggleFullScreen?: () => void;
 }) {
   const {
-    state: { selected, connection },
-    actions: { refreshTree },
+    state: { selected, connection, entries },
+    actions: { refreshTree, select },
   } = useCatalog();
   const { addJob } = useQueue();
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -626,6 +626,23 @@ export default function PreviewPane({
     setPreviewUrl(getFileUrl(connection, selectedRelPath, { includeToken: true }));
   }, [connection, selectedRelPath, selectedKind]);
 
+  // Navigation: get media files only (images/videos) for arrow key navigation
+  const mediaFiles = entries.filter(
+    (e) => e.kind === "file" && (e.mime.startsWith("image") || e.mime.startsWith("video"))
+  );
+  const currentIndex = selected ? mediaFiles.findIndex((e) => e.relPath === selected.relPath) : -1;
+
+  const handleNavigatePrevious = useCallback(() => {
+    if (currentIndex > 0) {
+      select(mediaFiles[currentIndex - 1]);
+    }
+  }, [currentIndex, mediaFiles, select]);
+
+  const handleNavigateNext = useCallback(() => {
+    if (currentIndex >= 0 && currentIndex < mediaFiles.length - 1) {
+      select(mediaFiles[currentIndex + 1]);
+    }
+  }, [currentIndex, mediaFiles, select]);
 
 
   const handleDownload = async () => {
@@ -856,6 +873,8 @@ export default function PreviewPane({
             await refreshTree(relPath);
           }}
           onClose={() => onToggleFullScreen?.()}
+          onPrevious={currentIndex > 0 ? handleNavigatePrevious : undefined}
+          onNext={currentIndex < mediaFiles.length - 1 ? handleNavigateNext : undefined}
         />
       ) : isFullScreen && selected.mime.startsWith("image") && previewUrl && connection ? (
         <ImageEditor
@@ -870,6 +889,8 @@ export default function PreviewPane({
             await refreshTree(relPath);
           }}
           onClose={() => onToggleFullScreen?.()}
+          onPrevious={currentIndex > 0 ? handleNavigatePrevious : undefined}
+          onNext={currentIndex < mediaFiles.length - 1 ? handleNavigateNext : undefined}
         />
       ) : (
         <div className="flex flex-1 flex-col gap-3 overflow-y-auto min-h-0">

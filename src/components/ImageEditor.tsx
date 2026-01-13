@@ -32,6 +32,8 @@ interface ImageEditorProps {
     imageName: string;
     onSave: (blob: Blob, filename: string) => Promise<void>;
     onClose: () => void;
+    onPrevious?: () => void;
+    onNext?: () => void;
 }
 
 const MIN_ZOOM = 0.1;
@@ -43,6 +45,8 @@ export default function ImageEditor({
     imageName,
     onSave,
     onClose,
+    onPrevious,
+    onNext,
 }: ImageEditorProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -797,12 +801,24 @@ export default function ImageEditor({
             } else if (e.key === "0" && (e.metaKey || e.ctrlKey)) {
                 e.preventDefault();
                 handleResetZoom();
+            } else if (e.key === "ArrowUp" && onPrevious) {
+                e.preventDefault();
+                onPrevious();
+            } else if (e.key === "ArrowDown" && onNext) {
+                e.preventDefault();
+                onNext();
+            } else if (e.key === "ArrowLeft" && onPrevious) {
+                e.preventDefault();
+                onPrevious();
+            } else if (e.key === "ArrowRight" && onNext) {
+                e.preventDefault();
+                onNext();
             }
         };
 
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [textInput.visible, tool, cropArea, onClose, handleUndo, handleResetZoom]);
+    }, [textInput.visible, tool, cropArea, onClose, handleUndo, handleResetZoom, onPrevious, onNext]);
 
     return (
         <div

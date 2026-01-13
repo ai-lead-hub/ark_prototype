@@ -16,9 +16,10 @@ export type SpecialModelSpec = {
     endpoint: string;
     provider: "kie" | "fal-client";
     pricing?: string;
-    inputType: "video" | "image" | "both"; // "video" for V2V, "image" for T2V/I2V, "both" for image+video models
+    inputType: "video" | "image" | "both" | "references"; // "video" for V2V, "image" for T2V/I2V, "both" for image+video, "references" for multi-ref+elements
     videoInputConfig?: { min?: number; max: number }; // For video input models
     imageInputConfig?: { startFrame?: boolean; endFrame?: boolean }; // For image input models
+    referencesConfig?: { maxImages: number; supportsElements: boolean }; // For reference models
     params: Record<string, ParamDefinition | undefined>;
     taskConfig?: TaskPollingConfig;
 };
@@ -127,6 +128,33 @@ export const SPECIAL_MODELS: SpecialModelSpec[] = [
             },
         },
     },
+    {
+        id: "kling-o1-reference",
+        label: "Kling O1 Reference",
+        endpoint: "fal-ai/kling-video/o1/reference-to-video",
+        provider: "fal-client",
+        pricing: "$0.04",
+        inputType: "references",
+        referencesConfig: { maxImages: 7, supportsElements: true },
+        params: {
+            prompt: {
+                type: "string",
+                required: true,
+            },
+            duration: {
+                type: "enum",
+                required: false,
+                values: ["5", "10"],
+                default: "5",
+            },
+            aspect_ratio: {
+                type: "enum",
+                required: false,
+                values: ["16:9", "9:16", "1:1"],
+                default: "16:9",
+            },
+        },
+    },
 ];
 
 export const SPECIAL_MODEL_MAP: Record<string, SpecialModelSpec> = Object.fromEntries(
@@ -163,6 +191,12 @@ export type SpecialUnifiedPayload = {
     // Motion Control params
     character_orientation?: string;
     mode?: string;
+    // Reference model params (Kling O1 Reference)
+    image_urls?: string[]; // Reference images for style
+    elements?: Array<{
+        frontal_image_url: string;
+        reference_image_urls?: string[];
+    }>;
 };
 
 type InputValue = string | number | boolean | string[] | undefined;
@@ -224,6 +258,19 @@ export function buildSpecialModelInput(
         if (payload.video_urls) {
             input.video_urls = payload.video_urls;
         }
+    } else if (model.id === "kling-o1-reference") {
+        // Kling O1 Reference: FAL model with references and elements
+        // This model uses direct FAL input format (no model wrapping)
+        return {
+            model: model.endpoint,
+            input: {
+                prompt: payload.prompt,
+                image_urls: payload.image_urls ?? [],
+                elements: payload.elements ?? [],
+                duration: payload.duration ?? "5",
+                aspect_ratio: payload.aspect_ratio ?? "16:9",
+            } as unknown as Record<string, InputValue>,
+        };
     } else {
         // Fallback for unknown models
         kieModelName = model.id;

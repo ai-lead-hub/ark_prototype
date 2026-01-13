@@ -132,7 +132,7 @@ export function LivePreview({
 
     // Film Stock & Camera Body Filters
     const filmFilter = useMemo(() => {
-        let filters = [`brightness(${exposure})`];
+        const filters = [`brightness(${exposure})`];
 
         if (filmStock) {
             if (filmStock.type === 'black-white' || filmStock.id.includes('bw')) {
