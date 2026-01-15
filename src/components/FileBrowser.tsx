@@ -631,6 +631,64 @@ export default function FileBrowser() {
     return orderedEntries.slice(0, visibleCount);
   }, [orderedEntries, visibleCount]);
 
+  // Arrow key navigation for file browser (left/right only, up/down reserved for scrolling)
+  useEffect(() => {
+    const handleArrowNav = (e: KeyboardEvent) => {
+      // Don't navigate if user is typing in an input
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return;
+      }
+      // Don't navigate while editing
+      if (editingId) return;
+      // Don't navigate if modifier keys are pressed
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      const isLeft = e.key === 'ArrowLeft';
+      const isRight = e.key === 'ArrowRight';
+
+      // Only handle left/right arrows, let up/down scroll normally
+      if (!isLeft && !isRight) return;
+
+      e.preventDefault();
+
+      // If nothing selected, select first entry
+      if (!selected && visibleEntries.length > 0) {
+        select(visibleEntries[0]);
+        return;
+      }
+
+      if (!selected) return;
+
+      const currentIndex = visibleEntries.findIndex((entry) => entry.id === selected.id);
+      if (currentIndex === -1) {
+        // Selected file not in visible list, select first
+        if (visibleEntries.length > 0) {
+          select(visibleEntries[0]);
+        }
+        return;
+      }
+
+      let nextIndex = currentIndex;
+      if (isLeft) {
+        nextIndex = currentIndex - 1;
+      } else if (isRight) {
+        nextIndex = currentIndex + 1;
+      }
+
+      // Clamp to valid range
+      if (nextIndex < 0) nextIndex = 0;
+      if (nextIndex >= visibleEntries.length) nextIndex = visibleEntries.length - 1;
+
+      if (nextIndex !== currentIndex) {
+        select(visibleEntries[nextIndex]);
+      }
+    };
+
+    document.addEventListener('keydown', handleArrowNav);
+    return () => document.removeEventListener('keydown', handleArrowNav);
+  }, [selected, visibleEntries, select, editingId]);
+
   // Handle multi-select click with shift support for range selection
   const handleMultiSelectClick = useCallback((entry: FileEntry, event: React.MouseEvent) => {
     if (event.shiftKey && lastClickedIdRef.current && lastClickedIdRef.current !== entry.id) {

@@ -1,21 +1,14 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
-    HORIZONTAL_POSITIONS,
-    VERTICAL_POSITIONS,
     LENS_TYPES,
     APERTURE_STOPS,
-    SHUTTER_SPEEDS,
-    ISO_VALUES,
+    MOTION_BLUR_OPTIONS,
     CAMERA_BODIES,
     FILM_STOCKS,
-    getFramingFromScale,
-    type HorizontalPosition,
-    type VerticalPosition,
     type LensType,
     type ApertureStop,
-    type ShutterSpeed,
-    type IsoValue,
+    type MotionBlur,
     type CameraBody,
     type FilmStock,
 } from '../../lib/photography-presets';
@@ -36,45 +29,47 @@ export function PromptStudio({
     currentPrompt = '',
     initialImages = [],
 }: PromptStudioProps) {
-    const [prompt, setPrompt] = useState(currentPrompt);
+    // Prompt with history for undo/redo
+    const [promptHistory, setPromptHistory] = useState<string[]>([currentPrompt]);
+    const [historyIndex, setHistoryIndex] = useState(0);
+    const prompt = promptHistory[historyIndex];
 
-    // Position state
-    const [horizontalPos, setHorizontalPos] = useState<HorizontalPosition | undefined>(
-        HORIZONTAL_POSITIONS.find(h => h.id === 'perspective')
-    );
-    const [verticalPos, setVerticalPos] = useState<VerticalPosition | undefined>(
-        VERTICAL_POSITIONS.find(v => v.id === 'eye')
-    );
-    const [dutchTilt, setDutchTilt] = useState(0); // -45 to +45 degrees
-    const [framingScale, setFramingScale] = useState(70); // Default to MCU (Medium Close-Up)
+    const setPrompt = useCallback((newPrompt: string) => {
+        setPromptHistory(prev => {
+            const newHistory = prev.slice(0, historyIndex + 1);
+            newHistory.push(newPrompt);
+            return newHistory;
+        });
+        setHistoryIndex(prev => prev + 1);
+    }, [historyIndex]);
 
-    // Camera settings state - Cinematic defaults
-    const [lens, setLens] = useState<LensType | undefined>(
-        LENS_TYPES.find(l => l.id === 'portrait') // 85mm portrait lens
+    const undo = useCallback(() => {
+        if (historyIndex > 0) {
+            setHistoryIndex(prev => prev - 1);
+        }
+    }, [historyIndex]);
+
+    const redo = useCallback(() => {
+        if (historyIndex < promptHistory.length - 1) {
+            setHistoryIndex(prev => prev + 1);
+        }
+    }, [historyIndex, promptHistory.length]);
+
+    // Core controls - with sensible defaults
+    const [lens, setLens] = useState<LensType>(
+        LENS_TYPES.find(l => l.id === '50mm') || LENS_TYPES[2]
     );
-    const [aperture, setAperture] = useState<ApertureStop | undefined>(
-        APERTURE_STOPS.find(a => a.id === 'f2') // Shallow DOF for cinematic look
-    );
-    const [shutterSpeed, setShutterSpeed] = useState<ShutterSpeed | undefined>(
-        SHUTTER_SPEEDS.find(s => s.id === '1/125')
-    );
-    const [iso, setIso] = useState<IsoValue | undefined>(
-        ISO_VALUES.find(i => i.id === 'iso400')
+    const [aperture, setAperture] = useState<ApertureStop>(
+        APERTURE_STOPS.find(a => a.id === 'f2.8') || APERTURE_STOPS[1]
     );
 
-    // Look state
-    const [camera, setCamera] = useState<CameraBody | undefined>(
-        CAMERA_BODIES.find(c => c.id === 'arri')
-    );
-    const [filmStock, setFilmStock] = useState<FilmStock | undefined>(
-        FILM_STOCKS.find(f => f.id === 'portra') // Warm, flattering skin tones
-    );
-    const [useReferences, setUseReferences] = useState(false); // OFF by default
+    // Optional controls - default to "None"
+    const [motionBlur, setMotionBlur] = useState<MotionBlur>(MOTION_BLUR_OPTIONS[0]);
+    const [camera, setCamera] = useState<CameraBody>(CAMERA_BODIES[0]);
+    const [filmStock, setFilmStock] = useState<FilmStock>(FILM_STOCKS[0]);
 
     const [isGenerating, setIsGenerating] = useState(false);
     const [error, setError] = useState<string | null>(null);
-
-    const currentFraming = getFramingFromScale(framingScale);
 
     const handleMagicDraft = async () => {
         if (!prompt.trim()) {
@@ -86,43 +81,28 @@ export function PromptStudio({
         setError(null);
 
         try {
-            const presetParts = [];
+            // Build technical specs - these OVERRIDE any lens/aperture in user text
+            const specs: string[] = [];
 
-            // === CAMERA ANGLE & FRAMING FIRST (for higher weight in prompt) ===
-            // Horizontal angle (front, side, back, etc.)
-            if (horizontalPos) presetParts.push(horizontalPos.value);
-            // Vertical angle (eye level, high angle, low angle, etc.)
-            if (verticalPos) presetParts.push(verticalPos.value);
-            // Framing/shot type (wide, medium, close-up, etc.)
-            presetParts.push(currentFraming.value);
-            // Dutch tilt if non-zero
-            if (dutchTilt !== 0) {
-                const tiltDirection = dutchTilt > 0 ? 'right' : 'left';
-                presetParts.push(`dutch angle tilted ${Math.abs(dutchTilt)}° to the ${tiltDirection}`);
-            }
+            // Core specs (always included - these override user text)
+            specs.push(`REQUIRED: ${lens.lensName}`);
+            specs.push(`REQUIRED: f/${aperture.value} aperture`);
 
-            // === LENS & CAMERA SETTINGS ===
-            if (lens) presetParts.push(`${lens.mm}mm ${lens.name.toLowerCase()} lens`);
-            if (aperture) presetParts.push(`f/${aperture.value} aperture, ${aperture.dof} depth of field`);
-            if (shutterSpeed) presetParts.push(`${shutterSpeed.fraction} shutter speed`);
-            // ISO
-            if (iso) presetParts.push(`ISO ${iso.value}`);
-
-            // === LOOK & STYLE ===
-            if (camera) presetParts.push(`shot on ${camera.name}`);
-            if (filmStock && filmStock.id !== 'neutral') {
-                presetParts.push(`${filmStock.name} film look`);
-            }
+            // Optional specs (only if not "None")
+            if (motionBlur.value) specs.push(motionBlur.value);
+            if (camera.value) specs.push(camera.value);
+            if (filmStock.value) specs.push(filmStock.value);
 
             const expandedPrompt = await expandPromptWithPresets(
                 prompt,
-                presetParts.join('\n'),
-                useReferences && initialImages ? initialImages : []
+                specs.join('\n'),
+                initialImages // Always pass reference images
             );
             setPrompt(expandedPrompt);
         } catch (err) {
-            console.error(err);
-            setError('Failed to generate prompt. Please try again.');
+            console.error('Prompt generation error:', err);
+            const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+            setError(`Failed: ${errorMessage}`);
         } finally {
             setIsGenerating(false);
         }
@@ -130,7 +110,7 @@ export function PromptStudio({
 
     return createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md p-4 animate-in fade-in duration-200">
-            <div className="relative flex h-[90vh] w-full max-w-[1000px] overflow-hidden rounded-xl border border-white/10 bg-[#080808] shadow-2xl">
+            <div className="relative flex h-[80vh] w-full max-w-[850px] overflow-hidden rounded-xl border border-white/10 bg-[#080808] shadow-2xl">
 
                 {/* Close */}
                 <button
@@ -141,26 +121,14 @@ export function PromptStudio({
                 </button>
 
                 {/* Left: Controls */}
-                <div className="w-[45%] h-full border-r border-white/5 bg-[#0a0a0a] overflow-y-auto">
+                <div className="w-[35%] h-full border-r border-white/5 bg-[#0a0a0a] overflow-y-auto">
                     <StudioControls
-                        horizontalPos={horizontalPos}
-                        setHorizontalPos={setHorizontalPos}
-                        verticalPos={verticalPos}
-                        setVerticalPos={setVerticalPos}
-                        dutchTilt={dutchTilt}
-                        setDutchTilt={setDutchTilt}
-                        useReferences={useReferences}
-                        setUseReferences={setUseReferences}
-                        framingScale={framingScale}
-                        setFramingScale={setFramingScale}
                         lens={lens}
                         setLens={setLens}
                         aperture={aperture}
                         setAperture={setAperture}
-                        shutterSpeed={shutterSpeed}
-                        setShutterSpeed={setShutterSpeed}
-                        iso={iso}
-                        setIso={setIso}
+                        motionBlur={motionBlur}
+                        setMotionBlur={setMotionBlur}
                         camera={camera}
                         setCamera={setCamera}
                         filmStock={filmStock}
@@ -168,20 +136,14 @@ export function PromptStudio({
                     />
                 </div>
 
-                {/* Right: Preview */}
-                <div className="w-[55%] h-full bg-black">
+                {/* Right: Preview with References */}
+                <div className="w-[65%] h-full bg-black">
                     <StudioPreview
                         prompt={prompt}
                         setPrompt={setPrompt}
-                        horizontalPos={horizontalPos}
-                        verticalPos={verticalPos}
-                        dutchTilt={dutchTilt}
-                        framingScale={framingScale}
                         lens={lens}
                         aperture={aperture}
-                        iso={iso}
-                        camera={camera}
-                        filmStock={filmStock}
+                        referenceImages={initialImages}
                         onApply={() => {
                             onApply(prompt);
                             onClose();
@@ -189,6 +151,10 @@ export function PromptStudio({
                         onMagicDraft={handleMagicDraft}
                         isGenerating={isGenerating}
                         error={error}
+                        canUndo={historyIndex > 0}
+                        canRedo={historyIndex < promptHistory.length - 1}
+                        onUndo={undo}
+                        onRedo={redo}
                     />
                 </div>
             </div>

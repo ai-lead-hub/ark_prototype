@@ -49,4 +49,20 @@ export const UPSCALE_MODELS: UpscaleModelSpec[] = [
       output_format: "mp4",
     }),
   },
+  {
+    id: "magnific-v2",
+    label: "Magnific V2 (Freepik)",
+    endpoint: "image-upscaler-precision-v2",
+    provider: "freepik",
+    pricing: "API Credits",
+    kind: "image",
+    mapInput: ({ sourceUrl, upscaleFactor }) => ({
+      image: sourceUrl,
+      scale_factor: Number(upscaleFactor || "2"),
+      sharpen: 7,
+      smart_grain: 7,
+      ultra_detail: 30,
+      flavor: "photo",
+    }),
+  },
 ];

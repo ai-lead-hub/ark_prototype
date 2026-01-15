@@ -1,4 +1,5 @@
 import { callFal, callFalSubscribe, getFalKey } from "../fal";
+import { getFreepikKey } from "../freepik";
 import { callKie, getKieKey } from "../kie";
 import type {
   ModelProvider,
@@ -11,6 +12,7 @@ const ENV_MAP: Record<ModelProvider, string> = {
   fal: "VITE_FAL_KEY",
   "fal-client": "VITE_FAL_KEY",
   kie: "VITE_KIE_KEY",
+  freepik: "VITE_FREEPIK_KEY",
 };
 
 export async function callModelEndpoint(
@@ -33,7 +35,9 @@ export function getProviderEnvVar(provider: ModelProvider): string {
 }
 
 export function getProviderKey(provider: ModelProvider): string {
-  return provider === "kie" ? getKieKey() : getFalKey();
+  if (provider === "kie") return getKieKey();
+  if (provider === "freepik") return getFreepikKey();
+  return getFalKey();
 }
 
 export type {

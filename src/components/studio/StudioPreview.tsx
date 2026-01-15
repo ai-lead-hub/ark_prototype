@@ -1,135 +1,130 @@
-import { LivePreview } from '../PromptStudio/LivePreview';
 import { Spinner } from '../ui/Spinner';
-import { getFramingFromScale } from '../../lib/photography-presets';
-import type {
-    HorizontalPosition,
-    VerticalPosition,
-    LensType,
-    ApertureStop,
-    IsoValue,
-    CameraBody,
-    FilmStock,
-} from '../../lib/photography-presets';
+import type { LensType, ApertureStop } from '../../lib/photography-presets';
 
 interface StudioPreviewProps {
     prompt: string;
     setPrompt: (p: string) => void;
-    horizontalPos?: HorizontalPosition;
-    verticalPos?: VerticalPosition;
-    framingScale: number;
-    lens?: LensType;
-    aperture?: ApertureStop;
-    iso?: IsoValue;
-    camera?: CameraBody;
-    filmStock?: FilmStock;
-    dutchTilt?: number;
+    lens: LensType;
+    aperture: ApertureStop;
+    referenceImages: string[];
     onApply: () => void;
     onMagicDraft: () => void;
     isGenerating: boolean;
     error: string | null;
+    // Undo/Redo
+    canUndo: boolean;
+    canRedo: boolean;
+    onUndo: () => void;
+    onRedo: () => void;
 }
 
 export function StudioPreview({
     prompt,
     setPrompt,
-    horizontalPos,
-    verticalPos,
-    framingScale,
     lens,
     aperture,
-    iso,
-    camera,
-    filmStock,
-    dutchTilt,
+    referenceImages,
     onApply,
     onMagicDraft,
     isGenerating,
     error,
+    canUndo,
+    canRedo,
+    onUndo,
+    onRedo,
 }: StudioPreviewProps) {
-    const currentFraming = getFramingFromScale(framingScale);
-
     return (
         <div className="flex h-full flex-col bg-black">
-            {/* 3D Preview Area - Constrained to prevent pushing prompt box down */}
-            <div className="flex-shrink-0 flex items-center justify-center bg-black overflow-hidden p-6 min-h-0">
-                <div className="relative w-full max-w-[800px] aspect-video shadow-2xl overflow-hidden rounded-lg border border-white/5 bg-[#0a0a0a]">
-                    <LivePreview
-                        horizontalPos={horizontalPos}
-                        verticalPos={verticalPos}
-                        framingScale={framingScale}
-                        lens={lens}
-                        aperture={aperture}
-                        iso={iso}
-                        camera={camera}
-                        filmStock={filmStock}
-                        roll={dutchTilt}
-                    />
 
-                    {/* HUD Overlay */}
-                    <div className="absolute inset-0 pointer-events-none p-4 flex flex-col justify-between">
-                        {/* Top HUD */}
-                        <div className="flex justify-between items-start">
-                            <div className="text-[9px] font-mono bg-black/70 backdrop-blur px-2 py-1.5 rounded border border-white/10">
-                                <div className="text-green-400 font-bold flex items-center gap-1.5">
-                                    <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
-                                    REC
-                                </div>
-                            </div>
-                            <div className="text-right text-[9px] font-mono bg-black/70 backdrop-blur px-2 py-1.5 rounded border border-white/10">
-                                <div className="text-sky-400 font-bold">{currentFraming.abbr}</div>
-                                <div className="text-white/60">{horizontalPos?.name} • {verticalPos?.name}</div>
-                            </div>
-                        </div>
+            {/* Reference Images Display */}
+            <div className="flex-shrink-0 p-4 bg-[#0a0a0a] border-b border-white/5">
+                <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                        Reference Images
+                    </h3>
+                    <span className="text-[9px] text-slate-500">
+                        {referenceImages.length > 0 ? `${referenceImages.length} image${referenceImages.length > 1 ? 's' : ''}` : 'None uploaded'}
+                    </span>
+                </div>
 
-                        {/* Bottom HUD */}
-                        <div className="flex justify-between items-end">
-                            <div className="text-[9px] font-mono bg-black/70 backdrop-blur px-2 py-1.5 rounded border border-white/10">
-                                <div className="text-amber-400 font-bold">
-                                    {lens?.name} • f/{aperture?.value} • ISO {iso?.value}
-                                </div>
-                                {camera && <div className="text-white/50">{camera.name}</div>}
+                {referenceImages.length > 0 ? (
+                    <div className="grid grid-cols-3 gap-2">
+                        {referenceImages.map((img, idx) => (
+                            <div
+                                key={idx}
+                                className="aspect-square rounded-lg overflow-hidden border border-white/10 bg-black/50"
+                            >
+                                <img
+                                    src={img}
+                                    alt={`Reference ${idx + 1}`}
+                                    className="w-full h-full object-cover"
+                                />
                             </div>
-                            {filmStock && filmStock.id !== 'neutral' && (
-                                <div className="flex items-center gap-1.5 text-[9px] font-mono bg-black/70 backdrop-blur px-2 py-1.5 rounded border border-white/10">
-                                    <span
-                                        className="w-2.5 h-2.5 rounded-full"
-                                        style={{ background: `linear-gradient(135deg, ${filmStock.colors.highlights}, ${filmStock.colors.midtones})` }}
-                                    />
-                                    <span className="text-purple-300">{filmStock.name}</span>
-                                </div>
-                            )}
-                        </div>
+                        ))}
                     </div>
-
-                    {/* Grid overlay */}
-                    <div className="absolute inset-0 pointer-events-none opacity-10">
-                        <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
-                            <defs>
-                                <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                                    <path d="M 40 0 L 0 0 0 40" fill="none" stroke="white" strokeWidth="0.5" />
-                                </pattern>
-                            </defs>
-                            <rect width="100%" height="100%" fill="url(#grid)" />
-                        </svg>
+                ) : (
+                    <div className="flex items-center justify-center h-20 rounded-lg border border-dashed border-white/10 bg-white/5">
+                        <span className="text-[10px] text-slate-500">
+                            References uploaded in Controls will appear here
+                        </span>
                     </div>
+                )}
+            </div>
+
+            {/* Settings Summary HUD */}
+            <div className="flex-shrink-0 p-3 bg-black/80 border-b border-white/5">
+                <div className="flex flex-wrap gap-2 text-[9px] font-mono">
+                    <span className="px-2 py-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        {lens.lensName}
+                    </span>
+                    <span className="px-2 py-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        f/{aperture.value}
+                    </span>
+                    <span className="text-[9px] text-slate-500 flex items-center">
+                        Framing & angle inferred from your description
+                    </span>
                 </div>
             </div>
 
-            {/* Bottom Input - Expanded to fill remaining space */}
-            <div className="flex-1 min-h-0 flex flex-col p-3 bg-[#0a0a0a] border-t border-white/5 space-y-2">
+            {/* Prompt Input - Expanded to fill remaining space */}
+            <div className="flex-1 min-h-0 flex flex-col p-3 bg-[#0a0a0a] space-y-2">
 
                 <div className="relative flex-1">
                     <textarea
                         value={prompt}
                         onChange={(e) => setPrompt(e.target.value)}
-                        placeholder="Describe your subject and scene..."
-                        className="w-full h-full rounded-lg border border-white/10 bg-black/50 px-3 py-2 pr-8 text-sm text-white placeholder:text-slate-600 outline-none focus:border-sky-500 resize-none"
+                        placeholder="Describe your subject, scene, framing, and angle..."
+                        className="w-full h-full rounded-lg border border-white/10 bg-black/50 px-3 py-2 pr-8 pb-10 text-sm text-white placeholder:text-slate-600 outline-none focus:border-sky-500 resize-none"
                     />
+
+                    {/* Bottom left: Undo/Redo */}
+                    <div className="absolute bottom-2 left-2 flex gap-1">
+                        <button
+                            type="button"
+                            onClick={onUndo}
+                            disabled={!canUndo || isGenerating}
+                            className="flex h-7 w-7 items-center justify-center rounded-md border border-rose-500/30 bg-rose-500/20 text-rose-200 transition hover:bg-rose-500/30 hover:text-white disabled:opacity-30"
+                            title="Undo"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6" /><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" /></svg>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={onRedo}
+                            disabled={!canRedo || isGenerating}
+                            className="flex h-7 w-7 items-center justify-center rounded-md border border-rose-500/30 bg-rose-500/20 text-rose-200 transition hover:bg-rose-500/30 hover:text-white disabled:opacity-30"
+                            title="Redo"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 7v6h-6" /><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13" /></svg>
+                        </button>
+                    </div>
+
+                    {/* Bottom right: Clear button */}
                     {prompt && (
                         <button
                             type="button"
                             onClick={() => setPrompt('')}
-                            className="absolute right-2 top-2 text-white/30 hover:text-white transition-colors"
+                            className="absolute right-2 bottom-2 text-white/30 hover:text-white transition-colors h-7 w-7 flex items-center justify-center"
                             title="Clear prompt"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">

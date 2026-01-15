@@ -123,90 +123,43 @@ export async function expandPromptWithPresets(
     technicalSpecs: string,
     referenceImages: string[] = []
 ): Promise<string> {
-    // Import the dedicated studio prompt
+    // Import the dedicated studio prompt and FAL upload
     const { STUDIO_PROMPT } = await import('./prompts');
+    const { uploadToFal } = await import('./fal');
 
-    // Parse the technical specs into structured fields
-    const specLines = technicalSpecs.split('\n').filter(line => line.trim());
+    // Build simple, natural input format for the LLM
+    const structuredInput = `
+[SCENE]: ${userContext}
 
-    // Extract specific values from the spec lines
-    let angle = '';
-    let framing = '';
-    let lens = '';
-    let dutchTilt = '';
-    let aperture = '';
-    let shutter = '';
-    let camera = '';
-    let stock = '';
-    let iso = '';
+[SETTINGS]: ${technicalSpecs}
+`.trim();
 
-    for (const line of specLines) {
-        const lowerLine = line.toLowerCase();
-
-        // Angle detection (horizontal + vertical)
-        if (lowerLine.includes('angle') || lowerLine.includes('level') ||
-            lowerLine.includes('overhead') || lowerLine.includes('worm') ||
-            lowerLine.includes('front') || lowerLine.includes('side') ||
-            lowerLine.includes('back') || lowerLine.includes('perspective')) {
-            angle = angle ? `${angle}, ${line}` : line;
-        }
-        // Framing detection
-        else if (lowerLine.includes('shot') || lowerLine.includes('close-up') ||
-            lowerLine.includes('closeup') || lowerLine.includes('wide') ||
-            lowerLine.includes('medium') || lowerLine.includes('full')) {
-            framing = line;
-        }
-        // Dutch tilt
-        else if (lowerLine.includes('dutch') || lowerLine.includes('tilt')) {
-            dutchTilt = line;
-        }
-        // Lens
-        else if (lowerLine.includes('lens') || lowerLine.includes('mm ')) {
-            lens = line;
-        }
-        // Aperture
-        else if (lowerLine.includes('f/') || lowerLine.includes('aperture')) {
-            aperture = line;
-        }
-        // Shutter
-        else if (lowerLine.includes('shutter') || lowerLine.match(/1\/\d+/)) {
-            shutter = line;
-        }
-        // Camera
-        else if (lowerLine.includes('shot on') || lowerLine.includes('arri') ||
-            lowerLine.includes('red') || lowerLine.includes('sony') ||
-            lowerLine.includes('panavision') || lowerLine.includes('film') ||
-            lowerLine.includes('imax')) {
-            camera = line;
-        }
-        // Film stock
-        else if (lowerLine.includes('portra') || lowerLine.includes('cinestill') ||
-            lowerLine.includes('velvia') || lowerLine.includes('gold') ||
-            lowerLine.includes('tri-x') || lowerLine.includes('film look')) {
-            stock = line;
-        }
-        // ISO
-        else if (lowerLine.includes('iso')) {
-            iso = line;
+    // Convert blob URLs to FAL-hosted URLs (OpenRouter can't access blob: URLs)
+    const processedImages: string[] = [];
+    for (const imageUrl of referenceImages) {
+        if (imageUrl.startsWith('blob:')) {
+            try {
+                console.log('[PromptStudio] Uploading blob to FAL...');
+                const response = await fetch(imageUrl);
+                const blob = await response.blob();
+                const file = new File([blob], 'reference.jpg', { type: blob.type || 'image/jpeg' });
+                const falUrl = await uploadToFal(file);
+                console.log('[PromptStudio] Uploaded to FAL:', falUrl);
+                processedImages.push(falUrl);
+            } catch (err) {
+                console.warn('[PromptStudio] Failed to upload blob to FAL:', err);
+                // Skip this image if upload fails
+            }
+        } else if (imageUrl.startsWith('data:') || imageUrl.startsWith('http')) {
+            // Already a data URL or remote URL - use as-is
+            processedImages.push(imageUrl);
         }
     }
 
-    // Build structured input format for the VLM
-    const structuredInput = `
-[SCENE]: ${userContext}
-[ANGLE]: ${angle || 'Not specified'}
-[FRAMING]: ${framing || 'Not specified'}
-[LENS]: ${lens || 'Not specified'}
-[DUTCH_TILT]: ${dutchTilt || '0'}
-[APERTURE]: ${aperture || 'Not specified'}
-[SHUTTER]: ${shutter || 'Not specified'}
-[CAMERA]: ${camera || 'Not specified'}
-[STOCK]: ${stock || 'Not specified'}
-[ISO]: ${iso || 'Not specified'}
-`.trim();
+    console.log('[PromptStudio] Processed', processedImages.length, 'of', referenceImages.length, 'images');
 
-    // Use the dedicated STUDIO_PROMPT with the structured input
-    return callOpenRouter(structuredInput, STUDIO_PROMPT, referenceImages);
+    // Use the simplified STUDIO_PROMPT with the structured input
+    return callOpenRouter(structuredInput, STUDIO_PROMPT, processedImages);
 }
 
 export async function alterPrompt(

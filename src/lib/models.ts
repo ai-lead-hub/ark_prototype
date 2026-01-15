@@ -123,6 +123,34 @@ const jsonSpecs =
       };
     }
 
+    // Adapter for FAL Kling V2.6 Pro I2V
+    if (model.id === "kling-2.6-pro-fal") {
+      model.adapter = {
+        mapInput: (unified) => {
+          if (!unified.start_frame_url) {
+            throw new Error("Start frame is required for Kling V2.6 Pro (FAL).");
+          }
+          const duration = String(unified.duration ?? "5");
+          const input: Record<string, FalInputValue> = {
+            prompt: unified.prompt,
+            start_image_url: unified.start_frame_url,
+            duration,
+            negative_prompt: unified.negative_prompt ?? "blur, distort, and low quality",
+            generate_audio: unified.generate_audio ?? false,
+          };
+          if (unified.end_frame_url) {
+            input.end_image_url = unified.end_frame_url;
+          }
+          return input;
+        },
+        getVideoUrl: (data) => {
+          // FAL returns { video: { url: "..." } }
+          const video = (data as { video?: { url?: string } })?.video;
+          return video?.url;
+        },
+      };
+    }
+
     // Adapter for LTX-2 (supports both I2V and T2V)
     if (model.id === "ltx-2") {
       model.adapter = {

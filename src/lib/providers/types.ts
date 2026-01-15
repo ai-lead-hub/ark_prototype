@@ -1,4 +1,4 @@
-export type ModelProvider = "fal" | "kie" | "fal-client";
+export type ModelProvider = "fal" | "kie" | "fal-client" | "freepik";
 
 export type ProviderCallResult = {
   url?: string;

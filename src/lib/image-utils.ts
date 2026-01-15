@@ -210,3 +210,104 @@ function lanczosResize(img: HTMLImageElement, destData: ImageData) {
         }
     }
 }
+
+/**
+ * Downscale an image to 1080p max (1920x1080) for Magnific upscaling.
+ * If the image is already smaller, returns the original.
+ * Uses high-quality PNG output to preserve details for upscaling.
+ */
+export async function downscaleForMagnific(file: File): Promise<File> {
+    if (!file.type.startsWith("image/")) {
+        return file;
+    }
+
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+
+        img.onload = () => {
+            URL.revokeObjectURL(url);
+
+            const maxWidth = 1920;
+            const maxHeight = 1080;
+            let { width, height } = img;
+
+            // Check if downscaling is needed
+            const needsResize = width > maxWidth || height > maxHeight;
+            if (!needsResize) {
+                // Return original as PNG for consistency
+                const canvas = document.createElement("canvas");
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext("2d");
+                if (!ctx) {
+                    reject(new Error("Failed to get canvas context"));
+                    return;
+                }
+                ctx.drawImage(img, 0, 0);
+                canvas.toBlob(
+                    (blob) => {
+                        if (!blob) {
+                            reject(new Error("Canvas toBlob failed"));
+                            return;
+                        }
+                        const newFile = new File(
+                            [blob],
+                            file.name.replace(/\.[^/.]+$/, "") + ".png",
+                            { type: "image/png", lastModified: Date.now() }
+                        );
+                        resolve(newFile);
+                    },
+                    "image/png"
+                );
+                return;
+            }
+
+            // Calculate new dimensions maintaining aspect ratio
+            const widthRatio = maxWidth / width;
+            const heightRatio = maxHeight / height;
+            const ratio = Math.min(widthRatio, heightRatio);
+
+            const newWidth = Math.round(width * ratio);
+            const newHeight = Math.round(height * ratio);
+
+            const canvas = document.createElement("canvas");
+            canvas.width = newWidth;
+            canvas.height = newHeight;
+
+            const ctx = canvas.getContext("2d");
+            if (!ctx) {
+                reject(new Error("Failed to get canvas context"));
+                return;
+            }
+
+            // Use high quality settings
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = "high";
+            ctx.drawImage(img, 0, 0, newWidth, newHeight);
+
+            canvas.toBlob(
+                (blob) => {
+                    if (!blob) {
+                        reject(new Error("Canvas toBlob failed"));
+                        return;
+                    }
+                    const newFile = new File(
+                        [blob],
+                        file.name.replace(/\.[^/.]+$/, "") + ".png",
+                        { type: "image/png", lastModified: Date.now() }
+                    );
+                    resolve(newFile);
+                },
+                "image/png"
+            );
+        };
+
+        img.onerror = (err) => {
+            URL.revokeObjectURL(url);
+            reject(err);
+        };
+
+        img.src = url;
+    });
+}

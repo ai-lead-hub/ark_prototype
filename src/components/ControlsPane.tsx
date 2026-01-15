@@ -56,6 +56,7 @@ import {
   type ControlsFileRef,
 } from "../lib/controls-store";
 import { recordRecentReference } from "../lib/recent-references";
+import { useRandomizeSeed } from "../lib/useRandomizeSeed";
 
 import { type UploadSlot } from "./UpscaleControls";
 import { UploadZone } from "./UploadZone";
@@ -269,7 +270,7 @@ export default function ControlsPane() {
   const [videoInputUploads, setVideoInputUploads] = useState<ReferenceUpload[]>([]);
 
   const [aspectRatio, setAspectRatio] = usePersistentState("aspectRatio", "16:9");
-  const [randomizeSeed, setRandomizeSeed] = usePersistentState("randomizeSeed", false);
+  const [randomizeSeed] = useRandomizeSeed();
   const [imageResolution, setImageResolution] = useState("1K");
   const [status, setStatus] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -2611,23 +2612,6 @@ export default function ControlsPane() {
                   </select>
                 </div>
               ) : null}
-
-              {/* Randomize Seed Toggle */}
-              <div className="flex items-center justify-between py-1">
-                <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                  Randomize Seed
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setRandomizeSeed(!randomizeSeed)}
-                  disabled={isSubmitting || isExpanding}
-                  className={`relative h-5 w-9 rounded-full transition-colors ${randomizeSeed ? "bg-sky-500" : "bg-white/20"} ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
-                >
-                  <span
-                    className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${randomizeSeed ? "translate-x-4" : "translate-x-0"}`}
-                  />
-                </button>
-              </div>
             </div>
 
           </div>
@@ -2930,23 +2914,6 @@ export default function ControlsPane() {
                 </select>
               </div>
             )}
-
-            {/* Randomize Seed Toggle */}
-            <div className="flex items-center justify-between py-1">
-              <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                Randomize Seed
-              </label>
-              <button
-                type="button"
-                onClick={() => setRandomizeSeed(!randomizeSeed)}
-                disabled={isSubmitting || isExpanding}
-                className={`relative h-5 w-9 rounded-full transition-colors ${randomizeSeed ? "bg-sky-500" : "bg-white/20"} ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
-              >
-                <span
-                  className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${randomizeSeed ? "translate-x-4" : "translate-x-0"}`}
-                />
-              </button>
-            </div>
 
             {/* Reference Images (for video models that support it) */}
             {referenceLimit > 0 ? (

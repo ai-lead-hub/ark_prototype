@@ -9,10 +9,10 @@ import { downloadBlob } from "../lib/providers/shared";
 import { callModelEndpoint, getProviderEnvVar, getProviderKey, type ModelProvider, type ProviderCallOptions } from "../lib/providers";
 import { buildFilename } from "../lib/filename";
 import { uploadToFal } from "../lib/fal";
-import { compressImage } from "../lib/image-utils";
+import { callMagnificUpscale, imageToBase64 } from "../lib/freepik";
+import { compressImage, downscaleForMagnific } from "../lib/image-utils";
 import { recordFileMetadata, recordGeneration } from "../lib/api/meta";
 import { enqueueControlsAction } from "../lib/controls-store";
-import { recordRecentReference } from "../lib/recent-references";
 import ImageEditor from "./ImageEditor";
 import VideoPlayer from "./VideoPlayer";
 
@@ -46,6 +46,7 @@ export default function PreviewPane({
   const [cropStatus, setCropStatus] = useState<string | null>(null);
   const [upscaleBusy, setUpscaleBusy] = useState(false);
   const [upscaleStatus, setUpscaleStatus] = useState<string | null>(null);
+  const [showUpscaleMenu, setShowUpscaleMenu] = useState(false);
   const [quickStatus, setQuickStatus] = useState<string | null>(null);
   const cropPresets = [
     { value: "16:9", label: "16:9" },
@@ -85,53 +86,6 @@ export default function PreviewPane({
     setQuickStatus(null);
   }, [selected?.id]);
 
-  const workspaceKey = connection
-    ? `${connection.apiBase}|${connection.workspaceId}`
-    : "";
-
-  const pushControlsFileAction = useCallback(
-    (type: "useStartFrame" | "useEndFrame" | "addReferenceImage") => {
-      if (!connection || !selected || selected.kind !== "file") return;
-
-      if (!selected.mime.startsWith("image/")) {
-        setQuickStatus("Select an image file to use it as a frame/reference.");
-        setTimeout(() => setQuickStatus(null), 2500);
-        return;
-      }
-
-      enqueueControlsAction({
-        type,
-        file: {
-          workspaceId: connection.workspaceId,
-          relPath: selected.relPath,
-          name: selected.name,
-          mime: selected.mime,
-        },
-      });
-
-      if (workspaceKey) {
-        recordRecentReference(
-          workspaceKey,
-          { relPath: selected.relPath, name: selected.name, mime: selected.mime },
-          type === "useStartFrame"
-            ? "startFrame"
-            : type === "useEndFrame"
-              ? "endFrame"
-              : "reference"
-        );
-      }
-
-      setQuickStatus(
-        type === "useStartFrame"
-          ? "Sent to Controls: Start frame"
-          : type === "useEndFrame"
-            ? "Sent to Controls: End frame"
-            : "Sent to Controls: Reference image"
-      );
-      setTimeout(() => setQuickStatus(null), 2000);
-    },
-    [connection, selected, workspaceKey]
-  );
 
   const pushRecreateAction = useCallback(() => {
     if (!connection || !selected || selected.kind !== "file") return;
@@ -611,6 +565,122 @@ export default function PreviewPane({
     }
   }, [connection, selected, previewUrl, refreshTree, addJob]);
 
+  const handleMagnificUpscale = useCallback(async () => {
+    if (!connection || !selected || selected.kind !== "file") {
+      setUpscaleStatus("No file selected.");
+      return;
+    }
+    if (!selected.mime.startsWith("image")) {
+      setUpscaleStatus("Magnific upscaling is only available for images.");
+      return;
+    }
+    if (!previewUrl) {
+      setUpscaleStatus("No file available to upscale.");
+      return;
+    }
+
+    setUpscaleBusy(true);
+    setShowUpscaleMenu(false);
+    setUpscaleStatus("Preparing image for Magnific...");
+
+    try {
+      // Fetch the image
+      const response = await fetch(previewUrl);
+      const blob = await response.blob();
+      const file = new File([blob], selected.name, { type: selected.mime });
+
+      // Downscale to 1080p if larger
+      setUpscaleStatus("Downscaling to 1080p if needed...");
+      const processedFile = await downscaleForMagnific(file);
+
+      // Convert to base64 for Magnific API
+      setUpscaleStatus("Encoding image...");
+      const base64Image = await imageToBase64(processedFile);
+
+      // Add job to queue
+      addJob(
+        "upscale",
+        `Magnific Upscale ${selected.name}`,
+        {
+          base64Image,
+          modelId: "magnific-v2",
+          category: "image",
+          provider: "freepik",
+          connection,
+          refreshTree,
+          selectedRelPath: selected.relPath,
+          selectedName: selected.name,
+        },
+        async (data: unknown, log) => {
+          const {
+            base64Image: imageData,
+            connection: conn,
+            refreshTree: refresh,
+            selectedRelPath: relPath,
+          } = data as {
+            base64Image: string;
+            connection: WorkspaceConnection;
+            refreshTree: (path?: string) => Promise<void>;
+            selectedRelPath: string;
+            selectedName: string;
+          };
+
+          log("Calling Magnific V2 API (this may take 3-5 minutes)...");
+          const result = await callMagnificUpscale(
+            {
+              image: imageData,
+              scaleFactor: 2,
+              flavor: "sublime",
+            },
+            log
+          );
+
+          if (!result.blob) {
+            throw new Error("No result from Magnific API");
+          }
+
+          log("Saving upscaled image to workspace...");
+          const filename = buildFilename("magnific-v2", "upscale", "png", "");
+          const directoryParts = relPath.split("/");
+          directoryParts.pop();
+          const baseDir = directoryParts.join("/");
+          const outputPath = baseDir ? `${baseDir}/${filename}` : filename;
+
+          await uploadFile(conn, outputPath, result.blob);
+          try {
+            await recordGeneration(conn, {
+              workspaceId: conn.workspaceId,
+              outputRelPath: outputPath,
+              outputMime: result.blob.type || "image/png",
+              outputSize: result.blob.size,
+              category: "upscale",
+              modelId: "magnific-v2",
+              provider: "freepik",
+              endpoint: "image-upscaler-precision-v2",
+              prompt: "Magnific 2x Upscale (Sublime)",
+              seed: "",
+              payload: { scaleFactor: 2, flavor: "sublime" },
+            });
+          } catch (error) {
+            log(`Metadata write failed: ${error instanceof Error ? error.message : String(error)}`);
+          }
+          await refresh(outputPath);
+
+          return result.url || "Upscale complete";
+        }
+      );
+
+      setUpscaleStatus("Magnific upscale job queued (may take 3-5 min).");
+      setTimeout(() => setUpscaleStatus(null), 4000);
+
+    } catch (error) {
+      console.error("Magnific upscale failed:", error);
+      setUpscaleStatus(`Magnific failed: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setUpscaleBusy(false);
+    }
+  }, [connection, selected, previewUrl, refreshTree, addJob]);
+
   const selectedRelPath = selected?.relPath;
   const selectedKind = selected?.kind;
 
@@ -1070,14 +1140,43 @@ export default function PreviewPane({
                       >
                         {cropBusy ? "Cropping…" : "Crop"}
                       </button>
-                      <button
-                        type="button"
-                        disabled={upscaleBusy}
-                        onClick={() => void handleUpscale()}
-                        className="rounded-lg border border-white/10 px-3 py-1 text-xs font-semibold text-slate-100 transition hover:border-sky-400 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {upscaleBusy ? "Upscaling…" : "Upscale"}
-                      </button>
+                      {/* Upscale split button: main button = SeedVR, dropdown = Magnific */}
+                      <div className="relative flex">
+                        <button
+                          type="button"
+                          disabled={upscaleBusy}
+                          onClick={() => void handleUpscale()}
+                          className="rounded-l-lg border border-r-0 border-white/10 px-3 py-1 text-xs font-semibold text-slate-100 transition hover:border-sky-400 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {upscaleBusy ? "Upscaling…" : "Upscale"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={upscaleBusy}
+                          onClick={() => setShowUpscaleMenu(!showUpscaleMenu)}
+                          className="rounded-r-lg border border-white/10 px-1.5 py-1 text-slate-100 transition hover:border-sky-400 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
+                          title="More upscale options"
+                        >
+                          <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+                        {showUpscaleMenu && !upscaleBusy && (
+                          <div className="absolute left-0 bottom-full z-50 mb-1 min-w-[160px] rounded-lg border border-white/20 bg-slate-900 py-1 shadow-xl">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowUpscaleMenu(false);
+                                void handleMagnificUpscale();
+                              }}
+                              className="w-full px-3 py-2 text-left text-xs text-slate-200 hover:bg-white/10"
+                            >
+                              <div className="font-medium">Magnific 2x</div>
+                              <div className="text-[10px] text-slate-400">Premium quality (3-5 min)</div>
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center gap-2">
                       <button
@@ -1088,33 +1187,6 @@ export default function PreviewPane({
                         aria-label="Recreate"
                       >
                         ⟳
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => pushControlsFileAction("useStartFrame")}
-                        className="rounded-lg border border-white/10 p-1.5 text-slate-100 transition hover:border-emerald-400 hover:text-emerald-200"
-                        title="Use as start frame"
-                        aria-label="Use as start frame"
-                      >
-                        ⏮
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => pushControlsFileAction("useEndFrame")}
-                        className="rounded-lg border border-white/10 p-1.5 text-slate-100 transition hover:border-emerald-400 hover:text-emerald-200"
-                        title="Use as end frame"
-                        aria-label="Use as end frame"
-                      >
-                        ⏭
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => pushControlsFileAction("addReferenceImage")}
-                        className="rounded-lg border border-white/10 p-1.5 text-slate-100 transition hover:border-sky-400 hover:text-sky-200"
-                        title="Add as reference image"
-                        aria-label="Add as reference image"
-                      >
-                        ⊕
                       </button>
                       <button
                         type="button"
