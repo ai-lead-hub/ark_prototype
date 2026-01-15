@@ -638,7 +638,9 @@ export default function ImageEditor({
         });
 
         const baseName = imageName.replace(/\.[^.]+$/, "");
-        const filename = `${baseName}_cropped.png`;
+        // Add timestamp to prevent overwriting previous crops of the same file
+        const timestamp = Date.now();
+        const filename = `${baseName}_cropped_${timestamp}.png`;
 
         setSaving(true);
         setStatus("Saving cropped image...");

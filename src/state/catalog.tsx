@@ -94,7 +94,11 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
         setQuery: (value: string) => setQ(value),
         rename: async (entry: FileEntry, newName: string) => {
           if (!connection) return;
-          const newPath = entry.relPath.replace(entry.name, newName);
+          // Properly construct new path by replacing only the filename at the end
+          // Using replace() is buggy if the filename appears in a parent folder name
+          const lastSlashIndex = entry.relPath.lastIndexOf('/');
+          const directory = lastSlashIndex >= 0 ? entry.relPath.substring(0, lastSlashIndex + 1) : '';
+          const newPath = directory + newName;
           await renameFile(connection, entry.relPath, newPath);
           await refreshTree(newPath);
         },

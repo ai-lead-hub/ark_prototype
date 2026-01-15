@@ -179,7 +179,10 @@ export default function FileBrowser() {
       return;
     }
     const nextName = editName.trim();
-    const newPath = entry.relPath.replace(entry.name, nextName);
+    // Properly construct new path by replacing only the filename at the end
+    const lastSlashIndex = entry.relPath.lastIndexOf('/');
+    const directory = lastSlashIndex >= 0 ? entry.relPath.substring(0, lastSlashIndex + 1) : '';
+    const newPath = directory + nextName;
     setOperationLoading(entry.id);
     try {
       await rename(entry, nextName);

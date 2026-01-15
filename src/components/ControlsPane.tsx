@@ -1951,7 +1951,9 @@ export default function ControlsPane() {
             aspect_ratio: paramValues.aspect_ratio as string | undefined,
           });
 
-          payload = specialPayload;
+          // For fal-client provider, use just the input part since callFalSubscribe wraps it
+          // For kie provider, use the full payload structure
+          payload = selectedSpecial.provider === "fal-client" ? specialPayload.input : specialPayload;
         }
 
 
@@ -2343,7 +2345,7 @@ export default function ControlsPane() {
                     if (showAutocomplete) {
                       const imgCount = referenceUploads.filter(r => r.file || r.url).length;
                       const options: string[] = [];
-                      for (let i = 1; i <= imgCount; i++) options.push(`@Img${i}`);
+                      for (let i = 1; i <= imgCount; i++) options.push(`@img${i}`);
 
                       if (options.length > 0) {
                         if (event.key === "ArrowDown") {
@@ -2384,7 +2386,7 @@ export default function ControlsPane() {
                       }
                     }
                   }}
-                  placeholder="Type @ to reference uploaded images (e.g., @Img1)..."
+                  placeholder="Type @ to reference uploaded images (e.g., @img1)..."
                   rows={6}
                   disabled={isSubmitting || isExpanding}
                   className={`w-full rounded-2xl border border-white/10 bg-black/40 px-3 py-3 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 pb-10 ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
@@ -2396,7 +2398,7 @@ export default function ControlsPane() {
                   if (imgCount === 0) return null;
 
                   const options = referenceUploads.filter(r => r.file || r.url).map((r, idx) => ({
-                    label: `@Img${idx + 1}`,
+                    label: `@img${idx + 1}`,
                     preview: r.preview,
                     name: r.name
                   }));
@@ -3498,7 +3500,7 @@ export default function ControlsPane() {
                       </div>
                       <div className="flex items-start gap-2">
                         {/* Frontal */}
-                        {el.frontalUrl ? (
+                        {(el.frontalUrl || el.frontalFile || el.frontalPreview) ? (
                           <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded border border-white/10 group">
                             <img src={el.frontalPreview} className="h-full w-full object-cover" alt="Frontal" />
                             {el.frontalUploading && <div className="absolute inset-0 flex items-center justify-center bg-black/50"><Spinner size="sm" /></div>}
@@ -3514,11 +3516,12 @@ export default function ControlsPane() {
                         ) : (
                           <div
                             className="flex h-14 w-14 shrink-0 cursor-pointer flex-col items-center justify-center rounded border border-dashed border-white/20 text-[9px] text-slate-400 hover:border-sky-400 transition"
-                            onDragEnter={(e) => e.preventDefault()}
-                            onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("border-sky-400", "bg-sky-500/10"); }}
-                            onDragLeave={(e) => { e.preventDefault(); e.currentTarget.classList.remove("border-sky-400", "bg-sky-500/10"); }}
+                            onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                            onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.add("border-sky-400", "bg-sky-500/10"); }}
+                            onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.remove("border-sky-400", "bg-sky-500/10"); }}
                             onDrop={async (e) => {
                               e.preventDefault();
+                              e.stopPropagation();
                               e.currentTarget.classList.remove("border-sky-400", "bg-sky-500/10");
                               const files = await extractFilesFromDataTransfer(e.dataTransfer);
                               const imageFile = files.find((f) => f.type.startsWith("image/"));
@@ -3558,11 +3561,12 @@ export default function ControlsPane() {
                           {el.referenceImages.length < 3 && (
                             <div
                               className="flex h-10 w-10 cursor-pointer items-center justify-center rounded border border-dashed border-white/10 text-slate-500 hover:border-sky-400 hover:text-sky-400 transition"
-                              onDragEnter={(e) => e.preventDefault()}
-                              onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("border-sky-400", "bg-sky-500/10"); }}
-                              onDragLeave={(e) => { e.preventDefault(); e.currentTarget.classList.remove("border-sky-400", "bg-sky-500/10"); }}
+                              onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.add("border-sky-400", "bg-sky-500/10"); }}
+                              onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.remove("border-sky-400", "bg-sky-500/10"); }}
                               onDrop={async (e) => {
                                 e.preventDefault();
+                                e.stopPropagation();
                                 e.currentTarget.classList.remove("border-sky-400", "bg-sky-500/10");
                                 const files = await extractFilesFromDataTransfer(e.dataTransfer);
                                 const imageFile = files.find((f) => f.type.startsWith("image/"));
@@ -3602,22 +3606,7 @@ export default function ControlsPane() {
                   )}
                 </div>
 
-                {/* Duration */}
-                {selectedSpecial.params.duration && selectedSpecial.params.duration.values && (
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">Duration</label>
-                    <select
-                      value={paramValues.duration === undefined ? String(selectedSpecial.params.duration.default) : String(paramValues.duration)}
-                      onChange={(event) => handleParamChange("duration", event.target.value)}
-                      disabled={isSubmitting || isExpanding}
-                      className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
-                    >
-                      {selectedSpecial.params.duration.values.map((val) => (
-                        <option key={String(val)} value={String(val)}>{String(val)}s</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+
 
                 {/* Aspect Ratio */}
                 {selectedSpecial.params.aspect_ratio && selectedSpecial.params.aspect_ratio.values && (

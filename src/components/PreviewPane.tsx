@@ -932,6 +932,7 @@ export default function PreviewPane({
       {/* Full-screen video player */}
       {isFullScreen && selected.mime.startsWith("video") && previewUrl && connection ? (
         <VideoPlayer
+          key={selected.relPath}
           videoUrl={previewUrl}
           videoName={selected.name}
           onSave={async (blob, filename) => {
@@ -948,6 +949,7 @@ export default function PreviewPane({
         />
       ) : isFullScreen && selected.mime.startsWith("image") && previewUrl && connection ? (
         <ImageEditor
+          key={selected.relPath}
           imageUrl={previewUrl}
           imageName={selected.name}
           onSave={async (blob, filename) => {
