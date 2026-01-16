@@ -29,7 +29,7 @@ type QueueContextType = {
 
 const QueueContext = createContext<QueueContextType | null>(null);
 
-const CONCURRENCY_LIMIT = 3;
+const CONCURRENCY_LIMIT = 5;
 
 export function QueueProvider({ children }: { children: ReactNode }) {
     const [jobs, setJobs] = useState<QueueJob[]>([]);
@@ -105,24 +105,25 @@ export function QueueProvider({ children }: { children: ReactNode }) {
         [jobs]
     );
 
-    // Track jobs being started to prevent double-processing
-    const startingJobsRef = useRef<Set<string>>(new Set());
+    // Use a ref to track currently active jobs for accurate concurrency control
+    // This avoids stale closure issues with processingCount
+    const activeJobsRef = useRef<Set<string>>(new Set());
 
     // Queue Processor - processes multiple jobs up to CONCURRENCY_LIMIT
     useEffect(() => {
         const processQueue = () => {
-            // How many more jobs can we start?
-            const currentlyStarting = startingJobsRef.current.size;
-            const slotsAvailable = CONCURRENCY_LIMIT - processingCount - currentlyStarting;
+            // Use the ref for accurate count of active jobs
+            const activeCount = activeJobsRef.current.size;
+            const slotsAvailable = CONCURRENCY_LIMIT - activeCount;
 
-            console.log(`[Queue] Slots: ${slotsAvailable} (limit: ${CONCURRENCY_LIMIT}, processing: ${processingCount}, starting: ${currentlyStarting}, pending: ${pendingJobCount})`);
+            console.log(`[Queue] Slots: ${slotsAvailable} (limit: ${CONCURRENCY_LIMIT}, active: ${activeCount}, pending: ${pendingJobCount})`);
 
             if (slotsAvailable <= 0) return;
             if (pendingJobCount === 0) return;
 
             // Find pending jobs that aren't already being started
             const pendingJobs = jobs
-                .filter((j) => j.status === "pending" && !startingJobsRef.current.has(j.id))
+                .filter((j) => j.status === "pending" && !activeJobsRef.current.has(j.id))
                 .slice(0, slotsAvailable);
 
             if (pendingJobs.length === 0) return;
@@ -141,8 +142,8 @@ export function QueueProvider({ children }: { children: ReactNode }) {
                     continue;
                 }
 
-                // Mark as starting to prevent double-start
-                startingJobsRef.current.add(nextJob.id);
+                // Mark as active to prevent double-start
+                activeJobsRef.current.add(nextJob.id);
 
                 // Mark as processing immediately
                 setJobs((prev) =>
@@ -231,8 +232,8 @@ export function QueueProvider({ children }: { children: ReactNode }) {
                             console.error("Failed to log error to server", e);
                         }
                     } finally {
-                        // Remove from starting set when done
-                        startingJobsRef.current.delete(nextJob.id);
+                        // Remove from active set when done
+                        activeJobsRef.current.delete(nextJob.id);
                     }
                 })();
             }
