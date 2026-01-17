@@ -104,15 +104,20 @@ export async function expandPrompt(
     type: "natural" | "yaml",
     mode: "image" | "video",
     referenceImages: string[] = [],
-    promptMode: "general" | "photoreal" = "photoreal"
+    promptMode: "general" | "photoreal" | "audiogen" | "editing" = "photoreal"
 ): Promise<string> {
     let systemPrompt: string;
 
     if (mode === "video") {
         const subMode = referenceImages.length > 0 ? "image_to_video" : "text_to_video";
-        systemPrompt = SYSTEM_PROMPTS.video[promptMode][subMode][type];
+        // audiogen is only for video; editing falls back to general for video
+        const videoMode = promptMode === "audiogen" ? "audiogen" :
+            promptMode === "editing" ? "general" : promptMode;
+        systemPrompt = SYSTEM_PROMPTS.video[videoMode][subMode][type];
     } else {
-        systemPrompt = SYSTEM_PROMPTS.image[promptMode][type];
+        // audiogen falls back to general for images; editing is image-specific
+        const imageMode = promptMode === "audiogen" ? "general" : promptMode;
+        systemPrompt = SYSTEM_PROMPTS.image[imageMode][type];
     }
 
     return callOpenRouter(prompt, systemPrompt, referenceImages);
@@ -166,9 +171,11 @@ export async function alterPrompt(
     currentPrompt: string,
     instruction: string,
     mode: "image" | "video",
-    promptMode: "general" | "photoreal" = "photoreal"
+    promptMode: "general" | "photoreal" | "audiogen" | "editing" = "photoreal"
 ): Promise<string> {
-    const systemPrompt = SYSTEM_PROMPTS.alteration[promptMode][mode];
+    // audiogen and editing don't have dedicated alteration prompts, fall back to general
+    const actualMode = (promptMode === "audiogen" || promptMode === "editing") ? "general" : promptMode;
+    const systemPrompt = SYSTEM_PROMPTS.alteration[actualMode][mode];
     const userMessage = `CURRENT PROMPT: \n${currentPrompt}\n\nINSTRUCTION: \n${instruction}`;
     return callOpenRouter(userMessage, systemPrompt, []);
 }

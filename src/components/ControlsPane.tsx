@@ -177,7 +177,7 @@ export default function ControlsPane() {
   const [imagePrompt, setImagePrompt] = usePersistentState("imagePrompt", "");
   const [videoPrompt, setVideoPrompt] = usePersistentState("videoPrompt", "");
   const [specialPrompt, setSpecialPrompt] = usePersistentState("specialPrompt", "");
-  const [promptMode, setPromptMode] = usePersistentState<"general" | "photoreal">("promptMode", "photoreal");
+  const [promptMode, setPromptMode] = usePersistentState<"general" | "photoreal" | "audiogen" | "editing">("promptMode", "photoreal");
 
   const prompt = activeTab === "image" ? imagePrompt : activeTab === "video" ? videoPrompt : specialPrompt;
   const setPrompt = (val: string) => {
@@ -2479,18 +2479,27 @@ export default function ControlsPane() {
                   <div className="w-px bg-white/10 mx-1" />
                   <button
                     type="button"
-                    onClick={() => setPromptMode(prev => prev === "photoreal" ? "general" : "photoreal")}
+                    onClick={() => setPromptMode(prev =>
+                      prev === "photoreal" ? "general" : prev === "general" ? "editing" : "photoreal"
+                    )}
                     disabled={isExpanding}
                     className={`flex h-7 w-7 items-center justify-center rounded-md border transition disabled:opacity-50 ${promptMode === "photoreal"
-                      ? "border-emerald-500/30 bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/40 hover:text-white"
-                      : "border-amber-500/30 bg-amber-500/20 text-amber-200 hover:bg-amber-500/40 hover:text-white"
+                        ? "border-emerald-500/30 bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/40 hover:text-white"
+                        : promptMode === "general"
+                          ? "border-amber-500/30 bg-amber-500/20 text-amber-200 hover:bg-amber-500/40 hover:text-white"
+                          : "border-cyan-500/30 bg-cyan-500/20 text-cyan-200 hover:bg-cyan-500/40 hover:text-white"
                       }`}
-                    title={`Current Mode: ${promptMode === "photoreal" ? "Photorealistic (Camera Aware)" : "General (Creative Description)"}`}
+                    title={`Current Mode: ${promptMode === "photoreal" ? "Photorealistic (Camera Aware)"
+                        : promptMode === "general" ? "General (Creative Description)"
+                          : "Editing (Reframe/Modify)"
+                      }`}
                   >
                     {promptMode === "photoreal" ? (
                       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" /><circle cx="12" cy="13" r="3" /></svg>
-                    ) : (
+                    ) : promptMode === "general" ? (
                       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 3v18" /><path d="M3 9h6" /></svg>
                     )}
                   </button>
                   <div className="w-px bg-white/10 mx-1" />
@@ -2682,19 +2691,29 @@ export default function ControlsPane() {
                   </button>
                   <div className="w-px bg-white/10 mx-1" />
 
-                  {/* Prompt Mode Toggle */}
+                  {/* Prompt Mode Toggle - 3 modes for video */}
                   <button
                     type="button"
-                    onClick={() => setPromptMode(prev => prev === "photoreal" ? "general" : "photoreal")}
+                    onClick={() => setPromptMode(prev =>
+                      prev === "photoreal" ? "general" :
+                        prev === "general" ? "audiogen" : "photoreal"
+                    )}
                     disabled={isExpanding}
                     className={`flex h-7 w-7 items-center justify-center rounded-md border transition disabled:opacity-50 ${promptMode === "photoreal"
                       ? "border-emerald-500/30 bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/40 hover:text-white"
-                      : "border-amber-500/30 bg-amber-500/20 text-amber-200 hover:bg-amber-500/40 hover:text-white"
+                      : promptMode === "audiogen"
+                        ? "border-purple-500/30 bg-purple-500/20 text-purple-200 hover:bg-purple-500/40 hover:text-white"
+                        : "border-amber-500/30 bg-amber-500/20 text-amber-200 hover:bg-amber-500/40 hover:text-white"
                       }`}
-                    title={`Current Mode: ${promptMode === "photoreal" ? "Photorealistic (Camera Aware)" : "General (Creative Description)"}`}
+                    title={`Current Mode: ${promptMode === "photoreal" ? "Photorealistic (Camera Aware)" :
+                      promptMode === "audiogen" ? "Audio-Gen (Sound Aware)" :
+                        "General (Creative Description)"
+                      }`}
                   >
                     {promptMode === "photoreal" ? (
                       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" /><circle cx="12" cy="13" r="3" /></svg>
+                    ) : promptMode === "audiogen" ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 10v3" /><path d="M6 6v11" /><path d="M10 3v18" /><path d="M14 8v7" /><path d="M18 5v13" /><path d="M22 10v3" /></svg>
                     ) : (
                       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>
                     )}

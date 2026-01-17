@@ -75,7 +75,7 @@ export function StudioPreview({
             <div className="flex-shrink-0 p-3 bg-black/80 border-b border-white/5">
                 <div className="flex flex-wrap gap-2 text-[9px] font-mono">
                     <span className="px-2 py-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                        {lens.lensName}
+                        {lens.mm}mm · {lens.effect}
                     </span>
                     <span className="px-2 py-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
                         f/{aperture.value}

@@ -81,12 +81,12 @@ export function PromptStudio({
         setError(null);
 
         try {
-            // Build technical specs - these OVERRIDE any lens/aperture in user text
+            // Build technical specs - describe EFFECTS, not brand names
             const specs: string[] = [];
 
-            // Core specs (always included - these override user text)
-            specs.push(`REQUIRED: ${lens.lensName}`);
-            specs.push(`REQUIRED: f/${aperture.value} aperture`);
+            // Core specs - describe the visual effects
+            specs.push(lens.promptEffect);
+            specs.push(aperture.promptEffect);
 
             // Optional specs (only if not "None")
             if (motionBlur.value) specs.push(motionBlur.value);

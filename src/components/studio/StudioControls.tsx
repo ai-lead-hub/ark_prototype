@@ -59,7 +59,7 @@ export function StudioControls({
                                     ? 'border-amber-500 bg-amber-500/20 text-amber-300'
                                     : 'border-white/10 bg-white/5 text-slate-400 hover:bg-white/10'
                                     }`}
-                                title={`${l.lensName} - ${l.description}`}
+                                title={l.description}
                             >
                                 <div className="text-[10px] font-bold">{l.name}</div>
                             </button>
