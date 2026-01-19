@@ -322,7 +322,7 @@
         },
         "generate_audio": {
           "type": "boolean",
-          "default": false
+          "default": true
         }
       },
       "output": {
