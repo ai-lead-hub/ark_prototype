@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useCatalog } from "../state/useCatalog";
 import { FILE_ENTRY_MIME } from "../lib/drag-constants";
 import { getFileUrl, uploadFile, type WorkspaceConnection } from "../lib/api/files";
@@ -697,22 +697,46 @@ export default function PreviewPane({
   }, [connection, selectedRelPath, selectedKind]);
 
   // Navigation: get media files only (images/videos) for arrow key navigation
-  const mediaFiles = entries.filter(
-    (e) => e.kind === "file" && (e.mime.startsWith("image") || e.mime.startsWith("video"))
+  // Memoize the array to keep reference stable
+  const mediaFiles = useMemo(() =>
+    entries.filter(
+      (e) => e.kind === "file" && (e.mime.startsWith("image") || e.mime.startsWith("video"))
+    ),
+    [entries]
   );
-  const currentIndex = selected ? mediaFiles.findIndex((e) => e.relPath === selected.relPath) : -1;
 
+  // Compute currentIndex for UI indicators (passed as prop conditions)
+  const currentIndex = useMemo(() =>
+    selected ? mediaFiles.findIndex((e) => e.id === selected.id) : -1,
+    [selected, mediaFiles]
+  );
+
+  // Navigation callbacks - compute index fresh inside to avoid stale closures
   const handleNavigatePrevious = useCallback(() => {
-    if (currentIndex > 0) {
-      select(mediaFiles[currentIndex - 1]);
+    if (!selected || mediaFiles.length === 0) return;
+
+    // Find current index using ID (not relPath which might have issues)
+    const idx = mediaFiles.findIndex((e) => e.id === selected.id);
+    if (idx > 0) {
+      const prevEntry = mediaFiles[idx - 1];
+      if (prevEntry && prevEntry.id !== selected.id) {
+        select(prevEntry);
+      }
     }
-  }, [currentIndex, mediaFiles, select]);
+  }, [selected, mediaFiles, select]);
 
   const handleNavigateNext = useCallback(() => {
-    if (currentIndex >= 0 && currentIndex < mediaFiles.length - 1) {
-      select(mediaFiles[currentIndex + 1]);
+    if (!selected || mediaFiles.length === 0) return;
+
+    // Find current index using ID
+    const idx = mediaFiles.findIndex((e) => e.id === selected.id);
+    if (idx >= 0 && idx < mediaFiles.length - 1) {
+      const nextEntry = mediaFiles[idx + 1];
+      if (nextEntry && nextEntry.id !== selected.id) {
+        select(nextEntry);
+      }
     }
-  }, [currentIndex, mediaFiles, select]);
+  }, [selected, mediaFiles, select]);
 
 
   const handleDownload = async () => {
