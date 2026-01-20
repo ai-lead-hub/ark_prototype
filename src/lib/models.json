@@ -68,7 +68,7 @@
       "label": "Kling V2.6 Pro (FAL)",
       "endpoint": "fal-ai/kling-video/v2.6/pro/image-to-video",
       "provider": "fal-client",
-      "pricing": "$0.35 🔊",
+      "pricing": "$0.35/5s (+audio)",
       "supports": {
         "startFrame": true,
         "endFrame": true,
@@ -120,7 +120,7 @@
       "label": "Kling V2.6 Pro",
       "endpoint": "/api/v1/jobs/createTask",
       "provider": "kie",
-      "pricing": "$0.28",
+      "pricing": "$0.28/5s (+audio 2x)",
       "supports": {
         "startFrame": true,
         "endFrame": false,
@@ -253,7 +253,7 @@
       "label": "Seedance 1.5 Pro",
       "endpoint": "/api/v1/jobs/createTask",
       "provider": "kie",
-      "pricing": "$0.14",
+      "pricing": "$0.14/4s (+audio 2x)",
       "supports": {
         "startFrame": true,
         "endFrame": true,
@@ -334,7 +334,7 @@
       "label": "LTX-2",
       "endpoint": "fal-ai/ltx-2/image-to-video",
       "provider": "fal-client",
-      "pricing": "$0.30 🔊",
+      "pricing": "$0.30/6s (+audio)",
       "supports": {
         "startFrame": true,
         "endFrame": false,

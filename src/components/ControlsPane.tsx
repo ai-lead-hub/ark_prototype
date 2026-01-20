@@ -993,9 +993,18 @@ export default function ControlsPane() {
           // === RESTORE REFERENCES FROM SAVED PAYLOAD (graceful fallback) ===
           try {
             const payload = (meta.payload ?? {}) as Record<string, unknown>;
+            // Extract the nested input object - this is where the actual reference URLs are stored
+            const input = (payload.input ?? payload) as Record<string, unknown>;
 
-            // Try to restore start frame (FAL URLs may be expired)
-            const savedStartFrame = payload.start_frame_url || payload.image_url || payload.first_frame_image;
+            // Try to restore start frame - check both nested input and top-level payload
+            // API keys vary: image_url (FAL Kling), start_image_url, first_frame_image, image (generic)
+            const savedStartFrame =
+              input.image_url ||
+              input.start_image_url ||
+              input.first_frame_image ||
+              input.image ||
+              payload.start_frame_url ||
+              payload.image_url;
             if (savedStartFrame && typeof savedStartFrame === "string") {
               setStartFrame({
                 url: savedStartFrame,
@@ -1006,7 +1015,12 @@ export default function ControlsPane() {
             }
 
             // Try to restore end frame
-            const savedEndFrame = payload.end_frame_url || payload.last_frame_image;
+            // API keys vary: tail_image_url (FAL Kling), end_image_url, last_frame_image
+            const savedEndFrame =
+              input.tail_image_url ||
+              input.end_image_url ||
+              input.last_frame_image ||
+              payload.end_frame_url;
             if (savedEndFrame && typeof savedEndFrame === "string") {
               setEndFrame({
                 url: savedEndFrame,
@@ -1017,7 +1031,15 @@ export default function ControlsPane() {
             }
 
             // Try to restore reference images - use correct setter based on category
-            const savedRefs = payload.reference_image_urls || payload.image_urls || payload.control_images || [];
+            // API keys vary: image_urls (Seedance, GPT Image), input_urls, reference_image_urls, control_images
+            const savedRefs =
+              input.image_urls ||
+              input.input_urls ||
+              input.reference_image_urls ||
+              input.control_images ||
+              payload.reference_image_urls ||
+              payload.image_urls ||
+              [];
             if (Array.isArray(savedRefs) && savedRefs.length > 0) {
               const restoredRefs: ReferenceUpload[] = savedRefs
                 .filter((url: unknown): url is string => typeof url === "string" && url.length > 0)
@@ -1794,7 +1816,8 @@ export default function ControlsPane() {
           // T2V/I2V models like Sora 2 - optional image input
 
           // Upload start frame if present but not yet uploaded
-          let uploadedStartFrameUrl = startFrame.url;
+          // Note: reusing outer uploadedStartFrameUrl variable
+          uploadedStartFrameUrl = startFrame.url;
           if (startFrame.file && !startFrame.url) {
             try {
               uploadedStartFrameUrl = await uploadToFal(startFrame.file);
@@ -1826,7 +1849,8 @@ export default function ControlsPane() {
           // Models that require both image and video (e.g., Motion Control)
 
           // Upload start frame if present but not yet uploaded
-          let uploadedStartFrameUrl = startFrame.url;
+          // Note: reusing outer uploadedStartFrameUrl variable
+          uploadedStartFrameUrl = startFrame.url;
           if (startFrame.file && !startFrame.url) {
             try {
               uploadedStartFrameUrl = await uploadToFal(startFrame.file);
@@ -2484,14 +2508,14 @@ export default function ControlsPane() {
                     )}
                     disabled={isExpanding}
                     className={`flex h-7 w-7 items-center justify-center rounded-md border transition disabled:opacity-50 ${promptMode === "photoreal"
-                        ? "border-emerald-500/30 bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/40 hover:text-white"
-                        : promptMode === "general"
-                          ? "border-amber-500/30 bg-amber-500/20 text-amber-200 hover:bg-amber-500/40 hover:text-white"
-                          : "border-cyan-500/30 bg-cyan-500/20 text-cyan-200 hover:bg-cyan-500/40 hover:text-white"
+                      ? "border-emerald-500/30 bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/40 hover:text-white"
+                      : promptMode === "general"
+                        ? "border-amber-500/30 bg-amber-500/20 text-amber-200 hover:bg-amber-500/40 hover:text-white"
+                        : "border-cyan-500/30 bg-cyan-500/20 text-cyan-200 hover:bg-cyan-500/40 hover:text-white"
                       }`}
                     title={`Current Mode: ${promptMode === "photoreal" ? "Photorealistic (Camera Aware)"
-                        : promptMode === "general" ? "General (Creative Description)"
-                          : "Editing (Reframe/Modify)"
+                      : promptMode === "general" ? "General (Creative Description)"
+                        : "Editing (Reframe/Modify)"
                       }`}
                   >
                     {promptMode === "photoreal" ? (
@@ -2657,6 +2681,39 @@ export default function ControlsPane() {
                 ) : null}
               </div>
             ) : null}
+
+            {/* Upload Expiration Warning */}
+            {supportsStartFrame && startFrame.url && startFrame.createdAt && (
+              (() => {
+                const ageMs = Date.now() - startFrame.createdAt;
+                const remainingMs = UPLOAD_URL_TTL_MS - ageMs;
+                const remainingMins = Math.floor(remainingMs / 60000);
+                if (remainingMins <= 10 && remainingMins > 0) {
+                  return (
+                    <div className="text-xs text-amber-400 flex items-center gap-1">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10" />
+                        <polyline points="12 6 12 12 16 14" />
+                      </svg>
+                      Upload expires in ~{remainingMins} min. Re-upload if generation takes longer.
+                    </div>
+                  );
+                }
+                if (remainingMs <= 0) {
+                  return (
+                    <div className="text-xs text-red-400 flex items-center gap-1">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="12" y1="8" x2="12" y2="12" />
+                        <line x1="12" y1="16" x2="12.01" y2="16" />
+                      </svg>
+                      Upload expired. Please re-upload the start frame.
+                    </div>
+                  );
+                }
+                return null;
+              })()
+            )}
 
             {/* Prompt */}
             <div className="space-y-1">
@@ -3982,6 +4039,22 @@ export default function ControlsPane() {
                   ? "Add a reference image"
                   : "✨ Generate"}
           </button>
+          {/* T2V/I2V Mode Indicator for video models */}
+          {modelKind === "video" && supportsStartFrame && (
+            <span
+              className={`rounded-lg border px-3 py-2 text-center text-xs font-semibold ${startFrame.preview || startFrame.url
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+                : "border-sky-500/30 bg-sky-500/10 text-sky-200"
+                }`}
+              title={
+                startFrame.preview || startFrame.url
+                  ? "Image-to-Video: Using start frame"
+                  : "Text-to-Video: No start frame"
+              }
+            >
+              {startFrame.preview || startFrame.url ? "I2V" : "T2V"}
+            </span>
+          )}
           {pricingLabel ? (
             <span className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-center text-sm font-semibold text-amber-200">
               {pricingLabel}

@@ -292,9 +292,13 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
       const hasRefs = imageUrls.length > 0;
       // GPT Image 1.5 only accepts 1:1, 2:3, 3:2 for aspect ratio
       const validAspectRatios = ["1:1", "2:3", "3:2"];
-      const effectiveAspectRatio = validAspectRatios.includes(aspectRatio ?? "")
-        ? aspectRatio
-        : "1:1";
+      let effectiveAspectRatio = aspectRatio;
+      if (!validAspectRatios.includes(aspectRatio ?? "")) {
+        console.warn(
+          `[GPT Image 1.5] Aspect ratio "${aspectRatio}" is not supported. Using "1:1" instead. Supported: ${validAspectRatios.join(", ")}`
+        );
+        effectiveAspectRatio = "1:1";
+      }
 
       return {
         model: hasRefs ? "gpt-image/1.5-image-to-image" : "gpt-image/1.5-text-to-image",

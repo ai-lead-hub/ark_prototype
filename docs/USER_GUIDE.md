@@ -131,14 +131,15 @@ Click the gear icon to access:
 
 **For Videos:**
 - **sora-2** - Best for cinematic quality (T2V & I2V)
-- **kling-2.6-pro** - Audio support, high quality
-- **seedance-1.5-pro** - Fastest, budget-friendly
+- **kling-v2-6-pro** - Audio support, high quality (or FAL variant)
+- **seedance-1.5-pro** - Fastest, budget-friendly (audio available)
 - **veo-3.1-fast** - Quick text-to-video
+- **ltx-2** - High resolution with audio
 
 **For Images:**
-- **nano-banana-pro** - Best quality, multi-reference
+- **nano-banana-pro-edit** - Best quality, multi-reference (up to 8)
 - **flux-2-pro** - Professional quality
-- **gpt-image-1.5** - Detailed editing
+- **gpt-image-1-5** - Detailed editing
 
 
 ---

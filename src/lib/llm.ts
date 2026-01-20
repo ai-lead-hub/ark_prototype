@@ -164,7 +164,14 @@ export async function expandPromptWithPresets(
     console.log('[PromptStudio] Processed', processedImages.length, 'of', referenceImages.length, 'images');
 
     // Use the simplified STUDIO_PROMPT with the structured input
-    return callOpenRouter(structuredInput, STUDIO_PROMPT, processedImages);
+    try {
+        return await callOpenRouter(structuredInput, STUDIO_PROMPT, processedImages);
+    } catch (error) {
+        if (error instanceof Error && error.message.includes('VITE_OPENROUTER_KEY')) {
+            throw new Error('Prompt Studio requires VITE_OPENROUTER_KEY to be configured in .env.local');
+        }
+        throw error;
+    }
 }
 
 export async function alterPrompt(

@@ -271,6 +271,12 @@ export default function FileBrowser() {
   const handleBulkDelete = async () => {
     if (!connection || selectedIds.size === 0) return;
 
+    // Confirm before deleting multiple files
+    const confirmed = window.confirm(
+      `Are you sure you want to trash ${selectedIds.size} file(s)? This action can be undone from the trash.`
+    );
+    if (!confirmed) return;
+
     setBulkDeleting(true);
     try {
       const paths = entries

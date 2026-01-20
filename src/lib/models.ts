@@ -133,13 +133,13 @@ const jsonSpecs =
           const duration = String(unified.duration ?? "5");
           const input: Record<string, FalInputValue> = {
             prompt: unified.prompt,
-            start_image_url: unified.start_frame_url,
+            image_url: unified.start_frame_url,
             duration,
             negative_prompt: unified.negative_prompt ?? "blur, distort, and low quality",
             generate_audio: unified.generate_audio ?? false,
           };
           if (unified.end_frame_url) {
-            input.end_image_url = unified.end_frame_url;
+            input.tail_image_url = unified.end_frame_url;
           }
           return input;
         },
