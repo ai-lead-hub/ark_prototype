@@ -64,58 +64,6 @@
       }
     },
     {
-      "id": "kling-2.6-pro-fal",
-      "label": "Kling V2.6 Pro (FAL)",
-      "endpoint": "fal-ai/kling-video/v2.6/pro/image-to-video",
-      "provider": "fal-client",
-      "pricing": "$0.35/5s (+audio)",
-      "supports": {
-        "startFrame": true,
-        "endFrame": true,
-        "audio": true,
-        "resolution": false,
-        "aspectRatio": false,
-        "fps": false
-      },
-      "params": {
-        "prompt": {
-          "type": "string",
-          "required": true
-        },
-        "start_image_url": {
-          "type": "string",
-          "required": true,
-          "uiKey": "start_frame_url"
-        },
-        "end_image_url": {
-          "type": "string",
-          "required": false,
-          "uiKey": "end_frame_url"
-        },
-        "duration": {
-          "type": "enum",
-          "required": true,
-          "values": [
-            "5",
-            "10"
-          ],
-          "default": "5"
-        },
-        "negative_prompt": {
-          "type": "string",
-          "default": "blur, distort, and low quality",
-          "hidden": true
-        },
-        "generate_audio": {
-          "type": "boolean",
-          "default": false
-        }
-      },
-      "output": {
-        "videoPath": "video.url"
-      }
-    },
-    {
       "id": "kling-v2-6-pro",
       "label": "Kling V2.6 Pro",
       "endpoint": "/api/v1/jobs/createTask",
