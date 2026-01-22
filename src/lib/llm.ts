@@ -110,14 +110,17 @@ export async function expandPrompt(
 
     if (mode === "video") {
         const subMode = referenceImages.length > 0 ? "image_to_video" : "text_to_video";
-        // audiogen is only for video; editing falls back to general for video
-        const videoMode = promptMode === "audiogen" ? "audiogen" :
-            promptMode === "editing" ? "general" : promptMode;
+        // audiogen is for video with audio; editing/general fall back to photoreal for video
+        const videoMode = promptMode === "audiogen" ? "audiogen" : "photoreal";
         systemPrompt = SYSTEM_PROMPTS.video[videoMode][subMode][type];
     } else {
         // audiogen falls back to general for images; editing is image-specific
         const imageMode = promptMode === "audiogen" ? "general" : promptMode;
-        systemPrompt = SYSTEM_PROMPTS.image[imageMode][type];
+        // Image prompts only have 'natural' - yaml was removed
+        const imagePrompts = SYSTEM_PROMPTS.image[imageMode];
+        systemPrompt = typeof imagePrompts === "object" && "natural" in imagePrompts
+            ? imagePrompts.natural
+            : (imagePrompts as unknown as string);
     }
 
     return callOpenRouter(prompt, systemPrompt, referenceImages);

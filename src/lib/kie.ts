@@ -86,8 +86,15 @@ export async function callKie(
   }
 
   const contentType = response.headers.get("content-type") ?? "";
+
+  // Handle empty response body
+  const responseText = await response.text();
+  if (!responseText || responseText.trim() === "") {
+    throw new Error(`KIE returned empty response for ${endpoint}`);
+  }
+
   if (!contentType.includes("application/json")) {
-    const arrayBuffer = await response.arrayBuffer();
+    const arrayBuffer = new TextEncoder().encode(responseText).buffer;
     return {
       blob: new Blob([arrayBuffer], {
         type: contentType || "application/octet-stream",
@@ -95,7 +102,17 @@ export async function callKie(
     };
   }
 
-  const data = (await response.json()) as Record<string, unknown>;
+  let data: Record<string, unknown>;
+  try {
+    data = JSON.parse(responseText) as Record<string, unknown>;
+  } catch (parseError) {
+    throw new Error(`KIE returned invalid JSON: ${responseText.substring(0, 200)}`);
+  }
+
+  if (!data || typeof data !== "object") {
+    throw new Error(`KIE returned invalid data structure: ${responseText.substring(0, 200)}`);
+  }
+
   if (typeof data.code === "number" && data.code !== 200) {
     const message =
       (data.msg as string | undefined) ??
