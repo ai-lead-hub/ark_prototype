@@ -230,7 +230,7 @@ export async function downscaleForMagnific(file: File): Promise<File> {
 
             const maxWidth = 1920;
             const maxHeight = 1080;
-            let { width, height } = img;
+            const { width, height } = img;
 
             // Check if downscaling is needed
             const needsResize = width > maxWidth || height > maxHeight;

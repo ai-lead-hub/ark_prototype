@@ -5,7 +5,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { PromptStudio } from "./PromptStudio/PromptStudio";
+import { PromptBuilderV2 } from "./PromptBuilder";
 import { BatchPromptModal } from "./BatchPromptModal";
 import { CameraMovementSelector } from "./ui/CameraMovementSelector";
 import type { ChangeEvent, FormEvent } from "react";
@@ -4063,7 +4063,7 @@ export default function ControlsPane() {
       </div>
 
       {showPromptStudio && (
-        <PromptStudio
+        <PromptBuilderV2
           currentPrompt={prompt}
           initialImages={referenceUploads.map((r) => r.url || r.preview).filter(Boolean)}
           onClose={() => setShowPromptStudio(false)}

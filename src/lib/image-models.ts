@@ -4,7 +4,6 @@ import type {
 } from "./providers";
 import {
   parseKieResultUrls,
-  parseFalImageUrls,
 } from "./model-helpers";
 
 export type ImageSizePreset =

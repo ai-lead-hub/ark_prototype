@@ -1,0 +1,576 @@
+{
+    "systems": {
+        "canon_dslr": {
+            "name": "Canon (DSLR/Mirrorless)",
+            "bodies": [
+                {
+                    "id": "eos_r5",
+                    "name": "EOS R5",
+                    "prompt": "shot on Canon EOS R5"
+                },
+                {
+                    "id": "eos_r6",
+                    "name": "EOS R6 Mark II",
+                    "prompt": "shot on Canon EOS R6 Mark II"
+                },
+                {
+                    "id": "eos_5d4",
+                    "name": "EOS 5D Mark IV",
+                    "prompt": "shot on Canon EOS 5D Mark IV"
+                }
+            ],
+            "lenses": [
+                {
+                    "id": "canon_rf",
+                    "name": "Canon RF L-series",
+                    "prompt": "with Canon RF L-series lens"
+                },
+                {
+                    "id": "canon_ef",
+                    "name": "Canon EF L-series",
+                    "prompt": "with Canon EF L-series lens"
+                },
+                {
+                    "id": "sigma_art",
+                    "name": "Sigma Art",
+                    "prompt": "with Sigma Art lens"
+                }
+            ],
+            "filmLooks": [
+                "kodak_portra",
+                "fuji_pro400h",
+                "kodak_ektar"
+            ]
+        },
+        "sony": {
+            "name": "Sony (Mirrorless)",
+            "bodies": [
+                {
+                    "id": "a7iv",
+                    "name": "A7 IV",
+                    "prompt": "shot on Sony A7 IV"
+                },
+                {
+                    "id": "a7riv",
+                    "name": "A7R IV",
+                    "prompt": "shot on Sony A7R IV"
+                },
+                {
+                    "id": "a7siii",
+                    "name": "A7S III",
+                    "prompt": "shot on Sony A7S III"
+                },
+                {
+                    "id": "a1",
+                    "name": "Alpha 1",
+                    "prompt": "shot on Sony Alpha 1"
+                }
+            ],
+            "lenses": [
+                {
+                    "id": "sony_gm",
+                    "name": "Sony G Master",
+                    "prompt": "with G Master lens"
+                },
+                {
+                    "id": "sony_g",
+                    "name": "Sony G",
+                    "prompt": "with Sony G lens"
+                },
+                {
+                    "id": "zeiss_batis",
+                    "name": "Zeiss Batis",
+                    "prompt": "with Zeiss Batis lens"
+                },
+                {
+                    "id": "sigma_art",
+                    "name": "Sigma Art",
+                    "prompt": "with Sigma Art lens"
+                }
+            ],
+            "filmLooks": [
+                "kodak_portra",
+                "fuji_pro400h",
+                "cinestill_800t"
+            ]
+        },
+        "nikon": {
+            "name": "Nikon",
+            "bodies": [
+                {
+                    "id": "z8",
+                    "name": "Z8",
+                    "prompt": "shot on Nikon Z8"
+                },
+                {
+                    "id": "z7ii",
+                    "name": "Z7 II",
+                    "prompt": "shot on Nikon Z7 II"
+                },
+                {
+                    "id": "d850",
+                    "name": "D850",
+                    "prompt": "shot on Nikon D850"
+                }
+            ],
+            "lenses": [
+                {
+                    "id": "nikon_s",
+                    "name": "Nikkor S-line",
+                    "prompt": "with Nikkor S-line lens"
+                },
+                {
+                    "id": "nikon_z",
+                    "name": "Nikkor Z",
+                    "prompt": "with Nikkor Z lens"
+                },
+                {
+                    "id": "sigma_art",
+                    "name": "Sigma Art",
+                    "prompt": "with Sigma Art lens"
+                }
+            ],
+            "filmLooks": [
+                "kodak_portra",
+                "kodak_trix",
+                "ilford_hp5"
+            ]
+        },
+        "fujifilm": {
+            "name": "Fujifilm",
+            "bodies": [
+                {
+                    "id": "xt5",
+                    "name": "X-T5",
+                    "prompt": "shot on Fujifilm X-T5"
+                },
+                {
+                    "id": "xh2s",
+                    "name": "X-H2S",
+                    "prompt": "shot on Fujifilm X-H2S"
+                },
+                {
+                    "id": "gfx100s",
+                    "name": "GFX 100S",
+                    "prompt": "shot on Fujifilm GFX 100S, medium format"
+                }
+            ],
+            "lenses": [
+                {
+                    "id": "fuji_xf",
+                    "name": "Fujinon XF",
+                    "prompt": "with Fujinon XF lens"
+                },
+                {
+                    "id": "fuji_gf",
+                    "name": "Fujinon GF",
+                    "prompt": "with Fujinon GF medium format lens"
+                }
+            ],
+            "filmLooks": [
+                "fuji_pro400h",
+                "fuji_superia",
+                "fuji_velvia"
+            ]
+        },
+        "leica": {
+            "name": "Leica",
+            "bodies": [
+                {
+                    "id": "m10",
+                    "name": "M10",
+                    "prompt": "shot on Leica M10"
+                },
+                {
+                    "id": "q2",
+                    "name": "Q2",
+                    "prompt": "shot on Leica Q2"
+                },
+                {
+                    "id": "sl2s",
+                    "name": "SL2-S",
+                    "prompt": "shot on Leica SL2-S"
+                }
+            ],
+            "lenses": [
+                {
+                    "id": "leica_summilux",
+                    "name": "Summilux",
+                    "prompt": "with Leica Summilux lens"
+                },
+                {
+                    "id": "leica_summicron",
+                    "name": "Summicron",
+                    "prompt": "with Leica Summicron lens"
+                },
+                {
+                    "id": "leica_apo",
+                    "name": "APO-Summicron",
+                    "prompt": "with Leica APO-Summicron lens"
+                }
+            ],
+            "filmLooks": [
+                "kodak_portra",
+                "kodak_trix",
+                "ilford_delta"
+            ]
+        },
+        "arri": {
+            "name": "ARRI (Cinema)",
+            "bodies": [
+                {
+                    "id": "alexa_mini_lf",
+                    "name": "ALEXA Mini LF",
+                    "prompt": "shot on ARRI ALEXA Mini LF, large format"
+                },
+                {
+                    "id": "alexa_35",
+                    "name": "ALEXA 35",
+                    "prompt": "shot on ARRI ALEXA 35, Super 35mm"
+                },
+                {
+                    "id": "alexa_65",
+                    "name": "ALEXA 65",
+                    "prompt": "shot on ARRI ALEXA 65, 65mm large format"
+                }
+            ],
+            "lenses": [
+                {
+                    "id": "arri_signature",
+                    "name": "ARRI Signature Prime",
+                    "prompt": "with ARRI Signature Prime lenses"
+                },
+                {
+                    "id": "cooke_s4",
+                    "name": "Cooke S4/i",
+                    "prompt": "with Cooke S4/i prime lenses, warm organic look"
+                },
+                {
+                    "id": "cooke_anamorphic",
+                    "name": "Cooke Anamorphic/i",
+                    "prompt": "with Cooke Anamorphic lenses, oval bokeh"
+                },
+                {
+                    "id": "zeiss_master",
+                    "name": "Zeiss Master Prime",
+                    "prompt": "with Zeiss Master Prime lenses, sharp and clean"
+                },
+                {
+                    "id": "zeiss_supreme",
+                    "name": "Zeiss Supreme Prime",
+                    "prompt": "with Zeiss Supreme Prime lenses"
+                }
+            ],
+            "filmLooks": [
+                "kodak_vision3_500t",
+                "kodak_vision3_250d",
+                "kodak_vision3_50d"
+            ]
+        },
+        "red": {
+            "name": "RED (Cinema)",
+            "bodies": [
+                {
+                    "id": "v_raptor",
+                    "name": "V-RAPTOR 8K",
+                    "prompt": "shot on RED V-RAPTOR 8K"
+                },
+                {
+                    "id": "komodo",
+                    "name": "Komodo 6K",
+                    "prompt": "shot on RED Komodo 6K"
+                },
+                {
+                    "id": "gemini",
+                    "name": "DSMC2 GEMINI",
+                    "prompt": "shot on RED GEMINI 5K"
+                }
+            ],
+            "lenses": [
+                {
+                    "id": "zeiss_master",
+                    "name": "Zeiss Master Prime",
+                    "prompt": "with Zeiss Master Prime lenses"
+                },
+                {
+                    "id": "zeiss_supreme",
+                    "name": "Zeiss Supreme Prime",
+                    "prompt": "with Zeiss Supreme Prime lenses"
+                },
+                {
+                    "id": "sigma_cine",
+                    "name": "Sigma Cine",
+                    "prompt": "with Sigma Cine lenses"
+                },
+                {
+                    "id": "canon_cine",
+                    "name": "Canon Cine-Servo",
+                    "prompt": "with Canon Cine-Servo zoom"
+                }
+            ],
+            "filmLooks": [
+                "kodak_vision3_500t",
+                "kodak_vision3_250d",
+                "cinestill_800t"
+            ]
+        },
+        "blackmagic": {
+            "name": "Blackmagic (Cinema)",
+            "bodies": [
+                {
+                    "id": "ursa_mini_12k",
+                    "name": "URSA Mini Pro 12K",
+                    "prompt": "shot on Blackmagic URSA Mini Pro 12K"
+                },
+                {
+                    "id": "pocket_6k",
+                    "name": "Pocket Cinema 6K Pro",
+                    "prompt": "shot on Blackmagic Pocket 6K Pro"
+                }
+            ],
+            "lenses": [
+                {
+                    "id": "sigma_cine",
+                    "name": "Sigma Cine",
+                    "prompt": "with Sigma Cine lenses"
+                },
+                {
+                    "id": "zeiss_cp3",
+                    "name": "Zeiss CP.3",
+                    "prompt": "with Zeiss CP.3 lenses"
+                },
+                {
+                    "id": "canon_ef",
+                    "name": "Canon EF Cinema",
+                    "prompt": "with Canon EF cinema lenses"
+                }
+            ],
+            "filmLooks": [
+                "kodak_vision3_500t",
+                "cinestill_800t",
+                "kodak_portra"
+            ]
+        },
+        "sony_venice": {
+            "name": "Sony VENICE (Cinema)",
+            "bodies": [
+                {
+                    "id": "venice_2",
+                    "name": "VENICE 2",
+                    "prompt": "shot on Sony VENICE 2, full-frame cinema"
+                },
+                {
+                    "id": "fx9",
+                    "name": "FX9",
+                    "prompt": "shot on Sony FX9"
+                }
+            ],
+            "lenses": [
+                {
+                    "id": "cooke_s7",
+                    "name": "Cooke S7/i",
+                    "prompt": "with Cooke S7/i full-frame lenses"
+                },
+                {
+                    "id": "zeiss_supreme",
+                    "name": "Zeiss Supreme Prime",
+                    "prompt": "with Zeiss Supreme Prime lenses"
+                },
+                {
+                    "id": "sony_cinealta",
+                    "name": "Sony CineAlta",
+                    "prompt": "with Sony CineAlta lenses"
+                }
+            ],
+            "filmLooks": [
+                "kodak_vision3_500t",
+                "kodak_vision3_250d"
+            ]
+        },
+        "panavision": {
+            "name": "Panavision (Cinema)",
+            "bodies": [
+                {
+                    "id": "dxl2",
+                    "name": "Millennium DXL2",
+                    "prompt": "shot on Panavision Millennium DXL2, 8K large format"
+                },
+                {
+                    "id": "genesis",
+                    "name": "Genesis",
+                    "prompt": "shot on Panavision Genesis"
+                }
+            ],
+            "lenses": [
+                {
+                    "id": "primo_70",
+                    "name": "Primo 70",
+                    "prompt": "with Panavision Primo 70 large format lenses"
+                },
+                {
+                    "id": "primo_artiste",
+                    "name": "Primo Artiste",
+                    "prompt": "with Panavision Primo Artiste lenses"
+                },
+                {
+                    "id": "ultra_panatar",
+                    "name": "Ultra Panatar",
+                    "prompt": "with Panavision Ultra Panatar anamorphic"
+                },
+                {
+                    "id": "c_series",
+                    "name": "C-Series Anamorphic",
+                    "prompt": "with Panavision C-Series anamorphic, vintage look"
+                }
+            ],
+            "filmLooks": [
+                "kodak_vision3_500t",
+                "kodak_vision3_250d",
+                "kodak_5219"
+            ]
+        },
+        "imax": {
+            "name": "IMAX",
+            "bodies": [
+                {
+                    "id": "imax_70mm",
+                    "name": "IMAX 70mm Film",
+                    "prompt": "shot on IMAX 70mm film, massive frame, stunning clarity"
+                },
+                {
+                    "id": "imax_digital",
+                    "name": "IMAX Digital",
+                    "prompt": "shot on IMAX Digital, enhanced resolution"
+                }
+            ],
+            "lenses": [
+                {
+                    "id": "hasselblad_imax",
+                    "name": "Hasselblad IMAX",
+                    "prompt": "with custom IMAX optics"
+                },
+                {
+                    "id": "panavision_imax",
+                    "name": "Panavision IMAX",
+                    "prompt": "with Panavision IMAX lenses"
+                }
+            ],
+            "filmLooks": [
+                "kodak_vision3_500t",
+                "kodak_5219"
+            ]
+        }
+    },
+    "filmLooks": {
+        "kodak_portra": {
+            "name": "Kodak Portra 400",
+            "prompt": "Kodak Portra 400 film look, warm tones, fine grain"
+        },
+        "kodak_ektar": {
+            "name": "Kodak Ektar 100",
+            "prompt": "Kodak Ektar 100 film look, vivid colors, fine grain"
+        },
+        "kodak_gold": {
+            "name": "Kodak Gold 200",
+            "prompt": "Kodak Gold 200 film look, warm nostalgic tones"
+        },
+        "kodak_trix": {
+            "name": "Kodak Tri-X 400",
+            "prompt": "Kodak Tri-X 400 black and white, iconic contrast"
+        },
+        "kodak_vision3_500t": {
+            "name": "Kodak Vision3 500T",
+            "prompt": "Kodak Vision3 500T motion picture film, tungsten balanced, cinematic colors"
+        },
+        "kodak_vision3_250d": {
+            "name": "Kodak Vision3 250D",
+            "prompt": "Kodak Vision3 250D motion picture film, daylight balanced, rich tones"
+        },
+        "kodak_vision3_50d": {
+            "name": "Kodak Vision3 50D",
+            "prompt": "Kodak Vision3 50D motion picture film, finest grain, maximum detail"
+        },
+        "kodak_5219": {
+            "name": "Kodak 5219 (500T)",
+            "prompt": "Kodak 5219 500T motion picture stock, classic Hollywood look"
+        },
+        "fuji_pro400h": {
+            "name": "Fujifilm Pro 400H",
+            "prompt": "Fujifilm Pro 400H film look, soft pastel colors"
+        },
+        "fuji_superia": {
+            "name": "Fujifilm Superia",
+            "prompt": "Fujifilm Superia film look, classic consumer aesthetic"
+        },
+        "fuji_velvia": {
+            "name": "Fujichrome Velvia",
+            "prompt": "Fujichrome Velvia slide film, saturated vivid colors"
+        },
+        "cinestill_800t": {
+            "name": "CineStill 800T",
+            "prompt": "CineStill 800T film look, tungsten cinematic, halation glow"
+        },
+        "ilford_hp5": {
+            "name": "Ilford HP5 Plus",
+            "prompt": "Ilford HP5 Plus black and white, classic grain"
+        },
+        "ilford_delta": {
+            "name": "Ilford Delta 3200",
+            "prompt": "Ilford Delta 3200 black and white, dramatic grain"
+        }
+    },
+    "focalLengths": [
+        {
+            "value": "14mm",
+            "label": "14mm (ultra-wide)"
+        },
+        {
+            "value": "18mm",
+            "label": "18mm (wide)"
+        },
+        {
+            "value": "24mm",
+            "label": "24mm (wide)"
+        },
+        {
+            "value": "28mm",
+            "label": "28mm (wide)"
+        },
+        {
+            "value": "35mm",
+            "label": "35mm (standard)"
+        },
+        {
+            "value": "40mm",
+            "label": "40mm (standard)"
+        },
+        {
+            "value": "50mm",
+            "label": "50mm (normal)"
+        },
+        {
+            "value": "65mm",
+            "label": "65mm"
+        },
+        {
+            "value": "75mm",
+            "label": "75mm"
+        },
+        {
+            "value": "85mm",
+            "label": "85mm (portrait)"
+        },
+        {
+            "value": "100mm",
+            "label": "100mm (portrait)"
+        },
+        {
+            "value": "135mm",
+            "label": "135mm (telephoto)"
+        },
+        {
+            "value": "200mm",
+            "label": "200mm (telephoto)"
+        }
+    ]
+}

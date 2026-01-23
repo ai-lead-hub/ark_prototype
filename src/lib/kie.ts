@@ -105,7 +105,7 @@ export async function callKie(
   let data: Record<string, unknown>;
   try {
     data = JSON.parse(responseText) as Record<string, unknown>;
-  } catch (parseError) {
+  } catch {
     throw new Error(`KIE returned invalid JSON: ${responseText.substring(0, 200)}`);
   }
 
