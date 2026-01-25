@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
     defaultState,
@@ -77,9 +77,24 @@ function ComboInput({
     onChange: (v: string) => void;
 }) {
     const [open, setOpen] = useState(false);
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        if (!open) return;
+
+        const handleClickOutside = (e: MouseEvent) => {
+            if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+                setOpen(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [open]);
 
     return (
-        <div className="relative">
+        <div className="relative" ref={containerRef}>
             <input
                 type="text"
                 value={value}
@@ -336,7 +351,6 @@ export function PromptBuilderV2({
     return createPortal(
         <div
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4"
-            onClick={(e) => e.target === e.currentTarget && onClose()}
         >
             <div className="relative flex flex-col h-[90vh] w-full max-w-[900px] overflow-hidden rounded-xl border border-white/10 bg-[#2a2a2a] shadow-2xl">
                 {/* Header */}

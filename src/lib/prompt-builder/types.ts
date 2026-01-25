@@ -404,10 +404,21 @@ export function parsePromptText(text: string): Partial<PromptBuilderState> {
             result.cameraAngle = angleMatch[1];
         }
 
-        // Parse shot/distance
-        const shotPatterns = ['extreme close-up', 'close-up', 'medium close-up', 'medium shot', 'medium full shot', 'full body', 'wide shot', 'macro detail'];
+        // Parse shot/distance - order from most specific to least specific to avoid false matches
+        const shotPatterns = [
+            'extreme close-up',
+            'medium close-up',
+            'medium full shot',
+            'medium shot',
+            'full body',
+            'wide shot',
+            'macro detail',
+            'close-up',  // Must come after more specific variants
+        ];
         for (const pattern of shotPatterns) {
-            if (cameraStr.includes(pattern)) {
+            // Use word boundary check to avoid partial matches
+            const regex = new RegExp(`\\b${pattern.replace(/-/g, '[- ]?')}\\b`, 'i');
+            if (regex.test(cameraStr)) {
                 result.cameraShot = pattern;
                 break;
             }

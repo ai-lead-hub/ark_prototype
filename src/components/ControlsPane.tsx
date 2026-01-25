@@ -1682,11 +1682,16 @@ export default function ControlsPane() {
       }
 
       // Upload reference images that have files but no URLs
+      // Use standardized filenames (image_1.jpg, image_2.jpg, etc.) so models can understand reference order
       const uploadedReferenceUrls: string[] = [];
+      let refIndex = 1;
       for (const ref of referenceUploads) {
         if (ref.file && !ref.url) {
           try {
-            const uploadedUrl = await uploadToFal(ref.file);
+            // Get file extension from original file or default to jpg
+            const ext = ref.file.name.split('.').pop()?.toLowerCase() || 'jpg';
+            const standardizedName = `image_${refIndex}.${ext}`;
+            const uploadedUrl = await uploadToFal(ref.file, standardizedName);
             uploadedReferenceUrls.push(uploadedUrl);
             setReferenceUploads((prev) =>
               prev.map((item) =>
@@ -1695,12 +1700,14 @@ export default function ControlsPane() {
                   : item
               )
             );
+            refIndex++;
           } catch (error) {
             console.error(`Failed to upload reference ${ref.name}:`, error);
             // Continue with other references, skip failed ones
           }
         } else if (ref.url) {
           uploadedReferenceUrls.push(ref.url);
+          refIndex++;
         }
       }
 
@@ -1769,8 +1776,15 @@ export default function ControlsPane() {
           ? uploadedReferenceUrls.slice(0, Math.min(selectedImage?.maxRefs ?? 5, 5))
           : [];
 
+        // Transform @img1, @img2, etc. references in prompt to image_1, image_2, etc.
+        let processedPrompt = prompt.trim();
+        for (let i = 1; i <= imageRefUrls.length; i++) {
+          // Replace @img1 -> image_1, @img2 -> image_2, etc. (case insensitive)
+          processedPrompt = processedPrompt.replace(new RegExp(`@img${i}\\b`, 'gi'), `image_${i}`);
+        }
+
         const imageJob = {
-          prompt: prompt.trim(),
+          prompt: processedPrompt,
           imageUrls: imageRefUrls,
           aspectRatio,
           seed: randomizeSeed ? Math.floor(Math.random() * 100000) : 1569,

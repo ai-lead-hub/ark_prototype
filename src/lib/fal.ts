@@ -159,9 +159,16 @@ function extractUploadUrl(result: unknown): string | undefined {
   return undefined;
 }
 
-export async function uploadToFal(file: File): Promise<string> {
+export async function uploadToFal(file: File, customName?: string): Promise<string> {
   const client = ensureFalClient();
-  const result = await client.storage.upload(file);
+
+  // If a custom name is provided, create a new File with that name
+  // This helps models understand which reference is which (e.g., image_1.jpg, image_2.jpg)
+  const fileToUpload = customName
+    ? new File([file], customName, { type: file.type })
+    : file;
+
+  const result = await client.storage.upload(fileToUpload);
   const url = extractUploadUrl(result);
   if (!url) {
     throw new Error("Upload response did not include a file URL.");
