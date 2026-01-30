@@ -104,18 +104,18 @@ export async function expandPrompt(
     type: "natural" | "yaml",
     mode: "image" | "video",
     referenceImages: string[] = [],
-    promptMode: "general" | "photoreal" | "audiogen" | "editing" = "photoreal"
+    promptMode: "general" | "photoreal" | "audiogen" | "editing" | "timestep" = "photoreal"
 ): Promise<string> {
     let systemPrompt: string;
 
     if (mode === "video") {
         const subMode = referenceImages.length > 0 ? "image_to_video" : "text_to_video";
-        // audiogen is for video with audio; editing/general fall back to photoreal for video
-        const videoMode = promptMode === "audiogen" ? "audiogen" : "photoreal";
+        // audiogen is for video with audio; timestep is for beat-by-beat; editing/general fall back to photoreal for video
+        const videoMode = promptMode === "audiogen" ? "audiogen" : promptMode === "timestep" ? "timestep" : "photoreal";
         systemPrompt = SYSTEM_PROMPTS.video[videoMode][subMode][type];
     } else {
-        // audiogen falls back to general for images; editing is image-specific
-        const imageMode = promptMode === "audiogen" ? "general" : promptMode;
+        // audiogen/timestep fall back to general for images; editing is image-specific
+        const imageMode = (promptMode === "audiogen" || promptMode === "timestep") ? "general" : promptMode;
         // Image prompts only have 'natural' - yaml was removed
         const imagePrompts = SYSTEM_PROMPTS.image[imageMode];
         systemPrompt = typeof imagePrompts === "object" && "natural" in imagePrompts
@@ -181,10 +181,10 @@ export async function alterPrompt(
     currentPrompt: string,
     instruction: string,
     mode: "image" | "video",
-    promptMode: "general" | "photoreal" | "audiogen" | "editing" = "photoreal"
+    promptMode: "general" | "photoreal" | "audiogen" | "editing" | "timestep" = "photoreal"
 ): Promise<string> {
-    // audiogen and editing don't have dedicated alteration prompts, fall back to general
-    const actualMode = (promptMode === "audiogen" || promptMode === "editing") ? "general" : promptMode;
+    // audiogen, editing, and timestep don't have dedicated alteration prompts, fall back to general
+    const actualMode = (promptMode === "audiogen" || promptMode === "editing" || promptMode === "timestep") ? "general" : promptMode;
     const systemPrompt = SYSTEM_PROMPTS.alteration[actualMode][mode];
     const userMessage = `CURRENT PROMPT: \n${currentPrompt}\n\nINSTRUCTION: \n${instruction}`;
     return callOpenRouter(userMessage, systemPrompt, []);

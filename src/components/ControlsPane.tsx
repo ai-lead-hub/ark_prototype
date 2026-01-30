@@ -177,7 +177,7 @@ export default function ControlsPane() {
   const [imagePrompt, setImagePrompt] = usePersistentState("imagePrompt", "");
   const [videoPrompt, setVideoPrompt] = usePersistentState("videoPrompt", "");
   const [specialPrompt, setSpecialPrompt] = usePersistentState("specialPrompt", "");
-  const [promptMode, setPromptMode] = usePersistentState<"photoreal" | "audiogen" | "editing" | "general">("promptMode", "photoreal");
+  const [promptMode, setPromptMode] = usePersistentState<"photoreal" | "audiogen" | "editing" | "general" | "timestep">("promptMode", "photoreal");
 
   const prompt = activeTab === "image" ? imagePrompt : activeTab === "video" ? videoPrompt : specialPrompt;
   const setPrompt = (val: string) => {
@@ -2749,23 +2749,32 @@ export default function ControlsPane() {
                   </button>
                   <div className="w-px bg-white/10 mx-1" />
 
-                  {/* Prompt Mode Toggle - 2 modes for video */}
+                  {/* Prompt Mode Toggle - 3 modes for video: photoreal, audiogen, timestep */}
                   <button
                     type="button"
                     onClick={() => setPromptMode(prev =>
-                      prev === "photoreal" ? "audiogen" : "photoreal"
+                      prev === "photoreal" ? "audiogen" : prev === "audiogen" ? "timestep" : "photoreal"
                     )}
                     disabled={isExpanding}
                     className={`flex h-7 w-7 items-center justify-center rounded-md border transition disabled:opacity-50 ${promptMode === "photoreal"
-                      ? "border-emerald-500/30 bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/40 hover:text-white"
-                      : "border-purple-500/30 bg-purple-500/20 text-purple-200 hover:bg-purple-500/40 hover:text-white"
+                        ? "border-emerald-500/30 bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/40 hover:text-white"
+                        : promptMode === "audiogen"
+                          ? "border-purple-500/30 bg-purple-500/20 text-purple-200 hover:bg-purple-500/40 hover:text-white"
+                          : "border-amber-500/30 bg-amber-500/20 text-amber-200 hover:bg-amber-500/40 hover:text-white"
                       }`}
-                    title={`Current Mode: ${promptMode === "photoreal" ? "Photorealistic (Camera Aware)" : "Audio-Gen (Sound Aware)"}`}
+                    title={`Current Mode: ${promptMode === "photoreal"
+                        ? "Photorealistic (Camera Aware)"
+                        : promptMode === "audiogen"
+                          ? "Audio-Gen (Sound Aware)"
+                          : "Timestep (Beat-by-Beat)"
+                      }`}
                   >
                     {promptMode === "photoreal" ? (
                       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" /><circle cx="12" cy="13" r="3" /></svg>
-                    ) : (
+                    ) : promptMode === "audiogen" ? (
                       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 10v3" /><path d="M6 6v11" /><path d="M10 3v18" /><path d="M14 8v7" /><path d="M18 5v13" /><path d="M22 10v3" /></svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
                     )}
                   </button>
                   <div className="w-px bg-white/10 mx-1" />
