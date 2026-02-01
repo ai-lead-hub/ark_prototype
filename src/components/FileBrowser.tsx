@@ -7,7 +7,6 @@ import { Spinner } from "./ui/Spinner";
 import { PublishModal } from "./PublishModal";
 import { buildDatedMediaPath, mediaFolderFromMime } from "../lib/storage-paths";
 import { setControlsPrompt } from "../lib/controls-store";
-import { type PinsMap } from "../lib/pins";
 import {
   loadPublished,
   addPublished,
@@ -25,7 +24,6 @@ import {
   listPrompts,
   recordFileMetadata,
   type PromptHistoryEntry,
-  listPins as fetchPins,
   setPin as apiSetPin,
   removePin as apiRemovePin,
   renamePin as apiRenamePin,
@@ -35,10 +33,14 @@ import { useHoverPlayVideos } from "../lib/useHoverPlayVideos";
 const IMAGE_EXTS = ["png", "jpg", "jpeg", "webp"];
 const VIDEO_EXTS = ["mp4", "webm", "mov", "mkv"];
 
-export default function FileBrowser() {
+type FileBrowserProps = {
+  disableKeyboardNav?: boolean;
+};
+
+export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
   const {
-    state: { entries, q, filterExt, selected, loading, connection },
-    actions: { setQuery, setFilters, select, refreshTree, rename },
+    state: { entries, q, filterExt, sortByName, pins, selected, loading, connection },
+    actions: { setQuery, setFilters, setSortByName, setPins, refreshPins, select, refreshTree, rename },
   } = useCatalog();
 
   const { jobs } = useQueue();
@@ -47,7 +49,6 @@ export default function FileBrowser() {
     [jobs]);
 
   const [viewMode, setViewMode] = useState<"list" | "grid">("grid");
-  const [sortByName, setSortByName] = useState(false);
   const [published, setPublished] = useState<PublishedMap>({});
   const [showRecent, setShowRecent] = useState(false);
   const [recentTab, setRecentTab] = useState<"references" | "prompts">("references");
@@ -85,32 +86,14 @@ export default function FileBrowser() {
     return `${connection.apiBase}|${connection.workspaceId}`;
   }, [connection]);
 
-  const [pins, setPins] = useState<PinsMap>({});
-
-  // Load pins from server
-  const loadPinsFromServer = useCallback(async () => {
-    if (!connection) {
-      setPins({});
-      return;
-    }
-    try {
-      const serverPins = await fetchPins(connection);
-      setPins(serverPins);
-    } catch (error) {
-      console.error("Failed to load pins:", error);
-      setPins({});
-    }
-  }, [connection]);
-
   useEffect(() => {
     if (!workspaceKey) {
-      setPins({});
       setPublished({});
       return;
     }
-    void loadPinsFromServer();
+    void refreshPins();
     setPublished(loadPublished(workspaceKey));
-  }, [workspaceKey, loadPinsFromServer]);
+  }, [workspaceKey, refreshPins]);
 
   // Toggle pin with server sync
   const handleTogglePin = useCallback(async (relPath: string) => {
@@ -137,9 +120,9 @@ export default function FileBrowser() {
     } catch (error) {
       console.error("Failed to toggle pin:", error);
       // Revert on failure
-      void loadPinsFromServer();
+      void refreshPins();
     }
-  }, [connection, pins, loadPinsFromServer]);
+  }, [connection, pins, refreshPins]);
 
   const refreshReferences = useCallback(() => {
     if (!workspaceKey) return;
@@ -294,7 +277,7 @@ export default function FileBrowser() {
           setRecentReferences(removeRecentReference(workspaceKey, relPath));
         }
         // Refresh pins from server
-        void loadPinsFromServer();
+        void refreshPins();
       }
 
       // Clear selection and refresh
@@ -645,6 +628,7 @@ export default function FileBrowser() {
 
   // Arrow key navigation for file browser (full grid navigation with auto-scroll)
   useEffect(() => {
+    if (disableKeyboardNav) return;
     const handleArrowNav = (e: KeyboardEvent) => {
       // Don't navigate if user is typing in an input
       const target = e.target as HTMLElement;
@@ -723,7 +707,7 @@ export default function FileBrowser() {
 
     document.addEventListener('keydown', handleArrowNav);
     return () => document.removeEventListener('keydown', handleArrowNav);
-  }, [selected, visibleEntries, select, editingId, viewMode]);
+  }, [selected, visibleEntries, select, editingId, viewMode, disableKeyboardNav]);
 
   // Handle multi-select click with shift support for range selection
   const handleMultiSelectClick = useCallback((entry: FileEntry, event: React.MouseEvent) => {

@@ -32,6 +32,7 @@ interface ImageEditorProps {
     imageName: string;
     onSave: (blob: Blob, filename: string) => Promise<void>;
     onClose: () => void;
+    onNavigate?: (direction: "left" | "right" | "up" | "down") => void;
     onPrevious?: () => void;
     onNext?: () => void;
 }
@@ -45,6 +46,7 @@ export default function ImageEditor({
     imageName,
     onSave,
     onClose,
+    onNavigate,
     onPrevious,
     onNext,
 }: ImageEditorProps) {
@@ -872,6 +874,7 @@ export default function ImageEditor({
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (textInput.visible) return;
+            if (e.metaKey || e.ctrlKey || e.altKey) return;
 
             if (e.key === "Escape") {
                 if (tool === "crop" && cropArea) {
@@ -885,24 +888,44 @@ export default function ImageEditor({
             } else if (e.key === "0" && (e.metaKey || e.ctrlKey)) {
                 e.preventDefault();
                 handleResetZoom();
-            } else if (e.key === "ArrowUp" && onPrevious) {
-                e.preventDefault();
-                onPrevious();
-            } else if (e.key === "ArrowDown" && onNext) {
-                e.preventDefault();
-                onNext();
-            } else if (e.key === "ArrowLeft" && onPrevious) {
-                e.preventDefault();
-                onPrevious();
-            } else if (e.key === "ArrowRight" && onNext) {
-                e.preventDefault();
-                onNext();
+            } else if (e.key === "ArrowUp") {
+                if (onNavigate) {
+                    e.preventDefault();
+                    onNavigate("up");
+                } else if (onPrevious) {
+                    e.preventDefault();
+                    onPrevious();
+                }
+            } else if (e.key === "ArrowDown") {
+                if (onNavigate) {
+                    e.preventDefault();
+                    onNavigate("down");
+                } else if (onNext) {
+                    e.preventDefault();
+                    onNext();
+                }
+            } else if (e.key === "ArrowLeft") {
+                if (onNavigate) {
+                    e.preventDefault();
+                    onNavigate("left");
+                } else if (onPrevious) {
+                    e.preventDefault();
+                    onPrevious();
+                }
+            } else if (e.key === "ArrowRight") {
+                if (onNavigate) {
+                    e.preventDefault();
+                    onNavigate("right");
+                } else if (onNext) {
+                    e.preventDefault();
+                    onNext();
+                }
             }
         };
 
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [textInput.visible, tool, cropArea, onClose, handleUndo, handleResetZoom, onPrevious, onNext]);
+    }, [textInput.visible, tool, cropArea, onClose, handleUndo, handleResetZoom, onNavigate, onPrevious, onNext]);
 
     return (
         <div

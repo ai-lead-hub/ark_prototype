@@ -21,7 +21,7 @@ type CatalogActions = {
   select(entry?: FileEntry): void;
   setFilters(filters: string[]): void;
   setQuery(value: string): void;
-  setSortByName(value: boolean): void;
+  setSortByName(next: boolean | ((prev: boolean) => boolean)): void;
   setPins(next: PinsMap | ((prev: PinsMap) => PinsMap)): void;
   refreshPins(): Promise<void>;
   rename(entry: FileEntry, newName: string): Promise<void>;

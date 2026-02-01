@@ -25,7 +25,7 @@ export default function Page() {
             </aside>
             <section className={`flex min-h-0 min-w-[420px] flex-[1.1] flex-col rounded-xl border border-white/5 bg-slate-900/50 backdrop-blur-sm ${isFullScreen ? "hidden" : ""}`}>
               <div className="flex-1 min-h-0 overflow-y-auto p-3">
-                <FileBrowser />
+                <FileBrowser disableKeyboardNav={isFullScreen} />
               </div>
             </section>
             <main

@@ -12,6 +12,7 @@ import {
   type FileEntry,
   type WorkspaceConnection,
 } from "../lib/api/files";
+import { listPins, type PinsMap } from "../lib/api/meta";
 import { CatalogContext, type CatalogContextValue } from "./CatalogContext";
 
 export type { CatalogState } from "./CatalogContext";
@@ -20,6 +21,8 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [filterExt, setFilterExt] = useState<string[]>([]);
   const [q, setQ] = useState("");
+  const [sortByName, setSortByName] = useState(false);
+  const [pins, setPins] = useState<PinsMap>({});
   const [selected, setSelected] = useState<FileEntry | undefined>();
   const [connection, setConnectionState] = useState<
     WorkspaceConnection | undefined
@@ -64,10 +67,30 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
     if (!connection) {
       setEntries([]);
       setSelected(undefined);
+      setPins({});
       return;
     }
     void refreshTree();
   }, [connection, refreshTree]);
+
+  const refreshPins = useCallback(async () => {
+    if (!connection) {
+      setPins({});
+      return;
+    }
+    try {
+      const nextPins = await listPins(connection);
+      setPins(nextPins);
+    } catch (error) {
+      console.error("Failed to load pins:", error);
+      setPins({});
+    }
+  }, [connection]);
+
+  useEffect(() => {
+    if (!connection) return;
+    void refreshPins();
+  }, [connection, refreshPins]);
 
   const setConnection = useCallback(
     (value?: WorkspaceConnection | null) => {
@@ -82,6 +105,8 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
         entries,
         filterExt,
         q,
+        sortByName,
+        pins,
         selected,
         connection,
         loading,
@@ -92,6 +117,9 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
         select: (entry?: FileEntry) => setSelected(entry),
         setFilters: (filters: string[]) => setFilterExt(filters),
         setQuery: (value: string) => setQ(value),
+        setSortByName,
+        setPins,
+        refreshPins,
         rename: async (entry: FileEntry, newName: string) => {
           if (!connection) return;
           // Properly construct new path by replacing only the filename at the end
@@ -116,11 +144,14 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
       entries,
       filterExt,
       q,
+      sortByName,
+      pins,
       selected,
       connection,
       loading,
       setConnection,
       refreshTree,
+      refreshPins,
     ]
   );
 

@@ -5,6 +5,7 @@ interface VideoPlayerProps {
     videoName: string;
     onSave: (blob: Blob, filename: string) => Promise<void>;
     onClose: () => void;
+    onNavigate?: (direction: "left" | "right" | "up" | "down") => void;
     onPrevious?: () => void;
     onNext?: () => void;
 }
@@ -19,6 +20,7 @@ export default function VideoPlayer({
     videoName,
     onSave,
     onClose,
+    onNavigate,
     onPrevious,
     onNext,
 }: VideoPlayerProps) {
@@ -175,36 +177,6 @@ export default function VideoPlayer({
         };
     }, [isSeeking, duration]);
 
-    // Keyboard shortcuts
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === "Escape") {
-                onClose();
-            } else if (e.code === "Space") {
-                e.preventDefault();
-                togglePlay();
-            } else if (e.key === "ArrowLeft") {
-                e.preventDefault();
-                stepFrame(-1);
-            } else if (e.key === "ArrowRight") {
-                e.preventDefault();
-                stepFrame(1);
-            } else if (e.key === "ArrowUp" && onPrevious) {
-                e.preventDefault();
-                onPrevious();
-            } else if (e.key === "ArrowDown" && onNext) {
-                e.preventDefault();
-                onNext();
-            } else if ((e.metaKey || e.ctrlKey) && e.key === "0") {
-                e.preventDefault();
-                resetZoom();
-            }
-        };
-
-        window.addEventListener("keydown", handleKeyDown);
-        return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [onClose, onPrevious, onNext]);
-
     // Zoom handler
     const handleWheel = useCallback((e: React.WheelEvent) => {
         e.preventDefault();
@@ -275,6 +247,58 @@ export default function VideoPlayer({
         video.currentTime = newTime;
         setCurrentTime(newTime);
     }, [duration]);
+
+    // Keyboard shortcuts
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === "Escape") {
+                onClose();
+            } else if (e.code === "Space") {
+                e.preventDefault();
+                togglePlay();
+            } else if (e.key === "ArrowLeft") {
+                if (e.metaKey || e.ctrlKey || e.altKey) return;
+                e.preventDefault();
+                if (onNavigate && !e.shiftKey) {
+                    onNavigate("left");
+                } else {
+                    stepFrame(-1);
+                }
+            } else if (e.key === "ArrowRight") {
+                if (e.metaKey || e.ctrlKey || e.altKey) return;
+                e.preventDefault();
+                if (onNavigate && !e.shiftKey) {
+                    onNavigate("right");
+                } else {
+                    stepFrame(1);
+                }
+            } else if (e.key === "ArrowUp") {
+                if (e.metaKey || e.ctrlKey || e.altKey) return;
+                if (onNavigate) {
+                    e.preventDefault();
+                    onNavigate("up");
+                } else if (onPrevious) {
+                    e.preventDefault();
+                    onPrevious();
+                }
+            } else if (e.key === "ArrowDown") {
+                if (e.metaKey || e.ctrlKey || e.altKey) return;
+                if (onNavigate) {
+                    e.preventDefault();
+                    onNavigate("down");
+                } else if (onNext) {
+                    e.preventDefault();
+                    onNext();
+                }
+            } else if ((e.metaKey || e.ctrlKey) && e.key === "0") {
+                e.preventDefault();
+                resetZoom();
+            }
+        };
+
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [onClose, onNavigate, onPrevious, onNext, resetZoom, togglePlay, stepFrame]);
 
     const changePlaybackRate = useCallback(() => {
         const rates = [0.5, 1, 1.5, 2];
@@ -530,7 +554,7 @@ export default function VideoPlayer({
                         <button
                             onClick={() => stepFrame(-1)}
                             className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-300 hover:bg-white/10 hover:text-white transition"
-                            title="Previous frame (←)"
+                            title="Previous frame (Shift+←)"
                         >
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                 <polygon points="11,19 2,12 11,5" fill="currentColor" />
@@ -542,7 +566,7 @@ export default function VideoPlayer({
                         <button
                             onClick={() => stepFrame(1)}
                             className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-300 hover:bg-white/10 hover:text-white transition"
-                            title="Next frame (→)"
+                            title="Next frame (Shift+→)"
                         >
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                 <polygon points="13,19 22,12 13,5" fill="currentColor" />

@@ -12,7 +12,6 @@ import { uploadToFal } from "../lib/fal";
 import { compressImage } from "../lib/image-utils";
 import { recordFileMetadata, recordGeneration } from "../lib/api/meta";
 import { enqueueControlsAction } from "../lib/controls-store";
-import { loadPins } from "../lib/pins";
 import ImageEditor from "./ImageEditor";
 import VideoPlayer from "./VideoPlayer";
 
@@ -27,7 +26,7 @@ export default function PreviewPane({
   onToggleFullScreen?: () => void;
 }) {
   const {
-    state: { selected, connection, entries },
+    state: { selected, connection, entries, pins, q, filterExt, sortByName },
     actions: { refreshTree, select },
   } = useCatalog();
   const { addJob } = useQueue();
@@ -581,18 +580,53 @@ export default function PreviewPane({
     setPreviewUrl(getFileUrl(connection, selectedRelPath, { includeToken: true }));
   }, [connection, selectedRelPath, selectedKind]);
 
-  // Navigation: get media files only (images/videos) for arrow key navigation
-  // Exclude pinned files from navigation to prevent looping issues
-  // Memoize the array to keep reference stable
+  // Navigation: keep ordering and filters in sync with the file browser
+  // Deduplicate to avoid loops if the backend returns repeated entries.
   const mediaFiles = useMemo(() => {
-    const workspaceKey = connection?.workspaceId || "";
-    const pins = workspaceKey ? loadPins(workspaceKey) : {};
-    return entries.filter(
-      (e) => e.kind === "file" &&
-        (e.mime.startsWith("image") || e.mime.startsWith("video")) &&
-        !pins[e.relPath] // Exclude pinned files
-    );
-  }, [entries, connection?.workspaceId]);
+    const query = q.trim().toLowerCase();
+
+    const filtered = entries.filter((entry) => {
+      // 1. Basic Exclusion: No directories, no dotfiles
+      if (entry.kind === "dir") return false;
+      if (entry.name.startsWith(".")) return false;
+
+      // 2. Mime Type Check: Only images and videos
+      const isMedia = entry.mime.startsWith("image/") || entry.mime.startsWith("video/");
+      if (!isMedia) return false;
+
+      // 3. Search Query
+      const matchesQuery = query
+        ? entry.name.toLowerCase().includes(query) ||
+        entry.relPath.toLowerCase().includes(query)
+        : true;
+
+      // 4. Extension Filter (if active)
+      const matchesExt =
+        filterExt.length === 0 ||
+        filterExt.includes(entry.ext);
+
+      return matchesQuery && matchesExt;
+    });
+
+    const pinnedEntries = filtered
+      .filter((entry) => Boolean(pins[entry.relPath]))
+      .sort((a, b) => (pins[b.relPath] ?? 0) - (pins[a.relPath] ?? 0));
+
+    let unpinnedEntries = filtered.filter((entry) => !pins[entry.relPath]);
+    if (sortByName) {
+      unpinnedEntries = unpinnedEntries.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    const ordered = [...pinnedEntries, ...unpinnedEntries];
+    const seenRelPaths = new Set<string>();
+    const seenIds = new Set<string>();
+    return ordered.filter((entry) => {
+      if (seenRelPaths.has(entry.relPath) || seenIds.has(entry.id)) return false;
+      seenRelPaths.add(entry.relPath);
+      seenIds.add(entry.id);
+      return true;
+    });
+  }, [entries, pins, q, filterExt, sortByName]);
 
   // Compute currentIndex for UI indicators (passed as prop conditions)
   const currentIndex = useMemo(() =>
@@ -600,32 +634,52 @@ export default function PreviewPane({
     [selected, mediaFiles]
   );
 
+  type NavigateDirection = "left" | "right" | "up" | "down";
+
+  const getColumnCount = () => {
+    if (typeof window === "undefined") return 2;
+    return window.innerWidth >= 640 ? 3 : 2;
+  };
+
   // Navigation callbacks - compute index fresh inside to avoid stale closures
-  const handleNavigatePrevious = useCallback(() => {
+  const handleNavigate = useCallback((direction: NavigateDirection) => {
     if (!selected || mediaFiles.length === 0) return;
 
     // Find current index using ID (not relPath which might have issues)
     const idx = mediaFiles.findIndex((e) => e.id === selected.id);
-    if (idx > 0) {
-      const prevEntry = mediaFiles[idx - 1];
-      if (prevEntry && prevEntry.id !== selected.id) {
-        select(prevEntry);
-      }
+    if (idx === -1) return;
+
+    const columnCount = getColumnCount();
+    let nextIndex = idx;
+
+    if (direction === "left") {
+      nextIndex = idx - 1;
+    } else if (direction === "right") {
+      nextIndex = idx + 1;
+    } else if (direction === "up") {
+      nextIndex = idx - columnCount;
+    } else if (direction === "down") {
+      nextIndex = idx + columnCount;
     }
-  }, [selected, mediaFiles, select]);
 
-  const handleNavigateNext = useCallback(() => {
-    if (!selected || mediaFiles.length === 0) return;
+    if (nextIndex < 0) nextIndex = 0;
+    if (nextIndex >= mediaFiles.length) nextIndex = mediaFiles.length - 1;
 
-    // Find current index using ID
-    const idx = mediaFiles.findIndex((e) => e.id === selected.id);
-    if (idx >= 0 && idx < mediaFiles.length - 1) {
-      const nextEntry = mediaFiles[idx + 1];
+    if (nextIndex !== idx) {
+      const nextEntry = mediaFiles[nextIndex];
       if (nextEntry && nextEntry.id !== selected.id) {
         select(nextEntry);
       }
     }
   }, [selected, mediaFiles, select]);
+
+  const handleNavigatePrevious = useCallback(() => {
+    handleNavigate("up");
+  }, [handleNavigate]);
+
+  const handleNavigateNext = useCallback(() => {
+    handleNavigate("down");
+  }, [handleNavigate]);
 
 
   const handleDownload = async () => {
@@ -857,6 +911,7 @@ export default function PreviewPane({
             await refreshTree(relPath);
           }}
           onClose={() => onToggleFullScreen?.()}
+          onNavigate={handleNavigate}
           onPrevious={currentIndex > 0 ? handleNavigatePrevious : undefined}
           onNext={currentIndex >= 0 && currentIndex < mediaFiles.length - 1 ? handleNavigateNext : undefined}
         />
@@ -874,6 +929,7 @@ export default function PreviewPane({
             await refreshTree(relPath);
           }}
           onClose={() => onToggleFullScreen?.()}
+          onNavigate={handleNavigate}
           onPrevious={currentIndex > 0 ? handleNavigatePrevious : undefined}
           onNext={currentIndex >= 0 && currentIndex < mediaFiles.length - 1 ? handleNavigateNext : undefined}
         />
