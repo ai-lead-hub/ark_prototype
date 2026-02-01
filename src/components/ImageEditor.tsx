@@ -83,6 +83,11 @@ export default function ImageEditor({
     const [saving, setSaving] = useState(false);
     const [status, setStatus] = useState<string | null>(null);
 
+    // Transform state for live preview (applied on save)
+    const [flipH, setFlipH] = useState(false);
+    const [flipV, setFlipV] = useState(false);
+    const [rotation, setRotation] = useState(0); // 0, 90, 180, 270
+
     // Focus text input when it becomes visible
     useEffect(() => {
         if (textInput.visible && textInputRef.current) {
@@ -142,13 +147,28 @@ export default function ImageEditor({
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         // Calculate centered position
-        const scaledW = img.naturalWidth * zoom;
-        const scaledH = img.naturalHeight * zoom;
+        // For rotation, we may need to swap dimensions
+        const isRotated90or270 = rotation === 90 || rotation === 270;
+        const displayW = isRotated90or270 ? img.naturalHeight : img.naturalWidth;
+        const displayH = isRotated90or270 ? img.naturalWidth : img.naturalHeight;
+        const scaledW = displayW * zoom;
+        const scaledH = displayH * zoom;
         const offsetX = (canvas.width - scaledW) / 2 + panOffset.x;
         const offsetY = (canvas.height - scaledH) / 2 + panOffset.y;
 
-        // Draw image
-        ctx.drawImage(img, offsetX, offsetY, scaledW, scaledH);
+        // Draw image with transforms
+        ctx.save();
+        // Move to center of where image will be drawn
+        ctx.translate(offsetX + scaledW / 2, offsetY + scaledH / 2);
+        // Apply rotation
+        ctx.rotate((rotation * Math.PI) / 180);
+        // Apply flip
+        ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
+        // Draw image centered at origin (the transforms handle the positioning)
+        const drawW = img.naturalWidth * zoom;
+        const drawH = img.naturalHeight * zoom;
+        ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
+        ctx.restore();
 
         // Draw annotations
         annotations.forEach((ann) => {
@@ -291,7 +311,7 @@ export default function ImageEditor({
             ctx.setLineDash([]);
             ctx.strokeRect(cropX, cropY, cropW, cropH);
         }
-    }, [imageLoaded, zoom, panOffset, annotations, currentDraw, currentBrushStroke, brushSize, cropArea, tool, color]);
+    }, [imageLoaded, zoom, panOffset, annotations, currentDraw, currentBrushStroke, brushSize, cropArea, tool, color, flipH, flipV, rotation]);
 
     useEffect(() => {
         render();
@@ -555,6 +575,21 @@ export default function ImageEditor({
         setCropArea(null);
     }, []);
 
+    // Flip horizontal toggle (live preview)
+    const handleFlipHorizontal = useCallback(() => {
+        setFlipH((prev) => !prev);
+    }, []);
+
+    // Flip vertical toggle (live preview)
+    const handleFlipVertical = useCallback(() => {
+        setFlipV((prev) => !prev);
+    }, []);
+
+    // Rotate 90° clockwise toggle (live preview)
+    const handleRotate90 = useCallback(() => {
+        setRotation((prev) => (prev + 90) % 360);
+    }, []);
+
     // Apply crop
     const handleApplyCrop = useCallback(async () => {
         if (!cropArea || !imageRef.current) return;
@@ -657,7 +692,7 @@ export default function ImageEditor({
         }
     }, [cropArea, annotations, imageName, onSave]);
 
-    // Save with annotations
+    // Save with annotations and transforms
     const handleSave = useCallback(async () => {
         const img = imageRef.current;
         if (!img) {
@@ -666,20 +701,31 @@ export default function ImageEditor({
             return;
         }
 
-        console.log("Starting save with", annotations.length, "annotations");
+        console.log("Starting save with", annotations.length, "annotations, transforms:", { flipH, flipV, rotation });
+
+        // Calculate output dimensions (swap for 90/270 rotation)
+        const isRotated90or270 = rotation === 90 || rotation === 270;
+        const outWidth = isRotated90or270 ? img.naturalHeight : img.naturalWidth;
+        const outHeight = isRotated90or270 ? img.naturalWidth : img.naturalHeight;
 
         const canvas = document.createElement("canvas");
-        canvas.width = img.naturalWidth;
-        canvas.height = img.naturalHeight;
+        canvas.width = outWidth;
+        canvas.height = outHeight;
         const ctx = canvas.getContext("2d");
         if (!ctx) {
             console.error("Could not get canvas context");
             return;
         }
 
-        ctx.drawImage(img, 0, 0);
+        // Apply transforms and draw image
+        ctx.save();
+        ctx.translate(outWidth / 2, outHeight / 2);
+        ctx.rotate((rotation * Math.PI) / 180);
+        ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
+        ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
+        ctx.restore();
 
-        // Draw annotations
+        // Draw annotations (need to transform annotation coordinates too)
         annotations.forEach((ann) => {
             ctx.strokeStyle = ann.color;
             ctx.fillStyle = ann.color;
@@ -687,43 +733,76 @@ export default function ImageEditor({
             ctx.lineCap = "round";
             ctx.lineJoin = "round";
 
+            // Transform annotation coordinates based on transforms
+            const transformPoint = (x: number, y: number) => {
+                let tx = x, ty = y;
+                // Apply flip
+                if (flipH) tx = img.naturalWidth - tx;
+                if (flipV) ty = img.naturalHeight - ty;
+                // Apply rotation
+                if (rotation === 90) {
+                    const newX = img.naturalHeight - ty;
+                    const newY = tx;
+                    tx = newX; ty = newY;
+                } else if (rotation === 180) {
+                    tx = img.naturalWidth - tx;
+                    ty = img.naturalHeight - ty;
+                } else if (rotation === 270) {
+                    const newX = ty;
+                    const newY = img.naturalWidth - tx;
+                    tx = newX; ty = newY;
+                }
+                return { x: tx, y: ty };
+            };
+
+            const p = transformPoint(ann.x, ann.y);
+
             if (ann.type === "rect" && ann.w !== undefined && ann.h !== undefined) {
                 ctx.lineWidth = ann.strokeWidth || 2;
-                ctx.strokeRect(ann.x, ann.y, ann.w, ann.h);
+                // For rects, we need to transform all corners and redraw
+                const p2 = transformPoint(ann.x + ann.w, ann.y + ann.h);
+                const x = Math.min(p.x, p2.x);
+                const y = Math.min(p.y, p2.y);
+                const w = Math.abs(p2.x - p.x);
+                const h = Math.abs(p2.y - p.y);
+                ctx.strokeRect(x, y, w, h);
             } else if (ann.type === "circle" && ann.r !== undefined) {
                 ctx.lineWidth = ann.strokeWidth || 2;
                 ctx.beginPath();
-                ctx.arc(ann.x, ann.y, ann.r, 0, Math.PI * 2);
+                ctx.arc(p.x, p.y, ann.r, 0, Math.PI * 2);
                 ctx.stroke();
             } else if (ann.type === "text" && ann.text) {
                 ctx.font = `${ann.fontSize || 24}px sans-serif`;
-                ctx.fillText(ann.text, ann.x, ann.y);
+                ctx.fillText(ann.text, p.x, p.y);
             } else if (ann.type === "brush" && ann.points && ann.points.length > 1) {
                 ctx.lineWidth = ann.strokeWidth || 8;
                 ctx.beginPath();
-                ctx.moveTo(ann.points[0].x, ann.points[0].y);
+                const firstPt = transformPoint(ann.points[0].x, ann.points[0].y);
+                ctx.moveTo(firstPt.x, firstPt.y);
                 for (let i = 1; i < ann.points.length; i++) {
-                    ctx.lineTo(ann.points[i].x, ann.points[i].y);
+                    const pt = transformPoint(ann.points[i].x, ann.points[i].y);
+                    ctx.lineTo(pt.x, pt.y);
                 }
                 ctx.stroke();
             } else if (ann.type === "arrow" && ann.x2 !== undefined && ann.y2 !== undefined) {
                 ctx.lineWidth = ann.strokeWidth || 2;
+                const p2 = transformPoint(ann.x2, ann.y2);
                 ctx.beginPath();
-                ctx.moveTo(ann.x, ann.y);
-                ctx.lineTo(ann.x2, ann.y2);
+                ctx.moveTo(p.x, p.y);
+                ctx.lineTo(p2.x, p2.y);
                 ctx.stroke();
-                // Arrowhead - proportional to stroke width
+                // Arrowhead
                 const strokeW = ann.strokeWidth || 2;
                 const headLen = Math.max(15, strokeW * 4);
                 const headLineW = Math.max(2, strokeW * 0.6);
                 const savedLineWidth = ctx.lineWidth;
                 ctx.lineWidth = headLineW;
-                const angle = Math.atan2(ann.y2 - ann.y, ann.x2 - ann.x);
+                const angle = Math.atan2(p2.y - p.y, p2.x - p.x);
                 ctx.beginPath();
-                ctx.moveTo(ann.x2, ann.y2);
-                ctx.lineTo(ann.x2 - headLen * Math.cos(angle - Math.PI / 6), ann.y2 - headLen * Math.sin(angle - Math.PI / 6));
-                ctx.moveTo(ann.x2, ann.y2);
-                ctx.lineTo(ann.x2 - headLen * Math.cos(angle + Math.PI / 6), ann.y2 - headLen * Math.sin(angle + Math.PI / 6));
+                ctx.moveTo(p2.x, p2.y);
+                ctx.lineTo(p2.x - headLen * Math.cos(angle - Math.PI / 6), p2.y - headLen * Math.sin(angle - Math.PI / 6));
+                ctx.moveTo(p2.x, p2.y);
+                ctx.lineTo(p2.x - headLen * Math.cos(angle + Math.PI / 6), p2.y - headLen * Math.sin(angle + Math.PI / 6));
                 ctx.stroke();
                 ctx.lineWidth = savedLineWidth;
             }
@@ -734,11 +813,14 @@ export default function ImageEditor({
         });
 
         const baseName = imageName.replace(/\.[^.]+$/, "");
-        const filename = `${baseName}_annotated.png`;
+        // Include transform info in filename if transforms applied
+        const hasTransforms = flipH || flipV || rotation !== 0;
+        const transformSuffix = hasTransforms ? "_edited" : "_annotated";
+        const filename = `${baseName}${transformSuffix}.png`;
         console.log("Saving as:", filename, "blob size:", blob.size);
 
         setSaving(true);
-        setStatus("Saving annotated image...");
+        setStatus("Saving image...");
         try {
             await onSave(blob, filename);
             console.log("Save successful");
@@ -750,7 +832,7 @@ export default function ImageEditor({
             setSaving(false);
             setTimeout(() => setStatus(null), 3000);
         }
-    }, [annotations, imageName, onSave]);
+    }, [annotations, imageName, onSave, flipH, flipV, rotation]);
 
     // Open in Photopea
     const handleOpenPhotopea = useCallback(async () => {
@@ -908,6 +990,9 @@ export default function ImageEditor({
                 onApplyCrop={handleApplyCrop}
                 onUndo={handleUndo}
                 onClear={handleClear}
+                onFlipHorizontal={handleFlipHorizontal}
+                onFlipVertical={handleFlipVertical}
+                onRotate90={handleRotate90}
                 onSave={handleSave}
                 onOpenPhotopea={handleOpenPhotopea}
                 onClose={onClose}

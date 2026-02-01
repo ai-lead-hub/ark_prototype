@@ -1495,7 +1495,7 @@ export default function ControlsPane() {
     }
   }, [modelKey, activeTab, setActiveTab]);
 
-  const handleExpandPrompt = async (type: "natural" | "yaml") => {
+  const handleExpandPrompt = async (type: "natural") => {
     if (!prompt.trim()) {
       setStatus("Please enter a prompt first.");
       setTimeout(() => setStatus(null), 3000);
@@ -2757,16 +2757,16 @@ export default function ControlsPane() {
                     )}
                     disabled={isExpanding}
                     className={`flex h-7 w-7 items-center justify-center rounded-md border transition disabled:opacity-50 ${promptMode === "photoreal"
-                        ? "border-emerald-500/30 bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/40 hover:text-white"
-                        : promptMode === "audiogen"
-                          ? "border-purple-500/30 bg-purple-500/20 text-purple-200 hover:bg-purple-500/40 hover:text-white"
-                          : "border-amber-500/30 bg-amber-500/20 text-amber-200 hover:bg-amber-500/40 hover:text-white"
+                      ? "border-emerald-500/30 bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/40 hover:text-white"
+                      : promptMode === "audiogen"
+                        ? "border-purple-500/30 bg-purple-500/20 text-purple-200 hover:bg-purple-500/40 hover:text-white"
+                        : "border-amber-500/30 bg-amber-500/20 text-amber-200 hover:bg-amber-500/40 hover:text-white"
                       }`}
                     title={`Current Mode: ${promptMode === "photoreal"
-                        ? "Photorealistic (Camera Aware)"
-                        : promptMode === "audiogen"
-                          ? "Audio-Gen (Sound Aware)"
-                          : "Timestep (Beat-by-Beat)"
+                      ? "Photorealistic (Camera Aware)"
+                      : promptMode === "audiogen"
+                        ? "Audio-Gen (Sound Aware)"
+                        : "Timestep (Beat-by-Beat)"
                       }`}
                   >
                     {promptMode === "photoreal" ? (
@@ -2789,19 +2789,6 @@ export default function ControlsPane() {
                       <Spinner size="sm" />
                     ) : (
                       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" /><path d="M5 3v4" /><path d="M9 3v4" /><path d="M3 5h4" /><path d="M3 9h4" /></svg>
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleExpandPrompt("yaml")}
-                    disabled={isExpanding || !prompt.trim()}
-                    className="flex h-7 w-7 items-center justify-center rounded-md border border-indigo-500/30 bg-indigo-500/20 text-indigo-200 transition hover:bg-indigo-500/40 hover:text-white disabled:opacity-50"
-                    title="Expand to YAML"
-                  >
-                    {isExpanding ? (
-                      <Spinner size="sm" />
-                    ) : (
-                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" /><path d="M12 13v6" /><path d="M12 13h-2" /><path d="M12 13h2" /></svg>
                     )}
                   </button>
                 </div>
@@ -3932,19 +3919,6 @@ export default function ControlsPane() {
                         <Spinner size="sm" />
                       ) : (
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" /><path d="M5 3v4" /><path d="M9 3v4" /><path d="M3 5h4" /><path d="M3 9h4" /></svg>
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleExpandPrompt("yaml")}
-                      disabled={isExpanding || isSubmitting || !prompt.trim()}
-                      className="flex h-7 w-7 items-center justify-center rounded-md border border-indigo-500/30 bg-indigo-500/20 text-indigo-200 transition hover:bg-indigo-500/40 hover:text-white disabled:opacity-50"
-                      title="Expand to YAML"
-                    >
-                      {isExpanding ? (
-                        <Spinner size="sm" />
-                      ) : (
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" /><path d="M12 13v6" /><path d="M12 13h-2" /><path d="M12 13h2" /></svg>
                       )}
                     </button>
                   </div>

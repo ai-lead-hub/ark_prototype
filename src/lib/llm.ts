@@ -101,7 +101,7 @@ async function callOpenRouter(
 
 export async function expandPrompt(
     prompt: string,
-    type: "natural" | "yaml",
+    _type: "natural", // kept for API compatibility, always natural
     mode: "image" | "video",
     referenceImages: string[] = [],
     promptMode: "general" | "photoreal" | "audiogen" | "editing" | "timestep" = "photoreal"
@@ -112,11 +112,11 @@ export async function expandPrompt(
         const subMode = referenceImages.length > 0 ? "image_to_video" : "text_to_video";
         // audiogen is for video with audio; timestep is for beat-by-beat; editing/general fall back to photoreal for video
         const videoMode = promptMode === "audiogen" ? "audiogen" : promptMode === "timestep" ? "timestep" : "photoreal";
-        systemPrompt = SYSTEM_PROMPTS.video[videoMode][subMode][type];
+        systemPrompt = SYSTEM_PROMPTS.video[videoMode][subMode];
     } else {
         // audiogen/timestep fall back to general for images; editing is image-specific
         const imageMode = (promptMode === "audiogen" || promptMode === "timestep") ? "general" : promptMode;
-        // Image prompts only have 'natural' - yaml was removed
+        // Image prompts only have 'natural'
         const imagePrompts = SYSTEM_PROMPTS.image[imageMode];
         systemPrompt = typeof imagePrompts === "object" && "natural" in imagePrompts
             ? imagePrompts.natural

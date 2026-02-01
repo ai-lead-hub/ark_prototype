@@ -46,7 +46,10 @@ export interface ScenePreset {
     composition: string;
 }
 
+export type PromptBuilderMode = 'default' | 'cinematic';
+
 export interface PromptBuilderState {
+    mode: PromptBuilderMode;
     preset: string;
     prompt: string;
     style: string;
@@ -62,6 +65,17 @@ export interface PromptBuilderState {
     lighting: string;
     colorMood: string;
     composition: string;
+    // Cinematic mode fields
+    subject: string;
+    environment: string;
+    camera: string;           // Camera body for cinematic (e.g., "ARRI ALEXA 65")
+    filmStock: string;        // Film stock (e.g., "CineStill 800T")
+    lightingSource: string;   // e.g., "Neon signs"
+    lightingStyle: string;    // e.g., "low key"
+    atmosphere: string;       // e.g., "mysterious"
+    movieAesthetic: string;   // e.g., "Blade Runner 2049 inspired"
+    filter: string;           // e.g., "Pro mist diffusion"
+    aspectRatio: string;      // e.g., "2.39:1"
 }
 
 export interface PromptBuilderData {
@@ -189,6 +203,7 @@ export const cameraOptions = {
 
 export function defaultState(): PromptBuilderState {
     return {
+        mode: "default",
         preset: "custom",
         prompt: "",
         style: "",
@@ -203,6 +218,17 @@ export function defaultState(): PromptBuilderState {
         lighting: "",
         colorMood: "",
         composition: "",
+        // Cinematic mode fields
+        subject: "",
+        environment: "",
+        camera: "",
+        filmStock: "",
+        lightingSource: "",
+        lightingStyle: "",
+        atmosphere: "",
+        movieAesthetic: "",
+        filter: "",
+        aspectRatio: "",
     };
 }
 
@@ -450,4 +476,157 @@ export function parsePromptText(text: string): Partial<PromptBuilderState> {
     result.prompt = remaining.trim();
 
     return result;
+}
+
+// Cinematic mode dropdown options
+export const cinematicOptions = {
+    style: [
+        { value: "A cinematic film still", label: "Cinematic film still" },
+        { value: "A noir film still", label: "Noir film still" },
+        { value: "A sci-fi film still", label: "Sci-fi film still" },
+        { value: "A dramatic film still", label: "Dramatic film still" },
+        { value: "A moody cinematic portrait", label: "Moody cinematic portrait" },
+        { value: "An epic cinematic shot", label: "Epic cinematic shot" },
+        { value: "A vintage film photograph", label: "Vintage film photograph" },
+        { value: "A documentary-style shot", label: "Documentary-style shot" },
+    ],
+    camera: [
+        { value: "ARRI ALEXA 65", label: "ARRI ALEXA 65" },
+        { value: "ARRI ALEXA Mini LF", label: "ARRI ALEXA Mini LF" },
+        { value: "RED V-Raptor 8K", label: "RED V-Raptor 8K" },
+        { value: "Sony VENICE 2", label: "Sony VENICE 2" },
+        { value: "Panavision Millennium DXL2", label: "Panavision Millennium DXL2" },
+        { value: "Blackmagic URSA Mini Pro 12K", label: "Blackmagic URSA Mini Pro 12K" },
+        { value: "Canon EOS C500 Mark II", label: "Canon EOS C500 Mark II" },
+    ],
+    focalLength: [
+        { value: "18mm", label: "18mm (ultra wide)" },
+        { value: "24mm", label: "24mm (wide)" },
+        { value: "35mm", label: "35mm (natural)" },
+        { value: "50mm", label: "50mm (standard)" },
+        { value: "85mm", label: "85mm (portrait)" },
+        { value: "100mm", label: "100mm (telephoto)" },
+        { value: "135mm", label: "135mm (long)" },
+    ],
+    lensType: [
+        { value: "anamorphic lens", label: "Anamorphic lens" },
+        { value: "spherical lens", label: "Spherical lens" },
+        { value: "prime lens", label: "Prime lens" },
+        { value: "Cooke S4/i lens", label: "Cooke S4/i lens" },
+        { value: "Zeiss Master Prime lens", label: "Zeiss Master Prime lens" },
+        { value: "Panavision Primo 70 lens", label: "Panavision Primo 70 lens" },
+    ],
+    filmStock: [
+        { value: "CineStill 800T film", label: "CineStill 800T" },
+        { value: "Kodak Vision3 500T film", label: "Kodak Vision3 500T" },
+        { value: "Kodak Vision3 250D film", label: "Kodak Vision3 250D" },
+        { value: "Kodak Portra 400 film", label: "Kodak Portra 400" },
+        { value: "Fujifilm Eterna 500 film", label: "Fujifilm Eterna 500" },
+        { value: "Ilford HP5 Plus film", label: "Ilford HP5 Plus (B&W)" },
+    ],
+    lightingSource: [
+        { value: "Neon signs", label: "Neon signs" },
+        { value: "Moonlight", label: "Moonlight" },
+        { value: "Candlelight", label: "Candlelight" },
+        { value: "Streetlamps", label: "Streetlamps" },
+        { value: "Sunset glow", label: "Sunset glow" },
+        { value: "Firelight", label: "Firelight" },
+        { value: "Fluorescent lights", label: "Fluorescent lights" },
+        { value: "Tungsten lights", label: "Tungsten lights" },
+    ],
+    lightingStyle: [
+        { value: "low key", label: "Low key (dark)" },
+        { value: "high key", label: "High key (bright)" },
+        { value: "chiaroscuro", label: "Chiaroscuro" },
+        { value: "silhouette", label: "Silhouette" },
+        { value: "rim lighting", label: "Rim lighting" },
+        { value: "Rembrandt", label: "Rembrandt" },
+        { value: "split lighting", label: "Split lighting" },
+    ],
+    atmosphere: [
+        { value: "mysterious", label: "Mysterious" },
+        { value: "melancholic", label: "Melancholic" },
+        { value: "tense", label: "Tense" },
+        { value: "romantic", label: "Romantic" },
+        { value: "nostalgic", label: "Nostalgic" },
+        { value: "eerie", label: "Eerie" },
+        { value: "hopeful", label: "Hopeful" },
+        { value: "dreamy", label: "Dreamy" },
+    ],
+    movieAesthetic: [
+        { value: "Blade Runner 2049 inspired aesthetic", label: "Blade Runner 2049" },
+        { value: "The Matrix inspired aesthetic", label: "The Matrix" },
+        { value: "Interstellar inspired aesthetic", label: "Interstellar" },
+        { value: "Dune inspired aesthetic", label: "Dune" },
+        { value: "Drive inspired aesthetic", label: "Drive" },
+        { value: "Amélie inspired aesthetic", label: "Amélie" },
+        { value: "Her inspired aesthetic", label: "Her" },
+        { value: "The Godfather inspired aesthetic", label: "The Godfather" },
+        { value: "Joker inspired aesthetic", label: "Joker" },
+        { value: "La La Land inspired aesthetic", label: "La La Land" },
+    ],
+    filter: [
+        { value: "Pro mist diffusion", label: "Pro mist diffusion" },
+        { value: "Black pro mist 1/4", label: "Black pro mist 1/4" },
+        { value: "Vintage halation", label: "Vintage halation" },
+        { value: "Glimmerglass", label: "Glimmerglass" },
+        { value: "Soft focus", label: "Soft focus" },
+        { value: "No filter", label: "No filter" },
+    ],
+    aspectRatio: [
+        { value: "2.39:1", label: "2.39:1 (Cinemascope)" },
+        { value: "1.85:1", label: "1.85:1 (Widescreen)" },
+        { value: "16:9", label: "16:9 (HD)" },
+        { value: "4:3", label: "4:3 (Academy)" },
+        { value: "2.76:1", label: "2.76:1 (Ultra Panavision)" },
+        { value: "1.33:1", label: "1.33:1 (Classic)" },
+    ],
+};
+
+/**
+ * Build cinematic prompt in 4-line template format:
+ * Line 1: [STYLE] of a [SUBJECT], set in [ENVIRONMENT].
+ * Line 2: Captured with [CAMERA], [FOCAL LENGTH], [LENS TYPE], [FILM STOCK].
+ * Line 3: [LIGHTING SOURCE], [LIGHTING STYLE], [ATMOSPHERE] mood.
+ * Line 4: [MOVIE AESTHETIC]. [FILTER]. [ASPECT RATIO] format.
+ */
+export function buildCinematicPromptText(state: PromptBuilderState): string {
+    const lines: string[] = [];
+
+    // Line 1: [STYLE] of a [SUBJECT], set in [ENVIRONMENT].
+    if (state.style || state.subject || state.environment) {
+        const style = state.style || "A cinematic film still";
+        const subject = state.subject || "[subject]";
+        const environment = state.environment || "[environment]";
+        lines.push(`${style} of ${subject}, set in ${environment}.`);
+    }
+
+    // Line 2: Captured with [CAMERA], [FOCAL LENGTH], [LENS TYPE], [FILM STOCK].
+    const line2Parts: string[] = [];
+    if (state.camera) line2Parts.push(state.camera);
+    if (state.focalLength) line2Parts.push(state.focalLength);
+    if (state.lensType) line2Parts.push(state.lensType);
+    if (state.filmStock) line2Parts.push(state.filmStock);
+    if (line2Parts.length > 0) {
+        lines.push(`Captured with ${line2Parts.join(", ")}.`);
+    }
+
+    // Line 3: [LIGHTING SOURCE], [LIGHTING STYLE], [ATMOSPHERE] mood.
+    const line3Parts: string[] = [];
+    if (state.lightingSource) line3Parts.push(state.lightingSource);
+    if (state.lightingStyle) line3Parts.push(state.lightingStyle);
+    if (state.atmosphere) line3Parts.push(`${state.atmosphere} mood`);
+    if (line3Parts.length > 0) {
+        lines.push(`${line3Parts.join(", ")}.`);
+    }
+
+    // Line 4: [MOVIE AESTHETIC]. [FILTER].
+    const line4Parts: string[] = [];
+    if (state.movieAesthetic) line4Parts.push(state.movieAesthetic);
+    if (state.filter) line4Parts.push(state.filter);
+    if (line4Parts.length > 0) {
+        lines.push(line4Parts.join(". ") + ".");
+    }
+
+    return lines.join("\n");
 }

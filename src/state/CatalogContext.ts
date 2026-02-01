@@ -3,11 +3,14 @@ import type {
   FileEntry,
   WorkspaceConnection,
 } from "../lib/api/files";
+import type { PinsMap } from "../lib/api/meta";
 
 export type CatalogState = {
   entries: FileEntry[];
   filterExt: string[];
   q: string;
+  sortByName: boolean;
+  pins: PinsMap;
   selected?: FileEntry;
   connection?: WorkspaceConnection;
 };
@@ -18,6 +21,9 @@ type CatalogActions = {
   select(entry?: FileEntry): void;
   setFilters(filters: string[]): void;
   setQuery(value: string): void;
+  setSortByName(value: boolean): void;
+  setPins(next: PinsMap | ((prev: PinsMap) => PinsMap)): void;
+  refreshPins(): Promise<void>;
   rename(entry: FileEntry, newName: string): Promise<void>;
   remove(entry: FileEntry): Promise<void>;
 };

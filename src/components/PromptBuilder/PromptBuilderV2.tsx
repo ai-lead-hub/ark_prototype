@@ -4,19 +4,19 @@ import {
     defaultState,
     buildPromptText,
     buildPromptData,
+    buildCinematicPromptText,
     parsePromptText,
     cameraOptions,
+    cinematicOptions,
     type PromptBuilderState,
-    type ScenePreset,
+    type PromptBuilderMode,
 } from '../../lib/prompt-builder/types';
 import {
-    presets,
     styles,
     lighting,
     mood,
     composition,
     flattenToOptions,
-    getPresetOptions,
 } from '../../lib/prompt-builder';
 import cameraSystems from '../../lib/prompt-builder/camera-systems.json';
 
@@ -181,17 +181,6 @@ function StyleSelector({
     );
 }
 
-// Helper to detect if a prompt matches a preset
-function detectPresetFromPrompt(promptText: string): string | null {
-    if (!promptText) return null;
-    for (const [key, preset] of Object.entries(presets)) {
-        if (preset.prompt && promptText.startsWith(preset.prompt)) {
-            return key;
-        }
-    }
-    return null;
-}
-
 // Type for camera system data
 type CameraSystemData = {
     name: string;
@@ -199,6 +188,66 @@ type CameraSystemData = {
     lenses: { id: string; name: string; prompt: string }[];
     filmLooks: string[];
 };
+
+/**
+ * Parse a cinematic format prompt back into state fields.
+ */
+function parseCinematicPromptText(text: string): Partial<PromptBuilderState> {
+    if (!text) return {};
+
+    const result: Partial<PromptBuilderState> = {
+        mode: 'cinematic',
+    };
+
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+
+    // Line 1: [STYLE] of a [SUBJECT], set in [ENVIRONMENT].
+    if (lines[0]) {
+        const line1Match = lines[0].match(/^(.+?) of (.+?), set in (.+?)\.?$/i);
+        if (line1Match) {
+            result.style = line1Match[1];
+            result.subject = line1Match[2];
+            result.environment = line1Match[3].replace(/\.$/, '');
+        }
+    }
+
+    // Line 2: Captured with [CAMERA], [FOCAL LENGTH], [LENS TYPE], [FILM STOCK].
+    if (lines[1]) {
+        const line2Match = lines[1].match(/^Captured with (.+?)\.?$/i);
+        if (line2Match) {
+            const parts = line2Match[1].split(',').map(p => p.trim());
+            if (parts[0]) result.camera = parts[0];
+            if (parts[1]) result.focalLength = parts[1];
+            if (parts[2]) result.lensType = parts[2];
+            if (parts[3]) result.filmStock = parts[3];
+        }
+    }
+
+    // Line 3: [LIGHTING SOURCE], [LIGHTING STYLE], [ATMOSPHERE] mood.
+    if (lines[2]) {
+        const parts = lines[2].replace(/\.$/, '').split(',').map(p => p.trim());
+        if (parts[0]) result.lightingSource = parts[0];
+        if (parts[1]) result.lightingStyle = parts[1];
+        if (parts[2]) {
+            const atmoMatch = parts[2].match(/(.+?) mood$/i);
+            result.atmosphere = atmoMatch ? atmoMatch[1] : parts[2];
+        }
+    }
+
+    // Line 4: [MOVIE AESTHETIC]. [FILTER].
+    if (lines[3]) {
+        const line4Parts = lines[3].split('.').map(p => p.trim()).filter(p => p);
+        for (const part of line4Parts) {
+            if (part.includes('inspired') || part.includes('aesthetic')) {
+                result.movieAesthetic = part;
+            } else if (part) {
+                result.filter = part;
+            }
+        }
+    }
+
+    return result;
+}
 
 export function PromptBuilderV2({
     onClose,
@@ -209,21 +258,14 @@ export function PromptBuilderV2({
     // Parse the current prompt to extract field values, or start fresh
     const [state, setState] = useState<PromptBuilderState>(() => {
         if (currentPrompt) {
-            const detectedPreset = detectPresetFromPrompt(currentPrompt);
-            if (detectedPreset && presets[detectedPreset]) {
-                const preset = presets[detectedPreset] as ScenePreset;
-                return {
-                    ...defaultState(),
-                    preset: detectedPreset,
-                    prompt: preset.prompt || '',
-                    style: preset.style || '',
-                    cameraAngle: preset.camera?.angle || '',
-                    cameraShot: preset.camera?.shot || '',
-                    lighting: preset.lighting || '',
-                    colorMood: preset.colors?.mood || '',
-                    composition: preset.composition || '',
-                };
+            // Try to detect if it's a cinematic format prompt (has newlines with "Captured with")
+            if (currentPrompt.includes('\n') && currentPrompt.includes('Captured with')) {
+                const parsed = parseCinematicPromptText(currentPrompt);
+                if (Object.keys(parsed).length > 1) {
+                    return { ...defaultState(), ...parsed, mode: 'cinematic' };
+                }
             }
+            // Try default parsing
             const parsed = parsePromptText(currentPrompt);
             if (Object.keys(parsed).length > 1) {
                 return { ...defaultState(), ...parsed };
@@ -240,10 +282,14 @@ export function PromptBuilderV2({
         setState((prev) => ({ ...prev, [key]: value }));
     }, []);
 
+    // Switch mode
+    const switchMode = useCallback((mode: PromptBuilderMode) => {
+        setState((prev) => ({ ...prev, mode }));
+    }, []);
+
     // Get camera system options (cinema first)
     const systemOptions = useMemo(() => {
         const systems = cameraSystems.systems as Record<string, CameraSystemData>;
-        // Order: IMAX, Panavision, ARRI, RED, Sony VENICE, Blackmagic, then photography cameras
         const cinemaOrder = ['imax', 'panavision', 'arri', 'red', 'sony_venice', 'blackmagic'];
         const photoOrder = ['sony', 'canon_dslr', 'nikon', 'fujifilm', 'leica'];
         const orderedKeys = [...cinemaOrder, ...photoOrder].filter(k => systems[k]);
@@ -275,7 +321,6 @@ export function PromptBuilderV2({
     // Get film looks for selected system
     const filmLookOptions = useMemo(() => {
         if (!state.cameraSystem) {
-            // Show all film looks
             return Object.values(cameraSystems.filmLooks).map((data) => ({
                 value: (data as { prompt: string }).prompt,
                 label: (data as { name: string }).name,
@@ -310,43 +355,32 @@ export function PromptBuilderV2({
         }));
     }, []);
 
-    // Load preset
-    const loadPreset = useCallback((presetKey: string) => {
-        if (presetKey === 'custom' || !presets[presetKey]) {
-            updateField('preset', 'custom');
-            return;
-        }
-
-        const preset = presets[presetKey] as ScenePreset;
-        setState({
-            ...defaultState(),
-            preset: presetKey,
-            prompt: preset.prompt || '',
-            style: preset.style || '',
-            cameraAngle: preset.camera?.angle || '',
-            cameraShot: preset.camera?.shot || '',
-            focalLength: preset.camera?.lens || '',
-            cameraAperture: preset.camera?.aperture || '',
-            lighting: preset.lighting || '',
-            colorMood: preset.colors?.mood || '',
-            composition: preset.composition || '',
-        });
-    }, []);
-
     // Handle apply
     const handleApply = useCallback(() => {
-        const data = buildPromptData(state);
-        const text = buildPromptText(data);
+        let text: string;
+        if (state.mode === 'cinematic') {
+            text = buildCinematicPromptText(state);
+        } else {
+            const data = buildPromptData(state);
+            text = buildPromptText(data);
+        }
         onApply(text);
         onClose();
     }, [state, onApply, onClose]);
 
-    // Build options for other fields
+    // Build options for default mode fields
     const styleOptions = flattenToOptions(styles);
     const lightingOptions = flattenToOptions(lighting);
     const moodOptions = flattenToOptions(mood);
     const compositionOptions = flattenToOptions(composition);
-    const presetOptions = getPresetOptions();
+
+    // Get current preview text
+    const previewText = useMemo(() => {
+        if (state.mode === 'cinematic') {
+            return buildCinematicPromptText(state);
+        }
+        return buildPromptText(buildPromptData(state));
+    }, [state]);
 
     return createPortal(
         <div
@@ -367,179 +401,348 @@ export function PromptBuilderV2({
                     </button>
                 </div>
 
+                {/* Mode Toggle */}
+                <div className="flex-shrink-0 flex border-b border-white/10 bg-[#252525]">
+                    <button
+                        onClick={() => switchMode('default')}
+                        className={`flex-1 px-4 py-2.5 text-xs font-medium transition-all ${state.mode === 'default'
+                            ? 'text-white bg-purple-600/30 border-b-2 border-purple-500'
+                            : 'text-slate-400 hover:text-white hover:bg-white/5'
+                            }`}
+                    >
+                        <span className="mr-1.5">📷</span> Default Mode
+                    </button>
+                    <button
+                        onClick={() => switchMode('cinematic')}
+                        className={`flex-1 px-4 py-2.5 text-xs font-medium transition-all ${state.mode === 'cinematic'
+                            ? 'text-white bg-amber-600/30 border-b-2 border-amber-500'
+                            : 'text-slate-400 hover:text-white hover:bg-white/5'
+                            }`}
+                    >
+                        <span className="mr-1.5">🎬</span> Cinematic Template
+                    </button>
+                </div>
+
                 {/* Body - Two columns */}
                 <div className="flex-1 flex min-h-0 overflow-hidden">
                     {/* Left column - Controls */}
                     <div className="w-[45%] border-r border-white/5 overflow-y-auto p-4 space-y-4 custom-scrollbar">
-                        {/* Preset */}
-                        <div className="pb-3 border-b border-white/10">
-                            <label className="block text-[10px] uppercase tracking-wider text-slate-500 mb-1.5">Load Preset</label>
-                            <Dropdown
-                                value={state.preset}
-                                options={presetOptions.map(o => ({ value: o.value, label: o.label }))}
-                                onChange={loadPreset}
-                            />
-                        </div>
+                        {state.mode === 'cinematic' ? (
+                            /* CINEMATIC MODE UI */
+                            <>
+                                {/* Line 1: Style, Subject, Environment */}
+                                <div className="bg-[#252525] rounded-lg p-3 space-y-3">
+                                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-400">
+                                        <div className="w-2 h-2 bg-amber-500 rounded-sm" />
+                                        Line 1: Scene Description
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] text-slate-500 mb-1">Style</label>
+                                        <Dropdown
+                                            value={state.style}
+                                            options={cinematicOptions.style}
+                                            placeholder="Select style..."
+                                            onChange={(v) => updateField('style', v)}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] text-slate-500 mb-1">Subject</label>
+                                        <input
+                                            type="text"
+                                            value={state.subject}
+                                            onChange={(e) => updateField('subject', e.target.value)}
+                                            placeholder="a detective walking"
+                                            className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2.5 py-2 text-xs text-white placeholder:text-slate-600 focus:border-amber-500 outline-none"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] text-slate-500 mb-1">Environment</label>
+                                        <input
+                                            type="text"
+                                            value={state.environment}
+                                            onChange={(e) => updateField('environment', e.target.value)}
+                                            placeholder="rain-soaked Tokyo streets"
+                                            className="w-full bg-[#1e1e1e] border border-white/10 rounded px-2.5 py-2 text-xs text-white placeholder:text-slate-600 focus:border-amber-500 outline-none"
+                                        />
+                                    </div>
+                                </div>
 
-                        {/* Main Prompt */}
-                        <div>
-                            <label className="block text-[10px] uppercase tracking-wider text-slate-500 mb-1.5">Main Prompt</label>
-                            <textarea
-                                value={state.prompt}
-                                onChange={(e) => updateField('prompt', e.target.value)}
-                                placeholder="Describe your scene in detail..."
-                                className="w-full h-24 bg-[#1e1e1e] border border-white/10 rounded px-2.5 py-2 text-xs text-white placeholder:text-slate-600 focus:border-purple-500 outline-none resize-none"
-                            />
-                        </div>
+                                {/* Line 2: Camera, Focal Length, Lens Type, Film Stock */}
+                                <div className="bg-[#252525] rounded-lg p-3 space-y-3">
+                                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-400">
+                                        <div className="w-2 h-2 bg-amber-500 rounded-sm" />
+                                        Line 2: Camera & Film
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <label className="block text-[10px] text-slate-500 mb-1">Camera</label>
+                                            <Dropdown
+                                                value={state.camera}
+                                                options={cinematicOptions.camera}
+                                                placeholder="Select camera..."
+                                                onChange={(v) => updateField('camera', v)}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] text-slate-500 mb-1">Focal Length</label>
+                                            <Dropdown
+                                                value={state.focalLength}
+                                                options={cinematicOptions.focalLength}
+                                                placeholder="Select..."
+                                                onChange={(v) => updateField('focalLength', v)}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <label className="block text-[10px] text-slate-500 mb-1">Lens Type</label>
+                                            <Dropdown
+                                                value={state.lensType}
+                                                options={cinematicOptions.lensType}
+                                                placeholder="Select lens..."
+                                                onChange={(v) => updateField('lensType', v)}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] text-slate-500 mb-1">Film Stock</label>
+                                            <Dropdown
+                                                value={state.filmStock}
+                                                options={cinematicOptions.filmStock}
+                                                placeholder="Select film..."
+                                                onChange={(v) => updateField('filmStock', v)}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
 
-                        {/* Style */}
-                        <div>
-                            <label className="block text-[10px] uppercase tracking-wider text-slate-500 mb-1.5">Style</label>
-                            <StyleSelector
-                                value={state.style}
-                                options={styleOptions}
-                                onChange={(v) => updateField('style', v)}
-                            />
-                        </div>
+                                {/* Line 3: Lighting Source, Lighting Style, Atmosphere */}
+                                <div className="bg-[#252525] rounded-lg p-3 space-y-3">
+                                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-400">
+                                        <div className="w-2 h-2 bg-amber-500 rounded-sm" />
+                                        Line 3: Lighting & Mood
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <label className="block text-[10px] text-slate-500 mb-1">Lighting Source</label>
+                                            <Dropdown
+                                                value={state.lightingSource}
+                                                options={cinematicOptions.lightingSource}
+                                                placeholder="Select source..."
+                                                onChange={(v) => updateField('lightingSource', v)}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] text-slate-500 mb-1">Lighting Style</label>
+                                            <Dropdown
+                                                value={state.lightingStyle}
+                                                options={cinematicOptions.lightingStyle}
+                                                placeholder="Select style..."
+                                                onChange={(v) => updateField('lightingStyle', v)}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] text-slate-500 mb-1">Atmosphere</label>
+                                        <Dropdown
+                                            value={state.atmosphere}
+                                            options={cinematicOptions.atmosphere}
+                                            placeholder="Select atmosphere..."
+                                            onChange={(v) => updateField('atmosphere', v)}
+                                        />
+                                    </div>
+                                </div>
 
-                        {/* Camera Settings */}
-                        <div className="bg-[#252525] rounded-lg p-3 space-y-3">
-                            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-purple-400">
-                                <div className="w-2 h-2 bg-purple-500 rounded-sm" />
-                                Camera Settings
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-2">
+                                {/* Line 4: Movie Aesthetic, Filter, Aspect Ratio */}
+                                <div className="bg-[#252525] rounded-lg p-3 space-y-3">
+                                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-400">
+                                        <div className="w-2 h-2 bg-amber-500 rounded-sm" />
+                                        Line 4: Aesthetic & Format
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] text-slate-500 mb-1">Movie Aesthetic</label>
+                                        <Dropdown
+                                            value={state.movieAesthetic}
+                                            options={cinematicOptions.movieAesthetic}
+                                            placeholder="Select aesthetic..."
+                                            onChange={(v) => updateField('movieAesthetic', v)}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] text-slate-500 mb-1">Filter</label>
+                                        <Dropdown
+                                            value={state.filter}
+                                            options={cinematicOptions.filter}
+                                            placeholder="Select filter..."
+                                            onChange={(v) => updateField('filter', v)}
+                                        />
+                                    </div>
+                                    <p className="text-[9px] text-slate-500 italic">Aspect ratio is set in the main controls panel.</p>
+                                </div>
+                            </>
+                        ) : (
+                            /* DEFAULT MODE UI */
+                            <>
+                                {/* Main Prompt */}
                                 <div>
-                                    <label className="block text-[10px] text-slate-500 mb-1">Angle</label>
-                                    <ComboInput
-                                        value={state.cameraAngle}
-                                        placeholder="eye level"
-                                        options={cameraOptions.angle}
-                                        onChange={(v) => updateField('cameraAngle', v)}
+                                    <label className="block text-[10px] uppercase tracking-wider text-slate-500 mb-1.5">Main Prompt</label>
+                                    <textarea
+                                        value={state.prompt}
+                                        onChange={(e) => updateField('prompt', e.target.value)}
+                                        placeholder="Describe your scene in detail..."
+                                        className="w-full h-24 bg-[#1e1e1e] border border-white/10 rounded px-2.5 py-2 text-xs text-white placeholder:text-slate-600 focus:border-purple-500 outline-none resize-none"
                                     />
                                 </div>
+
+                                {/* Style */}
                                 <div>
-                                    <label className="block text-[10px] text-slate-500 mb-1">Shot / Distance</label>
-                                    <ComboInput
-                                        value={state.cameraShot}
-                                        placeholder="medium shot"
-                                        options={cameraOptions.shot}
-                                        onChange={(v) => updateField('cameraShot', v)}
+                                    <label className="block text-[10px] uppercase tracking-wider text-slate-500 mb-1.5">Style</label>
+                                    <StyleSelector
+                                        value={state.style}
+                                        options={styleOptions}
+                                        onChange={(v) => updateField('style', v)}
                                     />
                                 </div>
-                            </div>
 
-                            <div className="grid grid-cols-2 gap-2">
-                                <div>
-                                    <label className="block text-[10px] text-slate-500 mb-1">Focal Length</label>
-                                    <Dropdown
-                                        value={state.focalLength}
-                                        options={focalLengthOptions}
-                                        placeholder="Select focal length"
-                                        onChange={(v) => updateField('focalLength', v)}
+                                {/* Camera Settings */}
+                                <div className="bg-[#252525] rounded-lg p-3 space-y-3">
+                                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-purple-400">
+                                        <div className="w-2 h-2 bg-purple-500 rounded-sm" />
+                                        Camera Settings
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <label className="block text-[10px] text-slate-500 mb-1">Angle</label>
+                                            <ComboInput
+                                                value={state.cameraAngle}
+                                                placeholder="eye level"
+                                                options={cameraOptions.angle}
+                                                onChange={(v) => updateField('cameraAngle', v)}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] text-slate-500 mb-1">Shot / Distance</label>
+                                            <ComboInput
+                                                value={state.cameraShot}
+                                                placeholder="medium shot"
+                                                options={cameraOptions.shot}
+                                                onChange={(v) => updateField('cameraShot', v)}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <label className="block text-[10px] text-slate-500 mb-1">Focal Length</label>
+                                            <Dropdown
+                                                value={state.focalLength}
+                                                options={focalLengthOptions}
+                                                placeholder="Select focal length"
+                                                onChange={(v) => updateField('focalLength', v)}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] text-slate-500 mb-1">Aperture</label>
+                                            <ComboInput
+                                                value={state.cameraAperture}
+                                                placeholder="f/2.8"
+                                                options={cameraOptions.aperture}
+                                                onChange={(v) => updateField('cameraAperture', v)}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Camera System (cascading) */}
+                                <div className="bg-[#252525] rounded-lg p-3 space-y-3">
+                                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-400">
+                                        <div className="w-2 h-2 bg-amber-500 rounded-sm" />
+                                        Camera System
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-[10px] text-slate-500 mb-1">Camera Brand</label>
+                                        <Dropdown
+                                            value={state.cameraSystem}
+                                            options={systemOptions}
+                                            placeholder="Select camera system"
+                                            onChange={handleSystemChange}
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-[10px] text-slate-500 mb-1">Camera Body</label>
+                                        <Dropdown
+                                            value={state.cameraBody}
+                                            options={bodyOptions}
+                                            placeholder={state.cameraSystem ? "Select body" : "Select system first"}
+                                            onChange={(v) => updateField('cameraBody', v)}
+                                            disabled={!state.cameraSystem}
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-[10px] text-slate-500 mb-1">Lens Type</label>
+                                        <Dropdown
+                                            value={state.lensType}
+                                            options={lensOptions}
+                                            placeholder={state.cameraSystem ? "Select lens" : "Select system first"}
+                                            onChange={(v) => updateField('lensType', v)}
+                                            disabled={!state.cameraSystem}
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-[10px] text-slate-500 mb-1">Film Look</label>
+                                        <Dropdown
+                                            value={state.filmLook}
+                                            options={filmLookOptions}
+                                            placeholder="Select film look"
+                                            onChange={(v) => updateField('filmLook', v)}
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Lighting */}
+                                <div className="bg-[#252525] rounded-lg p-3">
+                                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-purple-400 mb-2">
+                                        <div className="w-2 h-2 bg-purple-500 rounded-sm" />
+                                        Lighting
+                                    </div>
+                                    <StyleSelector
+                                        value={state.lighting}
+                                        options={lightingOptions}
+                                        onChange={(v) => updateField('lighting', v)}
                                     />
                                 </div>
-                                <div>
-                                    <label className="block text-[10px] text-slate-500 mb-1">Aperture</label>
-                                    <ComboInput
-                                        value={state.cameraAperture}
-                                        placeholder="f/2.8"
-                                        options={cameraOptions.aperture}
-                                        onChange={(v) => updateField('cameraAperture', v)}
+
+                                {/* Mood */}
+                                <div className="bg-[#252525] rounded-lg p-3">
+                                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-purple-400 mb-2">
+                                        <div className="w-2 h-2 bg-purple-500 rounded-sm" />
+                                        Mood
+                                    </div>
+                                    <StyleSelector
+                                        value={state.colorMood}
+                                        options={moodOptions}
+                                        onChange={(v) => updateField('colorMood', v)}
                                     />
                                 </div>
-                            </div>
-                        </div>
 
-                        {/* Camera System (cascading) */}
-                        <div className="bg-[#252525] rounded-lg p-3 space-y-3">
-                            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-400">
-                                <div className="w-2 h-2 bg-amber-500 rounded-sm" />
-                                Camera System
-                            </div>
-
-                            <div>
-                                <label className="block text-[10px] text-slate-500 mb-1">Camera Brand</label>
-                                <Dropdown
-                                    value={state.cameraSystem}
-                                    options={systemOptions}
-                                    placeholder="Select camera system"
-                                    onChange={handleSystemChange}
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-[10px] text-slate-500 mb-1">Camera Body</label>
-                                <Dropdown
-                                    value={state.cameraBody}
-                                    options={bodyOptions}
-                                    placeholder={state.cameraSystem ? "Select body" : "Select system first"}
-                                    onChange={(v) => updateField('cameraBody', v)}
-                                    disabled={!state.cameraSystem}
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-[10px] text-slate-500 mb-1">Lens Type</label>
-                                <Dropdown
-                                    value={state.lensType}
-                                    options={lensOptions}
-                                    placeholder={state.cameraSystem ? "Select lens" : "Select system first"}
-                                    onChange={(v) => updateField('lensType', v)}
-                                    disabled={!state.cameraSystem}
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-[10px] text-slate-500 mb-1">Film Look</label>
-                                <Dropdown
-                                    value={state.filmLook}
-                                    options={filmLookOptions}
-                                    placeholder="Select film look"
-                                    onChange={(v) => updateField('filmLook', v)}
-                                />
-                            </div>
-                        </div>
-
-                        {/* Lighting */}
-                        <div className="bg-[#252525] rounded-lg p-3">
-                            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-purple-400 mb-2">
-                                <div className="w-2 h-2 bg-purple-500 rounded-sm" />
-                                Lighting
-                            </div>
-                            <StyleSelector
-                                value={state.lighting}
-                                options={lightingOptions}
-                                onChange={(v) => updateField('lighting', v)}
-                            />
-                        </div>
-
-                        {/* Mood */}
-                        <div className="bg-[#252525] rounded-lg p-3">
-                            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-purple-400 mb-2">
-                                <div className="w-2 h-2 bg-purple-500 rounded-sm" />
-                                Mood
-                            </div>
-                            <StyleSelector
-                                value={state.colorMood}
-                                options={moodOptions}
-                                onChange={(v) => updateField('colorMood', v)}
-                            />
-                        </div>
-
-                        {/* Composition */}
-                        <div className="bg-[#252525] rounded-lg p-3">
-                            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-purple-400 mb-2">
-                                <div className="w-2 h-2 bg-purple-500 rounded-sm" />
-                                Composition
-                            </div>
-                            <StyleSelector
-                                value={state.composition}
-                                options={compositionOptions}
-                                onChange={(v) => updateField('composition', v)}
-                            />
-                        </div>
+                                {/* Composition */}
+                                <div className="bg-[#252525] rounded-lg p-3">
+                                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-purple-400 mb-2">
+                                        <div className="w-2 h-2 bg-purple-500 rounded-sm" />
+                                        Composition
+                                    </div>
+                                    <StyleSelector
+                                        value={state.composition}
+                                        options={compositionOptions}
+                                        onChange={(v) => updateField('composition', v)}
+                                    />
+                                </div>
+                            </>
+                        )}
                     </div>
 
                     {/* Right column - Preview */}
@@ -580,12 +783,25 @@ export function PromptBuilderV2({
 
                         {/* Preview */}
                         <div className="flex-1 min-h-0 p-4 overflow-y-auto">
-                            <h3 className="text-[10px] font-bold uppercase tracking-widest text-green-400 mb-2">
+                            <h3 className={`text-[10px] font-bold uppercase tracking-widest mb-2 ${state.mode === 'cinematic' ? 'text-amber-400' : 'text-green-400'}`}>
                                 Generated Prompt
                             </h3>
-                            <pre className="text-[10px] font-mono text-green-300 bg-[#0d0d0d] border border-white/10 rounded-lg p-3 whitespace-pre-wrap break-words">
-                                {buildPromptText(buildPromptData(state)) || '(Select options to build prompt)'}
+                            <pre className={`text-[10px] font-mono bg-[#0d0d0d] border border-white/10 rounded-lg p-3 whitespace-pre-wrap break-words ${state.mode === 'cinematic' ? 'text-amber-300' : 'text-green-300'}`}>
+                                {previewText || '(Select options to build prompt)'}
                             </pre>
+
+                            {/* Template Preview for Cinematic */}
+                            {state.mode === 'cinematic' && (
+                                <div className="mt-4 p-3 bg-[#0d0d0d] border border-white/10 rounded-lg">
+                                    <h4 className="text-[9px] font-bold uppercase tracking-widest text-slate-500 mb-2">Template Format</h4>
+                                    <div className="text-[9px] font-mono text-slate-500 space-y-1">
+                                        <div>1. [STYLE] of a [SUBJECT], set in [ENVIRONMENT].</div>
+                                        <div>2. Captured with [CAMERA], [FOCAL LENGTH], [LENS], [FILM].</div>
+                                        <div>3. [LIGHTING SOURCE], [LIGHTING STYLE], [ATMOSPHERE] mood.</div>
+                                        <div>4. [MOVIE AESTHETIC]. [FILTER]. [ASPECT RATIO] format.</div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -602,7 +818,10 @@ export function PromptBuilderV2({
                     <button
                         type="button"
                         onClick={handleApply}
-                        className="px-4 py-2 text-xs font-semibold text-white bg-gradient-to-r from-purple-600 to-indigo-600 rounded hover:opacity-90 transition"
+                        className={`px-4 py-2 text-xs font-semibold text-white rounded hover:opacity-90 transition ${state.mode === 'cinematic'
+                            ? 'bg-gradient-to-r from-amber-600 to-orange-600'
+                            : 'bg-gradient-to-r from-purple-600 to-indigo-600'
+                            }`}
                     >
                         Apply to Prompt
                     </button>
