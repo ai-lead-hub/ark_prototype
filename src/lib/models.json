@@ -249,9 +249,10 @@
           "type": "enum",
           "values": [
             "480p",
-            "720p"
+            "720p",
+            "1080p"
           ],
-          "default": "720p"
+          "default": "1080p"
         },
         "duration": {
           "type": "enum",
