@@ -72,8 +72,9 @@ export interface PromptBuilderState {
     filmStock: string;        // Film stock (e.g., "CineStill 800T")
     lightingSource: string;   // e.g., "Neon signs"
     lightingStyle: string;    // e.g., "low key"
-    atmosphere: string;       // e.g., "mysterious"
-    movieAesthetic: string;   // e.g., "Blade Runner 2049 inspired"
+    atmosphere: string;       // e.g., "mysterious" (legacy)
+    movieAesthetic: string;   // e.g., "Blade Runner 2049 inspired" (legacy)
+    filmInspiration: string;  // e.g., "inspired by the vast desolate orange-teal foggy look of Blade Runner 2049"
     filter: string;           // e.g., "Pro mist diffusion"
     aspectRatio: string;      // e.g., "2.39:1"
 }
@@ -227,6 +228,7 @@ export function defaultState(): PromptBuilderState {
         lightingStyle: "",
         atmosphere: "",
         movieAesthetic: "",
+        filmInspiration: "",
         filter: "",
         aspectRatio: "",
     };
@@ -269,8 +271,16 @@ export function buildPromptData(state: PromptBuilderState): PromptBuilderData {
 export function buildPromptText(data: PromptBuilderData): string {
     const parts: string[] = [];
 
-    if (data.prompt) parts.push(data.prompt);
-    if (data.style) parts.push(`Style: ${data.style}`);
+    // Style now prepends the prompt (e.g., "a cinematic still of [prompt]")
+    if (data.style && data.prompt) {
+        // Check if style already ends with "of" pattern
+        const styleEndsWithOf = /\bof$/i.test(data.style.trim());
+        parts.push(styleEndsWithOf ? `${data.style} ${data.prompt}` : `${data.style} of ${data.prompt}`);
+    } else if (data.prompt) {
+        parts.push(data.prompt);
+    } else if (data.style) {
+        parts.push(data.style);
+    }
 
     const camera = data.camera || {};
     if (Object.keys(camera).length) {
@@ -287,7 +297,7 @@ export function buildPromptText(data: PromptBuilderData): string {
     if (data.lighting) parts.push(`Lighting: ${data.lighting}`);
 
     const colors = data.colors || {};
-    if (colors.mood) parts.push(`Mood: ${colors.mood}`);
+    if (colors.mood) parts.push(colors.mood);  // Changed: mood already contains "inspired by..." format
     if (data.composition) parts.push(`Composition: ${data.composition}`);
 
     return parts.join(". ");
@@ -295,6 +305,7 @@ export function buildPromptText(data: PromptBuilderData): string {
 
 /**
  * Parse a formatted prompt string back into state fields.
+ * Handles new format where style prepends prompt and mood uses "inspired by" directly
  */
 export function parsePromptText(text: string): Partial<PromptBuilderState> {
     if (!text) return {};
@@ -312,11 +323,18 @@ export function parsePromptText(text: string): Partial<PromptBuilderState> {
         remaining = remaining.replace(/\. Composition: .+?$/, '');
     }
 
-    // Extract Mood
-    const moodMatch = remaining.match(/\. Mood: (.+?)(?=\. |$)/);
-    if (moodMatch) {
-        result.colorMood = moodMatch[1];
-        remaining = remaining.replace(/\. Mood: .+?(?=\. |$)/, '');
+    // Extract "inspired by" mood pattern (new format - no "Mood:" label)
+    const inspiredByMatch = remaining.match(/\. (inspired by [^.]+)/i);
+    if (inspiredByMatch) {
+        result.colorMood = inspiredByMatch[1];
+        remaining = remaining.replace(/\. inspired by [^.]+/i, '');
+    } else {
+        // Fallback: Extract legacy Mood format
+        const moodMatch = remaining.match(/\. Mood: (.+?)(?=\. |$)/);
+        if (moodMatch) {
+            result.colorMood = moodMatch[1];
+            remaining = remaining.replace(/\. Mood: .+?(?=\. |$)/, '');
+        }
     }
 
     // Extract Lighting
@@ -465,11 +483,30 @@ export function parsePromptText(text: string): Partial<PromptBuilderState> {
         remaining = remaining.replace(/\. Camera: .+?(?=\. |$)/, '');
     }
 
-    // Extract Style
+    // Extract Style (legacy format: "Style: X")
     const styleMatch = remaining.match(/\. Style: (.+?)(?=\. |$)/);
     if (styleMatch) {
         result.style = styleMatch[1];
         remaining = remaining.replace(/\. Style: .+?(?=\. |$)/, '');
+    } else {
+        // Try to detect new style prepend pattern (e.g., "Cinematic photography of ...")
+        const stylePatterns = [
+            { pattern: /^(Cinematic photography)[,.]?\s*/i, style: 'Cinematic photography' },
+            { pattern: /^(Aerial photography)[,.]?\s*/i, style: 'Aerial photography' },
+            { pattern: /^(Portrait photography)[,.]?\s*/i, style: 'Portrait photography' },
+            { pattern: /^(Landscape photography)[,.]?\s*/i, style: 'Landscape photography' },
+            { pattern: /^(Fashion photography)[,.]?\s*/i, style: 'Fashion photography' },
+            { pattern: /^(Fine art photography)[,.]?\s*/i, style: 'Fine art photography' },
+            { pattern: /^(Documentary photography)[,.]?\s*/i, style: 'Documentary photography' },
+        ];
+        for (const { pattern, style } of stylePatterns) {
+            const match = remaining.match(pattern);
+            if (match) {
+                result.style = style;
+                remaining = remaining.replace(pattern, '');
+                break;
+            }
+        }
     }
 
     // What's left is the main prompt
@@ -481,124 +518,150 @@ export function parsePromptText(text: string): Partial<PromptBuilderState> {
 // Cinematic mode dropdown options
 export const cinematicOptions = {
     style: [
-        { value: "A cinematic film still", label: "Cinematic film still" },
-        { value: "A noir film still", label: "Noir film still" },
-        { value: "A sci-fi film still", label: "Sci-fi film still" },
-        { value: "A dramatic film still", label: "Dramatic film still" },
-        { value: "A moody cinematic portrait", label: "Moody cinematic portrait" },
-        { value: "An epic cinematic shot", label: "Epic cinematic shot" },
-        { value: "A vintage film photograph", label: "Vintage film photograph" },
-        { value: "A documentary-style shot", label: "Documentary-style shot" },
+        { value: "A cinematic film still of", label: "Cinematic film still" },
+        { value: "A noir film still of", label: "Noir film still" },
+        { value: "A sci-fi film still of", label: "Sci-fi film still" },
+        { value: "A dramatic film still of", label: "Dramatic" },
+        { value: "A moody portrait of", label: "Moody portrait" },
+        { value: "An epic cinematic shot of", label: "Epic shot" },
+        { value: "A vintage photograph of", label: "Vintage" },
+        { value: "A documentary shot of", label: "Documentary" },
+        { value: "A thriller film still of", label: "Thriller" },
+        { value: "A romantic film still of", label: "Romantic" },
+        { value: "A horror film still of", label: "Horror" },
+        { value: "A fantasy film still of", label: "Fantasy" },
     ],
     camera: [
-        { value: "ARRI ALEXA 65", label: "ARRI ALEXA 65" },
-        { value: "ARRI ALEXA Mini LF", label: "ARRI ALEXA Mini LF" },
-        { value: "RED V-Raptor 8K", label: "RED V-Raptor 8K" },
-        { value: "Sony VENICE 2", label: "Sony VENICE 2" },
-        { value: "Panavision Millennium DXL2", label: "Panavision Millennium DXL2" },
-        { value: "Blackmagic URSA Mini Pro 12K", label: "Blackmagic URSA Mini Pro 12K" },
-        { value: "Canon EOS C500 Mark II", label: "Canon EOS C500 Mark II" },
+        { value: "ARRI ALEXA 35", label: "ALEXA 35 — organic color, wide dynamic range" },
+        { value: "ARRI ALEXA 65", label: "ALEXA 65 — 65mm large format, epic scope" },
+        { value: "ARRI ALEXA Mini LF", label: "ALEXA Mini LF — large format, shallow depth" },
+        { value: "RED V-RAPTOR", label: "RED V-RAPTOR — vibrant color, global shutter" },
+        { value: "RED Monstro", label: "RED Monstro — full frame, incredible low-light" },
+        { value: "Sony VENICE 2", label: "VENICE 2 — dual ISO, rich organic color" },
+        { value: "Panavision Millennium DXL2", label: "DXL2 — smooth highlights, organic skin" },
+        { value: "Blackmagic URSA Mini Pro", label: "URSA Mini — wide dynamic range" },
+        { value: "Canon C500 Mark II", label: "C500 II — rich color, cinema EOS" },
+        { value: "35mm Panavision Panaflex", label: "Panaflex 35mm — mechanical, classic Hollywood" },
+        { value: "IMAX 70mm film", label: "IMAX 70mm — massive frame, immersive scale" },
     ],
     focalLength: [
-        { value: "18mm", label: "18mm (ultra wide)" },
-        { value: "24mm", label: "24mm (wide)" },
-        { value: "35mm", label: "35mm (natural)" },
-        { value: "50mm", label: "50mm (standard)" },
-        { value: "85mm", label: "85mm (portrait)" },
-        { value: "100mm", label: "100mm (telephoto)" },
-        { value: "135mm", label: "135mm (long)" },
+        { value: "18mm", label: "18mm — wide, environmental" },
+        { value: "24mm", label: "24mm — documentary feel" },
+        { value: "35mm", label: "35mm — cinematic standard" },
+        { value: "50mm", label: "50mm — human eye perspective" },
+        { value: "65mm", label: "65mm — IMAX standard" },
+        { value: "85mm", label: "85mm — classic portrait" },
+        { value: "100mm", label: "100mm — tight portrait" },
+        { value: "135mm", label: "135mm — dreamy compression" },
     ],
     lensType: [
-        { value: "anamorphic lens", label: "Anamorphic lens" },
-        { value: "spherical lens", label: "Spherical lens" },
-        { value: "prime lens", label: "Prime lens" },
-        { value: "Cooke S4/i lens", label: "Cooke S4/i lens" },
-        { value: "Zeiss Master Prime lens", label: "Zeiss Master Prime lens" },
-        { value: "Panavision Primo 70 lens", label: "Panavision Primo 70 lens" },
+        { value: "anamorphic lens, oval bokeh, horizontal flares", label: "Anamorphic — oval bokeh, streak flares" },
+        { value: "spherical lens, round bokeh", label: "Spherical — round bokeh, neutral" },
+        { value: "Cooke S4/i, warm organic Cooke look", label: "Cooke S4/i — warm organic, subtle flare" },
+        { value: "Cooke Anamorphic/i, blue streak flares, vintage", label: "Cooke Anamorphic — blue flares, vintage" },
+        { value: "Zeiss Master Prime, clinical sharpness, clean", label: "Zeiss Master — clinical sharpness" },
+        { value: "Zeiss Supreme Prime, large format, soft edges", label: "Zeiss Supreme — soft edges, gentle falloff" },
+        { value: "ARRI Signature Prime, organic flares, smooth bokeh", label: "ARRI Signature — organic flares, smooth" },
+        { value: "Panavision Primo 70, ultra-sharp, smooth falloff", label: "Primo 70 — ultra-sharp, smooth falloff" },
+        { value: "Panavision C-Series anamorphic, vintage warmth", label: "C-Series — vintage warmth, flares" },
+        { value: "Atlas Orion anamorphic, blue streak flares", label: "Atlas Orion — modern vintage, blue streaks" },
+        { value: "Kowa Cine Prominar, soft dreamy vintage", label: "Kowa Prominar — soft dreamy Japanese" },
     ],
     filmStock: [
-        { value: "CineStill 800T film", label: "CineStill 800T" },
-        { value: "Kodak Vision3 500T film", label: "Kodak Vision3 500T" },
-        { value: "Kodak Vision3 250D film", label: "Kodak Vision3 250D" },
-        { value: "Kodak Portra 400 film", label: "Kodak Portra 400" },
-        { value: "Fujifilm Eterna 500 film", label: "Fujifilm Eterna 500" },
-        { value: "Ilford HP5 Plus film", label: "Ilford HP5 Plus (B&W)" },
+        { value: "Kodak Vision3 500T, tungsten, rich shadows", label: "Vision3 500T — tungsten, rich shadows" },
+        { value: "Kodak Vision3 250D, daylight, natural color", label: "Vision3 250D — daylight, natural color" },
+        { value: "Kodak Vision3 50D, fine grain, maximum sharpness", label: "Vision3 50D — fine grain, sharp" },
+        { value: "CineStill 800T, red halation, neon-friendly", label: "CineStill 800T — halation glow, neon" },
+        { value: "Kodak Portra 400, warm skin, soft pastels", label: "Portra 400 — warm skin, soft pastels" },
+        { value: "Kodak Tri-X 400 B&W, iconic contrast, grain", label: "Tri-X 400 B&W — iconic contrast, grain" },
+        { value: "Ilford HP5 Plus B&W, classic grain, pushable", label: "HP5 B&W — classic grain, versatile" },
+        { value: "Fujichrome Velvia 50, extreme saturation", label: "Velvia 50 — extreme saturation, punchy" },
     ],
     lightingSource: [
         { value: "Neon signs", label: "Neon signs" },
         { value: "Moonlight", label: "Moonlight" },
         { value: "Candlelight", label: "Candlelight" },
         { value: "Streetlamps", label: "Streetlamps" },
-        { value: "Sunset glow", label: "Sunset glow" },
+        { value: "Golden hour sunlight", label: "Golden hour" },
         { value: "Firelight", label: "Firelight" },
-        { value: "Fluorescent lights", label: "Fluorescent lights" },
-        { value: "Tungsten lights", label: "Tungsten lights" },
+        { value: "Fluorescent lights", label: "Fluorescent" },
+        { value: "Tungsten practicals", label: "Tungsten practicals" },
+        { value: "Harsh midday sun", label: "Harsh midday sun" },
+        { value: "Overcast diffused daylight", label: "Overcast diffused" },
     ],
     lightingStyle: [
-        { value: "low key", label: "Low key (dark)" },
-        { value: "high key", label: "High key (bright)" },
-        { value: "chiaroscuro", label: "Chiaroscuro" },
-        { value: "silhouette", label: "Silhouette" },
-        { value: "rim lighting", label: "Rim lighting" },
-        { value: "Rembrandt", label: "Rembrandt" },
-        { value: "split lighting", label: "Split lighting" },
+        { value: "low key, deep shadows", label: "Low key — deep shadows" },
+        { value: "high key, bright and airy", label: "High key — bright, airy" },
+        { value: "chiaroscuro, dramatic contrast", label: "Chiaroscuro — dramatic contrast" },
+        { value: "silhouette, backlit", label: "Silhouette — backlit" },
+        { value: "rim lighting, edge glow", label: "Rim lighting — edge glow" },
+        { value: "Rembrandt lighting, triangle shadow", label: "Rembrandt — triangle shadow" },
+        { value: "split lighting, half-face shadow", label: "Split — half-face shadow" },
+        { value: "butterfly lighting, glamour", label: "Butterfly — glamour" },
     ],
-    atmosphere: [
-        { value: "mysterious", label: "Mysterious" },
-        { value: "melancholic", label: "Melancholic" },
-        { value: "tense", label: "Tense" },
-        { value: "romantic", label: "Romantic" },
-        { value: "nostalgic", label: "Nostalgic" },
-        { value: "eerie", label: "Eerie" },
-        { value: "hopeful", label: "Hopeful" },
-        { value: "dreamy", label: "Dreamy" },
-    ],
-    movieAesthetic: [
-        { value: "Blade Runner 2049 inspired aesthetic", label: "Blade Runner 2049" },
-        { value: "The Matrix inspired aesthetic", label: "The Matrix" },
-        { value: "Interstellar inspired aesthetic", label: "Interstellar" },
-        { value: "Dune inspired aesthetic", label: "Dune" },
-        { value: "Drive inspired aesthetic", label: "Drive" },
-        { value: "Amélie inspired aesthetic", label: "Amélie" },
-        { value: "Her inspired aesthetic", label: "Her" },
-        { value: "The Godfather inspired aesthetic", label: "The Godfather" },
-        { value: "Joker inspired aesthetic", label: "Joker" },
-        { value: "La La Land inspired aesthetic", label: "La La Land" },
+    filmInspiration: [
+        { value: "inspired by the vast desolate orange-teal foggy look of Blade Runner 2049", label: "Blade Runner 2049" },
+        { value: "inspired by the warm chiaroscuro shadowy intimate look of The Godfather", label: "The Godfather" },
+        { value: "inspired by the natural-light brutal cold immersive look of The Revenant", label: "The Revenant" },
+        { value: "inspired by the vast muted desert ancient-future look of Dune", label: "Dune" },
+        { value: "inspired by the IMAX black-and-white intimate epic look of Oppenheimer", label: "Oppenheimer" },
+        { value: "inspired by the neon-noir pink-purple 80s look of Drive", label: "Drive" },
+        { value: "inspired by the warm green-yellow whimsical Parisian look of Amélie", label: "Amélie" },
+        { value: "inspired by the warm soft-focus pastel intimate look of Her", label: "Her" },
+        { value: "inspired by the gritty 70s amber-teal Gotham look of Joker", label: "Joker" },
+        { value: "inspired by the saturated Technicolor magic-hour look of La La Land", label: "La La Land" },
+        { value: "inspired by the green-tinted digital cold sterile look of The Matrix", label: "The Matrix" },
+        { value: "inspired by the saturated chrome kinetic desert look of Mad Max: Fury Road", label: "Mad Max: Fury Road" },
+        { value: "inspired by the intimate teal-magenta poetic look of Moonlight", label: "Moonlight" },
+        { value: "inspired by the symmetrical pastel storybook look of The Grand Budapest Hotel", label: "Grand Budapest Hotel" },
+        { value: "inspired by the rain-soaked neon noir smoky look of Blade Runner", label: "Blade Runner (1982)" },
+        { value: "inspired by the cold precise symmetrical futuristic look of 2001: A Space Odyssey", label: "2001: A Space Odyssey" },
+        { value: "inspired by the surreal smoky jungle golden-hour look of Apocalypse Now", label: "Apocalypse Now" },
+        { value: "inspired by the candlelit painterly natural-light look of Barry Lyndon", label: "Barry Lyndon" },
+        { value: "inspired by the rain-drenched red-noir Gotham look of The Batman", label: "The Batman" },
+        { value: "inspired by the slow-motion saturated-red romantic look of In the Mood for Love", label: "In the Mood for Love" },
+        { value: "inspired by the epic golden desert sweeping look of Lawrence of Arabia", label: "Lawrence of Arabia" },
+        { value: "inspired by the foggy muted contemplative mysterious look of Arrival", label: "Arrival" },
+        { value: "inspired by the class-contrast architectural green-tinted look of Parasite", label: "Parasite" },
+        { value: "inspired by the continuous-take immersive WWI mud-and-fire look of 1917", label: "1917" },
     ],
     filter: [
-        { value: "Pro mist diffusion", label: "Pro mist diffusion" },
-        { value: "Black pro mist 1/4", label: "Black pro mist 1/4" },
-        { value: "Vintage halation", label: "Vintage halation" },
-        { value: "Glimmerglass", label: "Glimmerglass" },
-        { value: "Soft focus", label: "Soft focus" },
-        { value: "No filter", label: "No filter" },
+        { value: "Pro mist diffusion, soft glow", label: "Pro mist — soft glow" },
+        { value: "Black pro mist 1/4, subtle halation", label: "Black pro mist — subtle halation" },
+        { value: "Vintage halation, warm bloom", label: "Halation — warm bloom" },
+        { value: "Glimmerglass, skin-flattering softness", label: "Glimmerglass — flattering softness" },
+        { value: "Soft focus filter", label: "Soft focus" },
+        { value: "No filter, clean and sharp", label: "No filter — clean, sharp" },
     ],
     aspectRatio: [
-        { value: "2.39:1", label: "2.39:1 (Cinemascope)" },
-        { value: "1.85:1", label: "1.85:1 (Widescreen)" },
-        { value: "16:9", label: "16:9 (HD)" },
-        { value: "4:3", label: "4:3 (Academy)" },
-        { value: "2.76:1", label: "2.76:1 (Ultra Panavision)" },
-        { value: "1.33:1", label: "1.33:1 (Classic)" },
+        { value: "2.39:1", label: "2.39:1 — Cinemascope" },
+        { value: "1.85:1", label: "1.85:1 — Widescreen" },
+        { value: "16:9", label: "16:9 — HD" },
+        { value: "4:3", label: "4:3 — Academy" },
+        { value: "2.76:1", label: "2.76:1 — Ultra Panavision" },
+        { value: "1.33:1", label: "1.33:1 — Classic" },
+        { value: "1.43:1", label: "1.43:1 — IMAX" },
     ],
 };
 
+
 /**
- * Build cinematic prompt in 4-line template format:
- * Line 1: [STYLE] of a [SUBJECT], set in [ENVIRONMENT].
+ * Build cinematic prompt in template format:
+ * Line 1: [STYLE] [SUBJECT], set in [ENVIRONMENT].
  * Line 2: Captured with [CAMERA], [FOCAL LENGTH], [LENS TYPE], [FILM STOCK].
- * Line 3: [LIGHTING SOURCE], [LIGHTING STYLE], [ATMOSPHERE] mood.
- * Line 4: [MOVIE AESTHETIC]. [FILTER]. [ASPECT RATIO] format.
+ * Line 3: [LIGHTING SOURCE], [LIGHTING STYLE].
+ * Line 4: [FILM INSPIRATION]. [FILTER].
  */
 export function buildCinematicPromptText(state: PromptBuilderState): string {
     const lines: string[] = [];
 
-    // Line 1: [STYLE] of a [SUBJECT], set in [ENVIRONMENT].
+    // Line 1: [STYLE] [SUBJECT], set in [ENVIRONMENT].
+    // Style now ends with "of" (e.g., "A cinematic film still of")
     if (state.style || state.subject || state.environment) {
-        const style = state.style || "A cinematic film still";
+        const style = state.style || "A cinematic film still of";
         const subject = state.subject || "[subject]";
-        const environment = state.environment || "[environment]";
-        lines.push(`${style} of ${subject}, set in ${environment}.`);
+        const environment = state.environment ? `, set in ${state.environment}` : "";
+        lines.push(`${style} ${subject}${environment}.`);
     }
 
     // Line 2: Captured with [CAMERA], [FOCAL LENGTH], [LENS TYPE], [FILM STOCK].
@@ -611,18 +674,24 @@ export function buildCinematicPromptText(state: PromptBuilderState): string {
         lines.push(`Captured with ${line2Parts.join(", ")}.`);
     }
 
-    // Line 3: [LIGHTING SOURCE], [LIGHTING STYLE], [ATMOSPHERE] mood.
+    // Line 3: [LIGHTING SOURCE], [LIGHTING STYLE].
     const line3Parts: string[] = [];
     if (state.lightingSource) line3Parts.push(state.lightingSource);
     if (state.lightingStyle) line3Parts.push(state.lightingStyle);
-    if (state.atmosphere) line3Parts.push(`${state.atmosphere} mood`);
     if (line3Parts.length > 0) {
         lines.push(`${line3Parts.join(", ")}.`);
     }
 
-    // Line 4: [MOVIE AESTHETIC]. [FILTER].
+    // Line 4: [FILM INSPIRATION]. [FILTER].
     const line4Parts: string[] = [];
-    if (state.movieAesthetic) line4Parts.push(state.movieAesthetic);
+    // Use filmInspiration (new) or fall back to movieAesthetic (legacy) or atmosphere (legacy)
+    if (state.filmInspiration) {
+        line4Parts.push(state.filmInspiration);
+    } else if (state.movieAesthetic) {
+        line4Parts.push(state.movieAesthetic);
+    } else if (state.atmosphere) {
+        line4Parts.push(`${state.atmosphere} mood`);
+    }
     if (state.filter) line4Parts.push(state.filter);
     if (line4Parts.length > 0) {
         lines.push(line4Parts.join(". ") + ".");
@@ -630,3 +699,4 @@ export function buildCinematicPromptText(state: PromptBuilderState): string {
 
     return lines.join("\n");
 }
+

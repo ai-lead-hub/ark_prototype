@@ -1,40 +1,218 @@
 {
-  "Emotional Tones": [
-    { "name": "Moody & Atmospheric", "prompt": "moody atmosphere, emotional depth, contemplative feeling, evocative imagery" },
-    { "name": "Dreamy & Ethereal", "prompt": "dreamy atmosphere, ethereal quality, soft and magical, otherworldly feeling" },
-    { "name": "Melancholic", "prompt": "melancholic mood, wistful atmosphere, bittersweet emotion, nostalgic sadness" },
-    { "name": "Joyful & Vibrant", "prompt": "joyful mood, vibrant energy, celebratory atmosphere, lively spirit" },
-    { "name": "Mysterious", "prompt": "mysterious atmosphere, enigmatic mood, intriguing shadows, sense of wonder" },
-    { "name": "Serene & Peaceful", "prompt": "serene atmosphere, peaceful mood, calm tranquility, meditative feeling" },
-    { "name": "Intense & Dramatic", "prompt": "intense atmosphere, dramatic mood, powerful emotion, high stakes feeling" },
-    { "name": "Romantic", "prompt": "romantic mood, intimate atmosphere, tender emotion, love and passion" }
+  "Classic Cinema (Pre-1980)": [
+    {
+      "name": "Citizen Kane",
+      "prompt": "inspired by the deep-focus shadowy expressionist look of Citizen Kane"
+    },
+    {
+      "name": "Lawrence of Arabia",
+      "prompt": "inspired by the epic golden desert sweeping look of Lawrence of Arabia"
+    },
+    {
+      "name": "2001: A Space Odyssey",
+      "prompt": "inspired by the cold precise symmetrical futuristic look of 2001: A Space Odyssey"
+    },
+    {
+      "name": "The Godfather",
+      "prompt": "inspired by the warm chiaroscuro shadowy intimate look of The Godfather"
+    },
+    {
+      "name": "Apocalypse Now",
+      "prompt": "inspired by the surreal smoky jungle golden-hour look of Apocalypse Now"
+    },
+    {
+      "name": "Taxi Driver",
+      "prompt": "inspired by the gritty neon-lit nocturnal urban look of Taxi Driver"
+    },
+    {
+      "name": "Chinatown",
+      "prompt": "inspired by the sun-bleached amber noir look of Chinatown"
+    },
+    {
+      "name": "Barry Lyndon",
+      "prompt": "inspired by the candlelit painterly natural-light look of Barry Lyndon"
+    }
   ],
-  "Visual Aesthetics": [
-    { "name": "Cinematic", "prompt": "cinematic mood, movie-like atmosphere, dramatic visual storytelling" },
-    { "name": "Vintage & Nostalgic", "prompt": "vintage mood, nostalgic atmosphere, retro aesthetic, timeless feeling" },
-    { "name": "Modern & Sleek", "prompt": "modern aesthetic, sleek and contemporary, minimalist mood, clean design" },
-    { "name": "Gritty & Raw", "prompt": "gritty atmosphere, raw aesthetic, unpolished texture, street-style mood" },
-    { "name": "Elegant & Luxurious", "prompt": "elegant mood, luxurious atmosphere, refined aesthetic, sophisticated feel" },
-    { "name": "Whimsical & Playful", "prompt": "whimsical mood, playful atmosphere, fun and quirky, lighthearted energy" },
-    { "name": "Dark & Gothic", "prompt": "dark gothic mood, shadowy atmosphere, macabre aesthetic, mysterious elegance" },
-    { "name": "Bright & Airy", "prompt": "bright and airy mood, light atmosphere, fresh and open, uplifting feeling" }
+  "New Hollywood & 80s": [
+    {
+      "name": "Blade Runner",
+      "prompt": "inspired by the rain-soaked neon noir smoky look of Blade Runner"
+    },
+    {
+      "name": "Raging Bull",
+      "prompt": "inspired by the high-contrast black-and-white brutal look of Raging Bull"
+    },
+    {
+      "name": "Paris, Texas",
+      "prompt": "inspired by the dusty saturated lonely Americana look of Paris, Texas"
+    },
+    {
+      "name": "Blue Velvet",
+      "prompt": "inspired by the oversaturated suburban nightmare look of Blue Velvet"
+    },
+    {
+      "name": "The Shining",
+      "prompt": "inspired by the cold sterile symmetrical unsettling look of The Shining"
+    },
+    {
+      "name": "E.T.",
+      "prompt": "inspired by the warm backlit magical suburban look of E.T."
+    },
+    {
+      "name": "Scarface",
+      "prompt": "inspired by the neon-soaked excess Miami look of Scarface"
+    }
   ],
-  "Environmental Moods": [
-    { "name": "Urban Elegance", "prompt": "urban elegance, city sophistication, metropolitan mood, stylish street atmosphere" },
-    { "name": "Natural & Organic", "prompt": "natural mood, organic atmosphere, earthy aesthetic, connection to nature" },
-    { "name": "Industrial", "prompt": "industrial mood, urban decay aesthetic, raw textures, gritty atmosphere" },
-    { "name": "Coastal & Breezy", "prompt": "coastal mood, ocean breeze atmosphere, seaside feeling, relaxed vibes" },
-    { "name": "Forest & Woodland", "prompt": "forest atmosphere, woodland mood, natural greenery, enchanted feeling" },
-    { "name": "Desert & Arid", "prompt": "desert mood, arid atmosphere, warm earth tones, vast open space" },
-    { "name": "Winter & Cold", "prompt": "winter mood, cold atmosphere, crisp and frozen, quiet stillness" },
-    { "name": "Tropical & Lush", "prompt": "tropical mood, lush atmosphere, vibrant greenery, exotic paradise" }
+  "90s-2000s": [
+    {
+      "name": "Amélie",
+      "prompt": "inspired by the warm green-yellow whimsical Parisian look of Amélie"
+    },
+    {
+      "name": "In the Mood for Love",
+      "prompt": "inspired by the slow-motion saturated-red romantic melancholic look of In the Mood for Love"
+    },
+    {
+      "name": "The Matrix",
+      "prompt": "inspired by the green-tinted digital cold sterile look of The Matrix"
+    },
+    {
+      "name": "Fight Club",
+      "prompt": "inspired by the grimy desaturated nihilistic look of Fight Club"
+    },
+    {
+      "name": "Children of Men",
+      "prompt": "inspired by the handheld grey apocalyptic documentary look of Children of Men"
+    },
+    {
+      "name": "Eternal Sunshine",
+      "prompt": "inspired by the soft dreamy color-shifting nostalgic look of Eternal Sunshine of the Spotless Mind"
+    },
+    {
+      "name": "Lost in Translation",
+      "prompt": "inspired by the neon-haze soft ambient Tokyo look of Lost in Translation"
+    },
+    {
+      "name": "The Dark Knight",
+      "prompt": "inspired by the IMAX-scale gritty blue-teal urban look of The Dark Knight"
+    },
+    {
+      "name": "No Country for Old Men",
+      "prompt": "inspired by the harsh daylight dusty desolate look of No Country for Old Men"
+    },
+    {
+      "name": "There Will Be Blood",
+      "prompt": "inspired by the oil-dark amber period epic look of There Will Be Blood"
+    }
   ],
-  "Stylistic Moods": [
-    { "name": "Film Noir", "prompt": "film noir mood, black and white contrast, shadowy mystery, detective atmosphere" },
-    { "name": "Sci-Fi Futuristic", "prompt": "sci-fi mood, futuristic atmosphere, technological aesthetic, cyberpunk vibes" },
-    { "name": "Fantasy & Magical", "prompt": "fantasy mood, magical atmosphere, enchanted aesthetic, mythical feeling" },
-    { "name": "Retro 80s", "prompt": "retro 80s mood, synthwave atmosphere, neon aesthetic, vintage futurism" },
-    { "name": "Bohemian", "prompt": "bohemian mood, free-spirited atmosphere, artistic aesthetic, eclectic vibes" },
-    { "name": "Minimalist Zen", "prompt": "minimalist zen mood, calm atmosphere, simple aesthetic, mindful presence" }
+  "Modern Cinema (2010s)": [
+    {
+      "name": "Blade Runner 2049",
+      "prompt": "inspired by the vast desolate orange-teal foggy look of Blade Runner 2049"
+    },
+    {
+      "name": "The Revenant",
+      "prompt": "inspired by the natural-light brutal cold immersive look of The Revenant"
+    },
+    {
+      "name": "Mad Max: Fury Road",
+      "prompt": "inspired by the saturated chrome kinetic desert look of Mad Max: Fury Road"
+    },
+    {
+      "name": "Her",
+      "prompt": "inspired by the warm soft-focus pastel intimate look of Her"
+    },
+    {
+      "name": "Drive",
+      "prompt": "inspired by the neon-noir pink-purple 80s look of Drive"
+    },
+    {
+      "name": "La La Land",
+      "prompt": "inspired by the saturated Technicolor magic-hour musical look of La La Land"
+    },
+    {
+      "name": "Moonlight",
+      "prompt": "inspired by the intimate teal-magenta poetic close-up look of Moonlight"
+    },
+    {
+      "name": "The Grand Budapest Hotel",
+      "prompt": "inspired by the symmetrical pastel storybook whimsical look of The Grand Budapest Hotel"
+    },
+    {
+      "name": "Arrival",
+      "prompt": "inspired by the foggy muted contemplative mysterious look of Arrival"
+    },
+    {
+      "name": "1917",
+      "prompt": "inspired by the continuous-take immersive WWI mud-and-fire look of 1917"
+    },
+    {
+      "name": "Joker",
+      "prompt": "inspired by the gritty 70s amber-teal Gotham look of Joker"
+    },
+    {
+      "name": "Parasite",
+      "prompt": "inspired by the class-contrast architectural green-tinted look of Parasite"
+    }
+  ],
+  "Contemporary (2020s)": [
+    {
+      "name": "Dune",
+      "prompt": "inspired by the vast muted desert ancient-future scale look of Dune"
+    },
+    {
+      "name": "Oppenheimer",
+      "prompt": "inspired by the IMAX black-and-white intimate epic look of Oppenheimer"
+    },
+    {
+      "name": "Everything Everywhere All at Once",
+      "prompt": "inspired by the multiverse playful chaotic color-shifting look of Everything Everywhere All at Once"
+    },
+    {
+      "name": "The Batman",
+      "prompt": "inspired by the rain-drenched red-noir Gotham look of The Batman"
+    },
+    {
+      "name": "Poor Things",
+      "prompt": "inspired by the fisheye surreal saturated theatrical look of Poor Things"
+    },
+    {
+      "name": "Killers of the Flower Moon",
+      "prompt": "inspired by the amber period naturalistic epic look of Killers of the Flower Moon"
+    },
+    {
+      "name": "Past Lives",
+      "prompt": "inspired by the soft naturalistic intimate Korean-American look of Past Lives"
+    }
+  ],
+  "Genre-Specific Looks": [
+    {
+      "name": "Neon Noir",
+      "prompt": "inspired by a neon-soaked rain-slicked night noir look"
+    },
+    {
+      "name": "Vintage Americana",
+      "prompt": "inspired by a sun-bleached faded nostalgic Americana look"
+    },
+    {
+      "name": "Dark Fantasy",
+      "prompt": "inspired by a shadowy mystical atmospheric fantasy look"
+    },
+    {
+      "name": "Cyberpunk",
+      "prompt": "inspired by a neon-drenched high-tech low-life cyberpunk look"
+    },
+    {
+      "name": "Giallo Horror",
+      "prompt": "inspired by a saturated red-blue Italian giallo horror look"
+    },
+    {
+      "name": "French New Wave",
+      "prompt": "inspired by a grainy black-and-white spontaneous French New Wave look"
+    },
+    {
+      "name": "Wong Kar-wai Romance",
+      "prompt": "inspired by a slow-motion saturated romantic Hong Kong look"
+    }
   ]
 }

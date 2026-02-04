@@ -9,7 +9,6 @@ import {
     cameraOptions,
     cinematicOptions,
     type PromptBuilderState,
-    type PromptBuilderMode,
 } from '../../lib/prompt-builder/types';
 import {
     styles,
@@ -186,7 +185,7 @@ type CameraSystemData = {
     name: string;
     bodies: { id: string; name: string; prompt: string }[];
     lenses: { id: string; name: string; prompt: string }[];
-    filmLooks: string[];
+    filmStocks: string[];
 };
 
 /**
@@ -282,11 +281,6 @@ export function PromptBuilderV2({
         setState((prev) => ({ ...prev, [key]: value }));
     }, []);
 
-    // Switch mode
-    const switchMode = useCallback((mode: PromptBuilderMode) => {
-        setState((prev) => ({ ...prev, mode }));
-    }, []);
-
     // Get camera system options (cinema first)
     const systemOptions = useMemo(() => {
         const systems = cameraSystems.systems as Record<string, CameraSystemData>;
@@ -318,10 +312,10 @@ export function PromptBuilderV2({
         return system.lenses.map(l => ({ value: l.prompt, label: l.name }));
     }, [state.cameraSystem]);
 
-    // Get film looks for selected system
+    // Get film stocks for selected system
     const filmLookOptions = useMemo(() => {
         if (!state.cameraSystem) {
-            return Object.values(cameraSystems.filmLooks).map((data) => ({
+            return Object.values(cameraSystems.filmStocks).map((data) => ({
                 value: (data as { prompt: string }).prompt,
                 label: (data as { name: string }).name,
             }));
@@ -329,12 +323,12 @@ export function PromptBuilderV2({
         const systems = cameraSystems.systems as Record<string, CameraSystemData>;
         const system = systems[state.cameraSystem];
         if (!system) return [];
-        const filmLooks = cameraSystems.filmLooks as Record<string, { name: string; prompt: string }>;
-        return system.filmLooks
-            .filter(key => filmLooks[key])
-            .map(key => ({
-                value: filmLooks[key].prompt,
-                label: filmLooks[key].name,
+        const filmStocks = cameraSystems.filmStocks as Record<string, { name: string; prompt: string }>;
+        return system.filmStocks
+            .filter((key: string) => filmStocks[key])
+            .map((key: string) => ({
+                value: filmStocks[key].prompt,
+                label: filmStocks[key].name,
             }));
     }, [state.cameraSystem]);
 
@@ -401,26 +395,11 @@ export function PromptBuilderV2({
                     </button>
                 </div>
 
-                {/* Mode Toggle */}
-                <div className="flex-shrink-0 flex border-b border-white/10 bg-[#252525]">
-                    <button
-                        onClick={() => switchMode('default')}
-                        className={`flex-1 px-4 py-2.5 text-xs font-medium transition-all ${state.mode === 'default'
-                            ? 'text-white bg-purple-600/30 border-b-2 border-purple-500'
-                            : 'text-slate-400 hover:text-white hover:bg-white/5'
-                            }`}
-                    >
-                        <span className="mr-1.5">📷</span> Default Mode
-                    </button>
-                    <button
-                        onClick={() => switchMode('cinematic')}
-                        className={`flex-1 px-4 py-2.5 text-xs font-medium transition-all ${state.mode === 'cinematic'
-                            ? 'text-white bg-amber-600/30 border-b-2 border-amber-500'
-                            : 'text-slate-400 hover:text-white hover:bg-white/5'
-                            }`}
-                    >
-                        <span className="mr-1.5">🎬</span> Cinematic Template
-                    </button>
+                {/* Mode Header */}
+                <div className="flex-shrink-0 flex border-b border-white/10 bg-[#252525] px-4 py-2.5">
+                    <div className="flex items-center text-xs font-medium text-white">
+                        <span className="mr-1.5">📷</span> Prompt Builder
+                    </div>
                 </div>
 
                 {/* Body - Two columns */}
@@ -542,12 +521,12 @@ export function PromptBuilderV2({
                                         </div>
                                     </div>
                                     <div>
-                                        <label className="block text-[10px] text-slate-500 mb-1">Atmosphere</label>
+                                        <label className="block text-[10px] text-slate-500 mb-1">Inspired by Film</label>
                                         <Dropdown
-                                            value={state.atmosphere}
-                                            options={cinematicOptions.atmosphere}
-                                            placeholder="Select atmosphere..."
-                                            onChange={(v) => updateField('atmosphere', v)}
+                                            value={state.filmInspiration}
+                                            options={cinematicOptions.filmInspiration}
+                                            placeholder="Select film inspiration..."
+                                            onChange={(v) => updateField('filmInspiration', v)}
                                         />
                                     </div>
                                 </div>
@@ -558,15 +537,7 @@ export function PromptBuilderV2({
                                         <div className="w-2 h-2 bg-amber-500 rounded-sm" />
                                         Line 4: Aesthetic & Format
                                     </div>
-                                    <div>
-                                        <label className="block text-[10px] text-slate-500 mb-1">Movie Aesthetic</label>
-                                        <Dropdown
-                                            value={state.movieAesthetic}
-                                            options={cinematicOptions.movieAesthetic}
-                                            placeholder="Select aesthetic..."
-                                            onChange={(v) => updateField('movieAesthetic', v)}
-                                        />
-                                    </div>
+
                                     <div>
                                         <label className="block text-[10px] text-slate-500 mb-1">Filter</label>
                                         <Dropdown
@@ -716,11 +687,11 @@ export function PromptBuilderV2({
                                     />
                                 </div>
 
-                                {/* Mood */}
+                                {/* Film Inspiration */}
                                 <div className="bg-[#252525] rounded-lg p-3">
                                     <div className="flex items-center gap-1.5 text-[11px] font-semibold text-purple-400 mb-2">
                                         <div className="w-2 h-2 bg-purple-500 rounded-sm" />
-                                        Mood
+                                        Inspired by the Look of
                                     </div>
                                     <StyleSelector
                                         value={state.colorMood}

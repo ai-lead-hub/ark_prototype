@@ -66,6 +66,85 @@ Supports both Text-to-Video (T2V) and Image-to-Video (I2V). When `image_urls` is
 ---
 
 
+### Grok Imagine I2V
+**Provider**: KIE
+**Endpoint**: `/api/v1/jobs/createTask`
+**Pricing**: $0.10 (6s), $0.15 (10s)
+
+Generates video from a reference image. Supports multiple generation modes including "spicy" mode for internal task_id images only (not supported with external image URLs).
+
+#### Parameters
+| Parameter | Type | Required | Description | Example |
+| :--- | :--- | :--- | :--- | :--- |
+| `model` | string | Yes | Model ID | `"grok-imagine/image-to-video"` |
+| `input.image_urls` | array(URL) | Conditional | External image URL. Provide this OR task_id+index, not both. Max 10MB. Accepts: jpeg, png, webp. | `["https://..."]` |
+| `input.task_id` | string | Conditional | Task ID of a Grok-generated image. Use with `index` below. Supports Spicy mode unlike external images. | `"task_abc123"` |
+| `input.index` | number | No | Which image from the task_id generation (0-5). Only used with task_id. | `0` |
+| `input.prompt` | string | No | Text prompt describing desired video motion. Max 5000 chars. | `"POV hand comes into frame..."` |
+| `input.mode` | string | No | Generation mode. Options: `"normal"`, `"fun"`, `"spicy"`. Default: `"normal"`. **Note:** Spicy mode not supported with external image_urls. | `"normal"` |
+| `input.duration` | string | No | Duration in seconds. Options: `"6"`, `"10"`. Default: `"6"`. | `"6"` |
+| `callBackUrl` | string | No | Callback URL for notifications. | `"https://..."` |
+
+#### Request Example (External Image)
+```json
+{
+  "model": "grok-imagine/image-to-video",
+  "callBackUrl": "https://your-domain.com/api/callback",
+  "input": {
+    "image_urls": ["https://example.com/my-image.png"],
+    "prompt": "POV hand comes into frame handing the girl a cup of take away coffee, the girl steps out of the screen looking tired, then takes it and she says happily: 'thanks! Back to work' she exits the frame and walks right to a different part of the office.",
+    "mode": "normal",
+    "duration": "6"
+  }
+}
+```
+
+#### Request Example (Using Task ID)
+```json
+{
+  "model": "grok-imagine/image-to-video",
+  "callBackUrl": "https://your-domain.com/api/callback",
+  "input": {
+    "task_id": "e989621f54392584b05867f87b160672",
+    "index": 0,
+    "prompt": "The subject walks towards the camera with a confident smile",
+    "mode": "spicy",
+    "duration": "10"
+  }
+}
+```
+
+#### Response Example
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "taskId": "task_12345678"
+  }
+}
+```
+
+#### Callback Notification Example
+```json
+{
+  "code": 200,
+  "data": {
+    "completeTime": 1755599644000,
+    "costTime": 8,
+    "createTime": 1755599634000,
+    "model": "grok-imagine/image-to-video",
+    "resultJson": "{\"resultUrls\":[\"https://example.com/generated-video.mp4\"]}",
+    "state": "success",
+    "taskId": "e989621f54392584b05867f87b160672"
+  },
+  "msg": "Playground task completed successfully."
+}
+```
+
+---
+
+
 ### Kling O1 Reference-to-Video
 **Provider**: FAL
 **Endpoint**: `fal-ai/kling-video/o1/reference-to-video`
@@ -491,6 +570,93 @@ Transfers motion from a reference video onto a person in an image. Requires both
   }
 }
 ```
+
+---
+
+### Kling O3 Pro Video-to-Video Edit
+**Provider**: FAL
+**Endpoint**: `fal-ai/kling-video/o3/pro/video-to-video/edit`
+**Pricing**: ~$0.08 per video
+
+Edits existing videos based on a text prompt. Supports reference images for style/appearance and elements (characters/objects). Reference video as `@Video1`, images as `@Image1`, `@Image2`, and elements as `@Element1`, `@Element2` in prompts.
+
+#### Parameters
+| Parameter | Type | Required | Description | Example |
+| :--- | :--- | :--- | :--- | :--- |
+| `prompt` | string | Yes | Text prompt for video editing. Reference video as @Video1. | `"Change the background to tropical island"` |
+| `video_url` | string | Yes | Reference video URL. Only .mp4/.mov formats, 3-10s duration, 720-2160px resolution, max 200MB. | `"https://..."` |
+| `image_urls` | array | No | Reference images for style/appearance. Reference in prompt as @Image1, @Image2, etc. Maximum 4 total (elements + reference images) when using video. | `["https://..."]` |
+| `keep_audio` | boolean | No | Whether to keep the original audio from the reference video. Default: `true`. | `true` |
+| `elements` | array | No | Elements (characters/objects) to include. Reference in prompt as @Element1, @Element2. See Element Structure below. | See below |
+| `shot_type` | enum | No | The type of multi-shot video generation. Options: `"customize"`. Default: `"customize"`. | `"customize"` |
+
+**Element Structure:**
+```json
+{
+  "frontal_image_url": "https://...",
+  "reference_image_urls": ["https://..."]
+}
+```
+
+#### Request Example (Basic)
+```javascript
+import { fal } from "@fal-ai/client";
+
+const result = await fal.subscribe("fal-ai/kling-video/o3/pro/video-to-video/edit", {
+  input: {
+    prompt: "Change the background to tropical island",
+    video_url: "https://v3b.fal.media/files/b/0a8d03c4/zy-MD131DqeVEi8VRMUmD_out_9sec.mp4"
+  },
+  logs: true,
+  onQueueUpdate: (update) => {
+    if (update.status === "IN_PROGRESS") {
+      update.logs.map((log) => log.message).forEach(console.log);
+    }
+  },
+});
+console.log(result.data);
+console.log(result.requestId);
+```
+
+#### Request Example (JSON Input)
+```json
+{
+  "prompt": "Change the background to tropical island",
+  "video_url": "https://v3b.fal.media/files/b/0a8d03c4/zy-MD131DqeVEi8VRMUmD_out_9sec.mp4",
+  "image_urls": null,
+  "keep_audio": true,
+  "elements": null,
+  "shot_type": "customize"
+}
+```
+
+#### Queue Submit Example
+```javascript
+import { fal } from "@fal-ai/client";
+
+const { request_id } = await fal.queue.submit("fal-ai/kling-video/o3/pro/video-to-video/edit", {
+  input: {
+    prompt: "Change the background to tropical island",
+    video_url: "https://v3b.fal.media/files/b/0a8d03c4/zy-MD131DqeVEi8VRMUmD_out_9sec.mp4"
+  },
+  webhookUrl: "https://optional.webhook.url/for/results",
+});
+```
+
+#### Response Example
+```json
+{
+  "video": {
+    "file_size": 25370958,
+    "file_name": "output.mp4",
+    "content_type": "video/mp4",
+    "url": "https://v3b.fal.media/files/b/0a8d0443/gJiT7nXFsKBGBYk1skwt3_output.mp4"
+  }
+}
+```
+
+> [!NOTE]
+> For long-running requests, use the Queue API to submit requests and rely on webhooks for results instead of blocking while waiting.
 
 ---
 

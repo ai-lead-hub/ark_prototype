@@ -9,6 +9,7 @@ import {
 import { useCatalog } from "../state/useCatalog";
 import { Tooltip } from "./ui/Tooltip";
 import { useQueue } from "../state/queue";
+import { useElements } from "../state/elements";
 import QueueLog from "./QueueLog";
 import CreditTracker from "./CreditTracker";
 import { useHoverPlayVideos } from "../lib/useHoverPlayVideos";
@@ -186,6 +187,7 @@ export default function ProjectBar() {
         {/* Right: Actions */}
         <div className="flex items-center gap-2">
           <CreditTracker />
+          <ElementsButton />
           <QueueButton />
 
           {/* Settings Button + Dropdown */}
@@ -350,6 +352,30 @@ function QueueButton() {
       {activeCount > 0 && (
         <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-sky-500 text-[9px] text-white">
           {activeCount}
+        </span>
+      )}
+    </button>
+  );
+}
+
+function ElementsButton() {
+  const { elements, toggleManager, isManagerOpen, selectedElements } = useElements();
+  const totalCount = elements.length;
+  const selectedCount = selectedElements.length;
+
+  return (
+    <button
+      onClick={toggleManager}
+      className={`relative rounded-full border px-3 py-1 font-semibold text-xs transition ${isManagerOpen || selectedCount > 0
+        ? "border-amber-500 text-amber-400 bg-amber-500/10"
+        : "border-white/10 text-slate-400 hover:text-white"
+        }`}
+      title="Elements Manager"
+    >
+      👤 Elements
+      {totalCount > 0 && (
+        <span className={`absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full text-[9px] text-white ${selectedCount > 0 ? "bg-amber-500" : "bg-slate-600"}`}>
+          {selectedCount > 0 ? selectedCount : totalCount}
         </span>
       )}
     </button>

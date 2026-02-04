@@ -298,28 +298,14 @@ const jsonSpecs =
               }
             }
 
-            // Determine the KIE model name based on model ID
             // Models with both T2V and I2V endpoints - switch based on whether image is provided
             const kieModelMap: Record<string, { i2v: string; t2v?: string }> = {
+              "grok-imagine/image-to-video": { i2v: "grok-imagine/image-to-video" },
               "kling-2.5-pro": { i2v: "kling/v2-5-turbo-image-to-video-pro" },
               "hailuo-2.3-pro": { i2v: "hailuo/2-3-image-to-video-pro" }, // T2V unavailable
               "hailuo-02-pro": {
                 i2v: "hailuo/02-image-to-video-pro",
                 t2v: "hailuo/02-text-to-video-pro"
-              },
-              "wan-2.5-i2v": {
-                i2v: "wan/2-5-image-to-video",
-                t2v: "wan/2-5-text-to-video"
-              },
-              "kling-2.1-pro": { i2v: "kling/v2-1-pro" },
-              "wan-2.2-turbo": { i2v: "wan/2-2-a14b-image-to-video-turbo" },
-              "seedance-pro": {
-                i2v: "bytedance/v1-pro-image-to-video",
-                t2v: "bytedance/v1-pro-text-to-video"
-              },
-              "seedance-1.5-pro": {
-                i2v: "bytedance/seedance-1.5-pro",
-                t2v: "bytedance/seedance-1.5-pro"
               },
               "kling-v2-6-pro": {
                 i2v: "kling-2.6/image-to-video",
@@ -363,16 +349,12 @@ const jsonSpecs =
               }
             }
 
-            // Special handling for Seedance 1.5 Pro - uses input_urls array (0-2 images)
-            if (model.id === "seedance-1.5-pro") {
-              const urls: string[] = [];
-              if (unified.start_frame_url) urls.push(unified.start_frame_url);
-              if (unified.end_frame_url) urls.push(unified.end_frame_url);
-              // Only add input_urls if we have images, otherwise T2V mode
-              if (urls.length > 0) {
-                input.input_urls = urls;
+            // Special handling for Grok Imagine I2V - image_urls must be an array
+            if (model.id === "grok-imagine/image-to-video" && hasImage) {
+              const imageUrl = input.image_urls ?? unified.start_frame_url;
+              if (typeof imageUrl === "string") {
+                input.image_urls = [imageUrl];
               }
-              delete input.image_url; // Remove if present
             }
 
             return {

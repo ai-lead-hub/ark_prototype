@@ -89,7 +89,7 @@ try {
 }
 
 // API routes that require auth
-const API_ROUTES = ["/files", "/workspaces", "/publish", "/log", "/meta"];
+const API_ROUTES = ["/files", "/workspaces", "/publish", "/log", "/meta", "/elements"];
 
 server.addHook("onRequest", async (request, reply) => {
   // Get just the pathname (without query string)
@@ -958,6 +958,184 @@ server.patch("/meta/pins", async (request, reply) => {
   } catch (error) {
     request.log.error(error);
     return reply.code(500).send({ error: "Failed to rename pin" });
+  }
+});
+
+// ============================================================
+// ELEMENTS API - Global elements storage outside workspaces
+// ============================================================
+
+const ELEMENTS_DIR = path.join(STORAGE_ROOT, "_elements");
+const ELEMENTS_JSON = path.join(ELEMENTS_DIR, "elements.json");
+
+// Ensure elements directory exists
+await fs.mkdir(ELEMENTS_DIR, { recursive: true });
+
+// Load elements from JSON file
+async function loadElements() {
+  try {
+    const data = await fs.readFile(ELEMENTS_JSON, "utf-8");
+    return JSON.parse(data);
+  } catch {
+    return [];
+  }
+}
+
+// Save elements to JSON file
+async function saveElements(elements) {
+  await fs.writeFile(ELEMENTS_JSON, JSON.stringify(elements, null, 2));
+}
+
+// Get file extension from filename
+function getExtension(filename) {
+  return path.extname(filename).toLowerCase();
+}
+
+// List all elements
+server.get("/elements", async () => {
+  const elements = await loadElements();
+  return { elements };
+});
+
+// Create new element
+server.post("/elements", async (request, reply) => {
+  const parts = request.parts();
+  const elementId = crypto.randomUUID();
+  const elementDir = path.join(ELEMENTS_DIR, elementId);
+  await fs.mkdir(elementDir, { recursive: true });
+
+  let name = "";
+  let frontalImageUrl = "";
+  const referenceImageUrls = [];
+  let videoReferenceUrl = "";
+  let characterSheetUrl = "";
+
+  try {
+    for await (const part of parts) {
+      if (part.type === "field" && part.fieldname === "name") {
+        name = part.value.trim();
+        continue;
+      }
+
+      if (part.type === "file") {
+        const ext = getExtension(part.filename);
+        let targetName = "";
+
+        if (part.fieldname === "frontalImage") {
+          targetName = `frontal${ext}`;
+          frontalImageUrl = `/elements/${elementId}/files/${targetName}`;
+        } else if (part.fieldname.startsWith("referenceImage_")) {
+          const index = part.fieldname.split("_")[1];
+          targetName = `ref_${index}${ext}`;
+          referenceImageUrls.push(`/elements/${elementId}/files/${targetName}`);
+        } else if (part.fieldname === "videoReference") {
+          targetName = `video${ext}`;
+          videoReferenceUrl = `/elements/${elementId}/files/${targetName}`;
+        } else if (part.fieldname === "characterSheet") {
+          targetName = `sheet${ext}`;
+          characterSheetUrl = `/elements/${elementId}/files/${targetName}`;
+        }
+
+        if (targetName) {
+          const targetPath = path.join(elementDir, targetName);
+          const writeStream = createWriteStream(targetPath);
+          await pipeline(part.file, writeStream);
+        }
+      }
+    }
+
+    if (!name) {
+      await fs.rm(elementDir, { recursive: true, force: true });
+      return reply.code(400).send({ error: "Name is required" });
+    }
+
+    if (!frontalImageUrl) {
+      await fs.rm(elementDir, { recursive: true, force: true });
+      return reply.code(400).send({ error: "Frontal image is required" });
+    }
+
+    const now = Date.now();
+    const element = {
+      id: elementId,
+      name,
+      frontalImageUrl,
+      referenceImageUrls,
+      videoReferenceUrl: videoReferenceUrl || undefined,
+      characterSheetUrl: characterSheetUrl || undefined,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const elements = await loadElements();
+    elements.unshift(element);
+    await saveElements(elements);
+
+    return reply.send({ element });
+  } catch (error) {
+    await fs.rm(elementDir, { recursive: true, force: true }).catch(() => { });
+    request.log.error(error);
+    return reply.code(500).send({ error: error.message ?? "Failed to create element" });
+  }
+});
+
+// Delete element
+server.delete("/elements/:id", async (request, reply) => {
+  const { id } = request.params;
+
+  if (!id || !/^[a-f0-9-]+$/i.test(id)) {
+    return reply.code(400).send({ error: "Invalid element ID" });
+  }
+
+  try {
+    const elements = await loadElements();
+    const index = elements.findIndex((el) => el.id === id);
+
+    if (index === -1) {
+      return reply.code(404).send({ error: "Element not found" });
+    }
+
+    // Remove from list
+    elements.splice(index, 1);
+    await saveElements(elements);
+
+    // Delete files
+    const elementDir = path.join(ELEMENTS_DIR, id);
+    await fs.rm(elementDir, { recursive: true, force: true });
+
+    return reply.send({ ok: true });
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ error: error.message ?? "Failed to delete element" });
+  }
+});
+
+// Serve element files
+server.get("/elements/:id/files/*", async (request, reply) => {
+  const { id, "*": filename } = request.params;
+
+  if (!id || !/^[a-f0-9-]+$/i.test(id)) {
+    return reply.code(400).send({ error: "Invalid element ID" });
+  }
+
+  if (!filename || filename.includes("..")) {
+    return reply.code(400).send({ error: "Invalid filename" });
+  }
+
+  const filePath = path.join(ELEMENTS_DIR, id, filename);
+
+  try {
+    const stats = await fs.stat(filePath);
+    if (!stats.isFile()) {
+      return reply.code(404).send({ error: "Not found" });
+    }
+
+    const mimeType = mime.lookup(filePath) || "application/octet-stream";
+    reply.header("Content-Type", mimeType);
+    reply.header("Content-Length", stats.size);
+    reply.header("Cache-Control", "private, max-age=86400");
+    return reply.send(createReadStream(filePath));
+  } catch {
+    return reply.code(404).send({ error: "Not found" });
   }
 });
 

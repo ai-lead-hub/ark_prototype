@@ -16,7 +16,7 @@ export type SpecialModelSpec = {
     endpoint: string;
     provider: "kie" | "fal-client";
     pricing?: string;
-    inputType: "video" | "image" | "both" | "references"; // "video" for V2V, "image" for T2V/I2V, "both" for image+video, "references" for multi-ref+elements
+    inputType: "video" | "image" | "both" | "references" | "kling-v3"; // "video" for V2V, "image" for T2V/I2V, "both" for image+video, "references" for multi-ref+elements, "kling-v3" for Kling V3 (start/end frames + elements only)
     videoInputConfig?: { min?: number; max: number }; // For video input models
     imageInputConfig?: { startFrame?: boolean; endFrame?: boolean }; // For image input models
     referencesConfig?: { maxImages: number; supportsElements: boolean }; // For reference models
@@ -129,13 +129,13 @@ export const SPECIAL_MODELS: SpecialModelSpec[] = [
         },
     },
     {
-        id: "kling-o1-reference",
-        label: "Kling O1 Reference",
-        endpoint: "fal-ai/kling-video/o1/reference-to-video",
+        id: "kling-v3-pro",
+        label: "Kling V3 Pro",
+        endpoint: "fal-ai/kling-video/v3/pro/image-to-video",
         provider: "fal-client",
-        pricing: "$0.04",
-        inputType: "references",
-        referencesConfig: { maxImages: 7, supportsElements: true },
+        pricing: "$0.224/sec (no audio) / $0.336/sec (with audio)",
+        inputType: "kling-v3",  // Special input type - only start/end frames + elements
+        imageInputConfig: { startFrame: true, endFrame: true },
         params: {
             prompt: {
                 type: "string",
@@ -144,7 +144,7 @@ export const SPECIAL_MODELS: SpecialModelSpec[] = [
             duration: {
                 type: "enum",
                 required: false,
-                values: ["5", "10"],
+                values: ["3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"],
                 default: "5",
             },
             aspect_ratio: {
@@ -152,6 +152,19 @@ export const SPECIAL_MODELS: SpecialModelSpec[] = [
                 required: false,
                 values: ["16:9", "9:16", "1:1"],
                 default: "16:9",
+            },
+            generate_audio: {
+                type: "boolean",
+                default: true,
+            },
+            cfg_scale: {
+                type: "number",
+                default: 0.5,
+            },
+            negative_prompt: {
+                type: "string",
+                default: "blur, distort, and low quality",
+                hidden: true,
             },
         },
     },
@@ -191,11 +204,21 @@ export type SpecialUnifiedPayload = {
     // Motion Control params
     character_orientation?: string;
     mode?: string;
-    // Reference model params (Kling O1 Reference)
+    // Reference model params (Kling O1 Reference, Kling V3 Pro)
     image_urls?: string[]; // Reference images for style
     elements?: Array<{
-        frontal_image_url: string;
+        frontal_image_url?: string;
         reference_image_urls?: string[];
+        video_url?: string;  // For video-based elements
+    }>;
+    // Kling V3 Pro specific
+    generate_audio?: boolean;
+    cfg_scale?: number;
+    negative_prompt?: string;
+    // Multishot prompts (uses multi_prompt field)
+    multi_prompt?: Array<{
+        prompt: string;
+        duration: string;
     }>;
 };
 
@@ -258,18 +281,64 @@ export function buildSpecialModelInput(
         if (payload.video_urls) {
             input.video_urls = payload.video_urls;
         }
-    } else if (model.id === "kling-o1-reference") {
-        // Kling O1 Reference: FAL model with references and elements
-        // This model uses direct FAL input format (no model wrapping)
+    } else if (model.id === "kling-v3-pro") {
+        // Kling V3 Pro: FAL model with elements, multi-shot, audio
+        const falInput: Record<string, unknown> = {
+            aspect_ratio: payload.aspect_ratio ?? "16:9",
+            generate_audio: payload.generate_audio ?? true,
+            cfg_scale: payload.cfg_scale ?? 0.5,
+            negative_prompt: payload.negative_prompt ?? "blur, distort, and low quality",
+        };
+
+        // Handle multishot prompts (uses multi_prompt field)
+        if (payload.multi_prompt && payload.multi_prompt.length > 0) {
+            falInput.multi_prompt = payload.multi_prompt.map((shot: { prompt: string; duration: string }) => ({
+                prompt: shot.prompt,
+                // Enforce minimum 3 seconds per shot as per API requirements
+                duration: String(Math.max(3, parseInt(shot.duration) || 3)),
+            }));
+            // Calculate total duration from shots (respecting min 3s per shot)
+            const totalDuration = (falInput.multi_prompt as Array<{ duration: string }>).reduce(
+                (sum: number, shot: { duration: string }) => sum + parseInt(shot.duration),
+                0
+            );
+            falInput.duration = String(totalDuration);
+        } else {
+            // Use normal prompt
+            falInput.prompt = payload.prompt;
+            // Also enforce minimum 3s for single video
+            falInput.duration = String(Math.max(3, parseInt(payload.duration ?? "5") || 5));
+        }
+
+        // Add start frame if provided
+        if (payload.start_frame_url) {
+            falInput.start_image_url = payload.start_frame_url;
+        }
+
+        // Add end frame if provided
+        if (payload.end_frame_url) {
+            falInput.end_image_url = payload.end_frame_url;
+        }
+
+        // Add elements if provided (convert to FAL format)
+        if (payload.elements && payload.elements.length > 0) {
+            falInput.elements = payload.elements.map(el => {
+                if (el.video_url) {
+                    // Video-based element
+                    return { video_url: el.video_url };
+                } else {
+                    // Image-based element
+                    return {
+                        frontal_image_url: el.frontal_image_url,
+                        reference_image_urls: el.reference_image_urls ?? [],
+                    };
+                }
+            });
+        }
+
         return {
             model: model.endpoint,
-            input: {
-                prompt: payload.prompt,
-                image_urls: payload.image_urls ?? [],
-                elements: payload.elements ?? [],
-                duration: payload.duration ?? "5",
-                aspect_ratio: payload.aspect_ratio ?? "16:9",
-            } as unknown as Record<string, InputValue>,
+            input: falInput as unknown as Record<string, InputValue>,
         };
     } else {
         // Fallback for unknown models
