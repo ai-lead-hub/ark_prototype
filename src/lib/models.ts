@@ -315,6 +315,10 @@ const jsonSpecs =
                 i2v: "wan/2-6-image-to-video",
                 t2v: "wan/2-6-text-to-video"
               },
+              "seedance-1.5-pro": {
+                i2v: "bytedance/seedance-1.5-pro",
+                t2v: "bytedance/seedance-1.5-pro"
+              },
             };
 
             const endpoints = kieModelMap[model.id];
@@ -355,6 +359,18 @@ const jsonSpecs =
               if (typeof imageUrl === "string") {
                 input.image_urls = [imageUrl];
               }
+            }
+
+            // Special handling for Seedance 1.5 Pro - uses input_urls array (0-2 images)
+            if (model.id === "seedance-1.5-pro") {
+              const urls: string[] = [];
+              if (unified.start_frame_url) urls.push(unified.start_frame_url);
+              if (unified.end_frame_url) urls.push(unified.end_frame_url);
+              // Only add input_urls if we have images, otherwise T2V mode
+              if (urls.length > 0) {
+                input.input_urls = urls;
+              }
+              delete input.image_url; // Remove if present
             }
 
             return {
