@@ -30,7 +30,11 @@ import { buildFilename } from "../lib/filename";
 import { compressImage } from "../lib/image-utils";
 import { useCatalog } from "../state/useCatalog";
 import { Spinner } from "./ui/Spinner";
-import { FILE_ENTRY_MIME } from "../lib/drag-constants";
+import {
+  ELEMENT_CHARACTER_SHEET_MIME,
+  FILE_ENTRY_MIME,
+  type ElementCharacterSheetDragPayload,
+} from "../lib/drag-constants";
 import {
   callModelEndpoint,
   getProviderEnvVar,
@@ -83,6 +87,25 @@ const VIDEO_END_FRAME_KEY = "controls_videoEndFrame_v1";
 const IMAGE_HISTORY_KEY = "controls_imageHistory_v1";
 const VIDEO_HISTORY_KEY = "controls_videoHistory_v1";
 const HISTORY_MAX_SIZE = 50;
+const ELEMENTS_API_BASE = import.meta.env.VITE_FILE_API_BASE ?? "http://localhost:8787";
+const ELEMENTS_API_TOKEN = import.meta.env.VITE_FILE_API_TOKEN;
+
+function buildElementAssetUrl(assetPath: string): string {
+  if (assetPath.startsWith("http://") || assetPath.startsWith("https://")) {
+    return assetPath;
+  }
+
+  const url = new URL(`${ELEMENTS_API_BASE}${assetPath}`);
+  if (ELEMENTS_API_TOKEN) {
+    url.searchParams.set("token", ELEMENTS_API_TOKEN);
+  }
+  return url.toString();
+}
+
+function getFileNameFromPath(filePath: string, fallback: string): string {
+  const fileName = filePath.split("/").filter(Boolean).pop();
+  return fileName && fileName.length > 0 ? fileName : fallback;
+}
 
 type PersistedHistory = {
   entries: string[];
@@ -208,11 +231,11 @@ export default function ControlsPane() {
   const prompt = activeTab === "image" ? imagePrompt : activeTab === "video" ? videoPrompt : specialPrompt;
   const promptMode: PromptMode =
     activeTab === "video" ? videoPromptMode : activeTab === "special" ? specialPromptMode : imagePromptMode;
-  const setPrompt = (val: string) => {
+  const setPrompt = useCallback((val: string) => {
     if (activeTab === "image") setImagePrompt(val);
     else if (activeTab === "video") setVideoPrompt(val);
     else setSpecialPrompt(val);
-  };
+  }, [activeTab, setImagePrompt, setVideoPrompt, setSpecialPrompt]);
   const [alterInstruction, setAlterInstruction] = useState("");
   const [isAltering, setIsAltering] = useState(false);
   const [history, setHistory] = useState<string[]>([]);
@@ -493,7 +516,7 @@ export default function ControlsPane() {
       }
     }
     wasSubmittingRef.current = isSubmitting;
-  }, [isSubmitting, isBatchProcessing, batchIndex, batchQueue]);
+  }, [isSubmitting, isBatchProcessing, batchIndex, batchQueue, setPrompt]);
 
   // When batch queue is first set, trigger initial submission
   useEffect(() => {
@@ -502,7 +525,7 @@ export default function ControlsPane() {
         formRef.current?.requestSubmit();
       }, 300);
     }
-  }, [batchQueue]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [batchQueue, batchIndex, isSubmitting]);
 
   useEffect(() => {
     if (typeof localStorage === "undefined") return;
@@ -566,6 +589,26 @@ export default function ControlsPane() {
     return SPECIAL_MODELS.find((spec) => spec.id === id);
   }, [modelKey, modelKind]);
 
+  useEffect(() => {
+    if (modelKind === "image" && !selectedImage && IMAGE_MODELS.length > 0) {
+      setModelKey(`image:${IMAGE_MODELS[0].id}`);
+      return;
+    }
+    if (modelKind === "video" && !selectedVideo && MODEL_SPECS.length > 0) {
+      setModelKey(`video:${MODEL_SPECS[0].id}`);
+      return;
+    }
+    if (modelKind === "special" && !selectedSpecial && SPECIAL_MODELS.length > 0) {
+      setModelKey(`special:${SPECIAL_MODELS[0].id}`);
+    }
+  }, [
+    modelKind,
+    selectedImage,
+    selectedSpecial,
+    selectedVideo,
+    setModelKey,
+  ]);
+
 
 
   const pricingLabel = useMemo(() => {
@@ -592,6 +635,11 @@ export default function ControlsPane() {
     modelKind === "video"
       ? Math.min(videoReferenceConfig?.max ?? 0, 5)
       : Math.min(selectedImage?.maxRefs ?? 0, 5);
+  const imageReferenceLimit = modelKind === "image"
+    ? Math.min(selectedImage?.maxRefs ?? 5, 5)
+    : 5;
+  const imageModelSupportsElements =
+    modelKind === "image" && selectedImage?.supportsElements === true;
 
   const registerPreview = useCallback((url: string) => {
     if (url.startsWith("blob:")) {
@@ -788,17 +836,19 @@ export default function ControlsPane() {
 
       if (newFiles.length === 0) return;
 
-      // Enforce max 5 references
-      const availableSlots = 5 - referenceUploads.length;
+      const maxRefs = referenceLimit > 0 ? referenceLimit : 5;
+      const availableSlots = maxRefs - referenceUploads.length;
       if (availableSlots <= 0) {
-        setStatus("Maximum 5 reference images allowed.");
+        setStatus(`Maximum ${maxRefs} reference image${maxRefs === 1 ? "" : "s"} allowed.`);
         setTimeout(() => setStatus(null), 3000);
         return;
       }
 
       const filesToAdd = newFiles.slice(0, availableSlots);
       if (newFiles.length > availableSlots) {
-        setStatus(`Only adding ${availableSlots} images (max 5).`);
+        setStatus(
+          `Only adding ${availableSlots} image${availableSlots === 1 ? "" : "s"} (max ${maxRefs}).`
+        );
         setTimeout(() => setStatus(null), 3000);
       }
 
@@ -819,7 +869,7 @@ export default function ControlsPane() {
 
       setReferenceUploads((prev) => [...prev, ...entries]);
     },
-    [referenceUploads.length, registerPreview, setReferenceUploads, setStatus]
+    [referenceLimit, referenceUploads.length, registerPreview, setReferenceUploads, setStatus]
   );
 
   const removeReference = useCallback(
@@ -834,6 +884,18 @@ export default function ControlsPane() {
     },
     [setReferenceUploads]
   );
+
+  useEffect(() => {
+    if (modelKind !== "image") return;
+    if (imageReferenceUploads.length <= imageReferenceLimit) return;
+    setImageReferenceUploads((prev) => {
+      if (prev.length <= imageReferenceLimit) return prev;
+      prev.slice(imageReferenceLimit).forEach((entry) => {
+        releasePreviewRef.current(entry.preview);
+      });
+      return prev.slice(0, imageReferenceLimit);
+    });
+  }, [imageReferenceLimit, imageReferenceUploads.length, modelKind]);
 
   const handleStartFrameSelectRef = useRef(handleStartFrameSelect);
   const handleEndFrameSelectRef = useRef(handleEndFrameSelect);
@@ -1075,16 +1137,23 @@ export default function ControlsPane() {
             }
 
             // Try to restore reference images - use correct setter based on category
-            // API keys vary: image_urls (Seedance, GPT Image), input_urls, reference_image_urls, control_images
-            const savedRefs =
+            // API keys vary: image_urls/input_urls/reference_image_urls/control_images/image_url
+            const savedRefsRaw =
               input.image_urls ||
               input.input_urls ||
               input.reference_image_urls ||
+              input.image_url ||
               input.control_images ||
               payload.reference_image_urls ||
               payload.image_urls ||
+              payload.image_url ||
               [];
-            if (Array.isArray(savedRefs) && savedRefs.length > 0) {
+            const savedRefs = Array.isArray(savedRefsRaw)
+              ? savedRefsRaw
+              : typeof savedRefsRaw === "string" && savedRefsRaw.length > 0
+                ? [savedRefsRaw]
+                : [];
+            if (savedRefs.length > 0) {
               const restoredRefs: ReferenceUpload[] = savedRefs
                 .filter((url: unknown): url is string => typeof url === "string" && url.length > 0)
                 .slice(0, 5)
@@ -1171,6 +1240,52 @@ export default function ControlsPane() {
     async (dataTransfer: DataTransfer | null) => {
       if (!dataTransfer) return;
 
+      const elementPayloadRaw = dataTransfer.getData(ELEMENT_CHARACTER_SHEET_MIME);
+      if (elementPayloadRaw) {
+        try {
+          const payload = JSON.parse(
+            elementPayloadRaw
+          ) as ElementCharacterSheetDragPayload;
+
+          if (modelKind !== "image") {
+            setStatus("Character sheet drops are only supported in Image mode.");
+            setTimeout(() => setStatus(null), 3000);
+            return;
+          }
+
+          if (!payload.characterSheetUrl) {
+            throw new Error("Missing character sheet URL.");
+          }
+
+          const response = await fetch(buildElementAssetUrl(payload.characterSheetUrl));
+          if (!response.ok) {
+            throw new Error(`Character sheet download failed (${response.status})`);
+          }
+
+          const blob = await response.blob();
+          const mime = blob.type || "image/png";
+          if (!mime.startsWith("image/")) {
+            setStatus("Element character sheet must be an image.");
+            setTimeout(() => setStatus(null), 3000);
+            return;
+          }
+
+          const inferredExt = extensionFromMime(mime);
+          const fallbackExt = inferredExt === "bin" ? "png" : inferredExt;
+          const fallbackName = `${payload.elementName || "element"}-sheet.${fallbackExt}`;
+          const fileName = getFileNameFromPath(payload.characterSheetUrl, fallbackName);
+          const file = new File([blob], fileName, { type: mime });
+          const dt = new DataTransfer();
+          dt.items.add(file);
+          await handleReferenceFiles(dt.files);
+        } catch (error) {
+          console.error("Failed to handle element character sheet drop:", error);
+          setStatus("Failed to add character sheet from element.");
+          setTimeout(() => setStatus(null), 3000);
+        }
+        return;
+      }
+
       // Check if this is a workspace file (has FILE_ENTRY_MIME data)
       const payloadRaw = dataTransfer.getData(FILE_ENTRY_MIME);
       if (payloadRaw && connection) {
@@ -1200,7 +1315,13 @@ export default function ControlsPane() {
         await handleReferenceFiles(dt.files);
       }
     },
-    [connection, extractFilesFromDataTransfer, handleReferenceFiles]
+    [
+      connection,
+      extractFilesFromDataTransfer,
+      handleReferenceFiles,
+      modelKind,
+      setStatus,
+    ]
   );
 
   const pendingUploads =
@@ -1548,7 +1669,18 @@ export default function ControlsPane() {
 
     setIsExpanding(true);
     try {
-      const mode = modelKind === "video" ? "video" : "image";
+      // Determine the mode based on tab and model type
+      // For special tab, check if it's a video-type model (kling-v3, video input, etc.)
+      let mode: "video" | "image" = "image";
+      if (modelKind === "video") {
+        mode = "video";
+      } else if (modelKind === "special" && selectedSpecial) {
+        // Special models that are video-based should use video mode
+        const videoInputTypes = ["kling-v3", "video", "both"];
+        if (videoInputTypes.includes(selectedSpecial.inputType)) {
+          mode = "video";
+        }
+      }
 
       // Helper to process any image reference (upload or slot)
       const processRef = async (ref: { preview?: string; url?: string }) => {
@@ -1827,9 +1959,66 @@ export default function ControlsPane() {
           processedPrompt = processedPrompt.replace(new RegExp(`@img${i}\\b`, 'gi'), `image_${i}`);
         }
 
+        const imageElements: Array<{
+          frontal_image_url: string;
+          reference_image_urls: string[];
+        }> = [];
+
+        if (imageModelSpec.supportsElements && elementsState.selectedElements.length > 0) {
+          setStatus("Uploading elements...");
+
+          for (const selectedEl of elementsState.selectedElements) {
+            const el = selectedEl.element;
+            try {
+              const frontalResponse = await fetch(buildElementAssetUrl(el.frontalImageUrl));
+              if (!frontalResponse.ok) {
+                throw new Error(`Failed to fetch frontal image (${frontalResponse.status})`);
+              }
+              const frontalBlob = await frontalResponse.blob();
+              const frontalExt = extensionFromMime(frontalBlob.type || "image/png");
+              const frontalFile = new File(
+                [frontalBlob],
+                `${el.name}_frontal.${frontalExt === "bin" ? "png" : frontalExt}`,
+                { type: frontalBlob.type || "image/png" }
+              );
+              const uploadedFrontalUrl = await uploadToFal(frontalFile);
+
+              const uploadedRefUrls: string[] = [];
+              if (el.referenceImageUrls?.length) {
+                for (const refUrl of el.referenceImageUrls) {
+                  const refResponse = await fetch(buildElementAssetUrl(refUrl));
+                  if (!refResponse.ok) {
+                    throw new Error(`Failed to fetch element reference image (${refResponse.status})`);
+                  }
+                  const refBlob = await refResponse.blob();
+                  const refExt = extensionFromMime(refBlob.type || "image/png");
+                  const refFile = new File(
+                    [refBlob],
+                    `${el.name}_ref.${refExt === "bin" ? "png" : refExt}`,
+                    { type: refBlob.type || "image/png" }
+                  );
+                  const uploadedRefUrl = await uploadToFal(refFile);
+                  uploadedRefUrls.push(uploadedRefUrl);
+                }
+              }
+
+              imageElements.push({
+                frontal_image_url: uploadedFrontalUrl,
+                reference_image_urls: uploadedRefUrls,
+              });
+            } catch (error) {
+              console.error(`Failed to upload image model element ${el.name}:`, error);
+              throw new Error(`Failed to upload element "${el.name}" for this model.`);
+            }
+          }
+
+          setStatus(null);
+        }
+
         const imageJob = {
           prompt: processedPrompt,
           imageUrls: imageRefUrls,
+          elements: imageElements,
           aspectRatio,
           seed: randomizeSeed ? Math.floor(Math.random() * 100000) : 1569,
           imageResolution: imageModelSpec.ui?.resolutions ? imageResolution : undefined,
@@ -2074,78 +2263,45 @@ export default function ControlsPane() {
           const uploadedElements: Array<{
             frontal_image_url?: string;
             reference_image_urls?: string[];
-            video_url?: string;
           }> = [];
-
-          // Build full URL helper  
-          const buildElementUrl = (path: string): string => {
-            if (path.startsWith("http")) return path;
-            const API_BASE = import.meta.env.VITE_FILE_API_BASE ?? "http://localhost:8787";
-            const API_TOKEN = import.meta.env.VITE_FILE_API_TOKEN;
-            const url = new URL(`${API_BASE}${path}`);
-            if (API_TOKEN) {
-              url.searchParams.set("token", API_TOKEN);
-            }
-            return url.toString();
-          };
 
           // Process selected elements from Elements Manager - UPLOAD TO FAL
           for (const selectedEl of elementsState.selectedElements) {
             const el = selectedEl.element;
 
-            if (selectedEl.mode === "video" && el.videoReferenceUrl) {
-              // Upload video to FAL
-              setStatus(`Uploading video element: ${el.name}...`);
-              const videoUrl = buildElementUrl(el.videoReferenceUrl);
-              try {
-                const response = await fetch(videoUrl);
-                const videoBlob = await response.blob();
-                // Convert Blob to File for uploadToFal
-                const videoFile = new File([videoBlob], `${el.name}_video.mp4`, { type: videoBlob.type });
-                const uploadedVideoUrl = await uploadToFal(videoFile);
-                uploadedElements.push({ video_url: uploadedVideoUrl });
-              } catch (error) {
-                console.error(`Failed to upload element video ${el.name}:`, error);
-                setStatus(`Failed to upload video for ${el.name}`);
-                setIsSubmitting(false);
-                setTimeout(() => setStatus(null), 3000);
-                return;
-              }
-            } else {
-              // Upload frontal + reference images to FAL
-              setStatus(`Uploading images for element: ${el.name}...`);
-              try {
-                // Upload frontal image
-                const frontalUrl = buildElementUrl(el.frontalImageUrl);
-                const frontalResponse = await fetch(frontalUrl);
-                const frontalBlob = await frontalResponse.blob();
-                const frontalFile = new File([frontalBlob], `${el.name}_frontal.png`, { type: frontalBlob.type });
-                const uploadedFrontalUrl = await uploadToFal(frontalFile);
+            // Upload frontal + reference images to FAL
+            setStatus(`Uploading images for element: ${el.name}...`);
+            try {
+              // Upload frontal image
+              const frontalUrl = buildElementAssetUrl(el.frontalImageUrl);
+              const frontalResponse = await fetch(frontalUrl);
+              const frontalBlob = await frontalResponse.blob();
+              const frontalFile = new File([frontalBlob], `${el.name}_frontal.png`, { type: frontalBlob.type });
+              const uploadedFrontalUrl = await uploadToFal(frontalFile);
 
-                // Upload reference images
-                const uploadedRefUrls: string[] = [];
-                if (el.referenceImageUrls?.length > 0) {
-                  for (const refUrl of el.referenceImageUrls) {
-                    const refFullUrl = buildElementUrl(refUrl);
-                    const refResponse = await fetch(refFullUrl);
-                    const refBlob = await refResponse.blob();
-                    const refFile = new File([refBlob], `${el.name}_ref.png`, { type: refBlob.type });
-                    const uploadedRefUrl = await uploadToFal(refFile);
-                    uploadedRefUrls.push(uploadedRefUrl);
-                  }
+              // Upload reference images
+              const uploadedRefUrls: string[] = [];
+              if (el.referenceImageUrls?.length > 0) {
+                for (const refUrl of el.referenceImageUrls) {
+                  const refFullUrl = buildElementAssetUrl(refUrl);
+                  const refResponse = await fetch(refFullUrl);
+                  const refBlob = await refResponse.blob();
+                  const refFile = new File([refBlob], `${el.name}_ref.png`, { type: refBlob.type });
+                  const uploadedRefUrl = await uploadToFal(refFile);
+                  uploadedRefUrls.push(uploadedRefUrl);
                 }
-
-                uploadedElements.push({
-                  frontal_image_url: uploadedFrontalUrl,
-                  reference_image_urls: uploadedRefUrls,
-                });
-              } catch (error) {
-                console.error(`Failed to upload element images ${el.name}:`, error);
-                setStatus(`Failed to upload images for ${el.name}`);
-                setIsSubmitting(false);
-                setTimeout(() => setStatus(null), 3000);
-                return;
               }
+
+              uploadedElements.push({
+                frontal_image_url: uploadedFrontalUrl,
+                reference_image_urls: uploadedRefUrls,
+              });
+            } catch (error) {
+              console.error(`Failed to upload element images ${el.name}:`, error);
+              setStatus(`Failed to upload images for ${el.name}`);
+              setIsSubmitting(false);
+              setTimeout(() => setStatus(null), 3000);
+              return;
             }
           }
 
@@ -2404,9 +2560,9 @@ export default function ControlsPane() {
             <div className="space-y-1">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                  Reference Images (optional)
+                  {selectedImage?.requireReference ? "Reference Image *" : "Reference Images (optional)"}
                 </label>
-                <span className="text-[10px] text-slate-500">Max 5</span>
+                <span className="text-[10px] text-slate-500">Max {imageReferenceLimit}</span>
               </div>
 
               <div
@@ -2495,7 +2651,7 @@ export default function ControlsPane() {
                 ))}
 
                 {/* Add Button */}
-                {referenceUploads.length < 5 && (
+                {referenceUploads.length < imageReferenceLimit && (
                   <button
                     type="button"
                     className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-dashed border-white/20 bg-white/5 text-slate-400 transition hover:border-sky-400 hover:text-sky-200"
@@ -2523,11 +2679,79 @@ export default function ControlsPane() {
                 {/* Empty State Text */}
                 {referenceUploads.length === 0 && (
                   <span className="ml-1 text-xs text-slate-500 pointer-events-none">
-                    Drag images or click +
+                    {selectedImage?.requireReference
+                      ? "Drop 1 base image or click +"
+                      : "Drag images or element sheets, or click +"}
                   </span>
                 )}
               </div>
             </div>
+
+            {imageModelSupportsElements && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Elements (face control)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      elementsState.setSelectionMode(true);
+                      if (!elementsState.isManagerOpen) {
+                        elementsState.toggleManager();
+                      }
+                    }}
+                    className="text-xs text-sky-400 hover:text-sky-300"
+                  >
+                    + Add from Elements
+                  </button>
+                </div>
+                {elementsState.selectedElements.length === 0 ? (
+                  <p className="text-xs text-slate-500">
+                    Optional. Select elements to guide character/face consistency.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {elementsState.selectedElements.map((selectedEl, idx) => (
+                      <div
+                        key={`${selectedEl.element.id}-${idx}`}
+                        className="relative h-14 w-14 overflow-hidden rounded border border-white/10 group"
+                      >
+                        <img
+                          src={buildElementAssetUrl(selectedEl.element.frontalImageUrl)}
+                          alt={selectedEl.element.name}
+                          className="h-full w-full object-cover"
+                        />
+                        <div className="absolute top-0 left-0 bg-amber-500/80 px-1 text-[8px] text-white font-bold">
+                          E{idx + 1}
+                        </div>
+                        <div className="absolute bottom-0 left-0 right-0 bg-black/70 px-1 text-[8px] text-white truncate">
+                          {selectedEl.element.name}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => elementsState.deselectElement(selectedEl.element.id)}
+                          className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white opacity-0 hover:bg-rose-500 group-hover:opacity-100"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="8"
+                            height="8"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="3"
+                          >
+                            <path d="M18 6 6 18" />
+                            <path d="m6 6 12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* 2. Prompt */}
             <div className="space-y-1">
@@ -4248,7 +4472,6 @@ export default function ControlsPane() {
                         label: `@Element${idx + 1}`,
                         preview: `${import.meta.env.VITE_FILE_API_BASE ?? "http://localhost:8787"}${selectedEl.element.frontalImageUrl}?token=${import.meta.env.VITE_FILE_API_TOKEN}`,
                         name: selectedEl.element.name,
-                        mode: selectedEl.mode
                       }));
 
                       return (
@@ -4277,7 +4500,7 @@ export default function ControlsPane() {
                               <img src={opt.preview} alt={opt.name} className="h-8 w-8 rounded object-cover" />
                               <div className="flex flex-col">
                                 <span className="font-medium">{opt.label}</span>
-                                <span className="text-xs text-slate-400">{opt.name} ({opt.mode})</span>
+                                <span className="text-xs text-slate-400">{opt.name}</span>
                               </div>
                             </button>
                           ))}

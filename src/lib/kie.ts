@@ -68,6 +68,16 @@ export async function callKie(
   }
 
   const target = buildProviderUrl(KIE_BASE_URL, endpoint);
+  const logger = options?.log;
+  
+  // Log the request payload for debugging
+  if (typeof logger === "function") {
+    logger(`KIE Request: POST ${endpoint}`);
+    logger(`Payload: ${JSON.stringify(payload, null, 2)}`);
+  } else {
+    console.log(`KIE Request: POST ${endpoint}`, payload);
+  }
+  
   const response = await withRetry(() =>
     fetchWithTimeout(target, {
       method: "POST",
@@ -107,6 +117,13 @@ export async function callKie(
     data = JSON.parse(responseText) as Record<string, unknown>;
   } catch {
     throw new Error(`KIE returned invalid JSON: ${responseText.substring(0, 200)}`);
+  }
+
+  // Log the response for debugging
+  if (typeof logger === "function") {
+    logger(`KIE Response: ${JSON.stringify(data, null, 2)}`);
+  } else {
+    console.log(`KIE Response:`, data);
   }
 
   if (!data || typeof data !== "object") {
@@ -150,7 +167,10 @@ export async function callKie(
     if (!taskId) {
       throw new Error("KIE response did not include a task id.");
     }
-    const finalData = await pollKieTask(key, taskId, taskConfig);
+    if (typeof logger === "function") {
+      logger(`Task created with ID: ${taskId}, starting polling...`);
+    }
+    const finalData = await pollKieTask(key, taskId, taskConfig, logger);
     const taskUrl =
       extractUrl(finalData) ??
       extractUrl(
@@ -194,7 +214,6 @@ export async function callKie(
       return { blob: taskBytes };
     }
 
-    const logger = options?.log;
     if (typeof logger === "function") {
       logger(`KIE finalData: ${JSON.stringify(finalData, null, 2)}`);
     } else {
@@ -219,16 +238,24 @@ function resolveTaskId(data: Record<string, unknown>): string | undefined {
   return undefined;
 }
 
+type LogFn = (msg: string) => void;
+
 async function pollKieTask(
   key: string,
   taskId: string,
-  config: TaskPollingConfig
+  config: TaskPollingConfig,
+  logger?: LogFn
 ): Promise<unknown> {
   const defaults = resolveTaskConfig(config);
 
   for (let attempt = 0; attempt < defaults.maxAttempts; attempt += 1) {
     const statusPayload = await fetchTaskStatus(key, taskId, config, defaults);
     const stateValue = getValueAtPath(statusPayload, defaults.statePath);
+
+    // Log poll status periodically (every 5 attempts)
+    if (logger && attempt % 5 === 0) {
+      logger(`Polling attempt ${attempt + 1}/${defaults.maxAttempts}, state: ${stateValue}`);
+    }
 
     // Handle both string and numeric state values (Veo uses numeric: 1=success, 2/3=fail)
     const stateStr = String(stateValue);
@@ -238,6 +265,9 @@ async function pollKieTask(
         (s: string | number) => s === stateValue || String(s) === stateStr
       );
       if (isSuccess) {
+        if (logger) {
+          logger(`Task completed successfully after ${attempt + 1} attempts`);
+        }
         return (
           getValueAtPath(statusPayload, defaults.responseDataPath) ??
           statusPayload

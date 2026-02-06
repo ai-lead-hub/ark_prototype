@@ -94,10 +94,6 @@ export default function ElementsManager() {
                                 isSelected={selectedElements.some(
                                     (sel) => sel.element.id === element.id
                                 )}
-                                selectedMode={
-                                    selectedElements.find((sel) => sel.element.id === element.id)
-                                        ?.mode
-                                }
                                 isSelectionMode={isSelectionMode}
                                 onSelect={selectElement}
                             />
@@ -109,7 +105,7 @@ export default function ElementsManager() {
             {/* Footer hint */}
             <div className="flex-shrink-0 border-t border-white/10 px-4 py-2 bg-black/20">
                 <p className="text-[10px] text-slate-500">
-                    Drag images/videos from the file browser to create elements
+                    Drag images from the file browser to create elements
                 </p>
             </div>
         </div>

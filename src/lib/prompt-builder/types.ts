@@ -303,9 +303,246 @@ export function buildPromptText(data: PromptBuilderData): string {
     return parts.join(". ");
 }
 
+// Import camera systems data for comprehensive parsing
+import cameraSystems from './camera-systems.json';
+
+// Types for camera systems data
+type CameraSystemData = {
+    name: string;
+    bodies: { id: string; name: string; prompt: string }[];
+    lenses: { id: string; name: string; prompt: string }[];
+    filmStocks: string[];
+};
+
+type FilmStockData = {
+    name: string;
+    prompt: string;
+};
+
+/**
+ * Build comprehensive camera body patterns from camera-systems.json
+ * Returns patterns sorted by specificity (longer patterns first)
+ */
+function buildCameraBodyPatterns(): { pattern: RegExp; value: string; system: string }[] {
+    const patterns: { pattern: RegExp; value: string; system: string; length: number }[] = [];
+    const systems = cameraSystems.systems as Record<string, CameraSystemData>;
+
+    for (const [systemKey, system] of Object.entries(systems)) {
+        for (const body of system.bodies) {
+            // Extract key identifiers from the prompt to build a flexible regex
+            const prompt = body.prompt;
+            
+            // Create patterns from the prompt text - extract the camera name portion
+            // e.g., "shot on ARRI ALEXA 35 — organic color..." -> match "ARRI ALEXA 35"
+            const shotOnMatch = prompt.match(/shot on (.+?)(?:\s*[—\-–,]|$)/i);
+            if (shotOnMatch) {
+                const cameraName = shotOnMatch[1].trim();
+                // Escape special regex characters and create flexible pattern
+                const escapedName = cameraName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                // Allow for variations like "shot on" prefix being optional
+                patterns.push({
+                    pattern: new RegExp(`(?:shot on\\s+)?${escapedName}`, 'i'),
+                    value: prompt,
+                    system: systemKey,
+                    length: cameraName.length
+                });
+            }
+            
+            // Also add patterns for common variations
+            // Handle specific camera names that might appear differently
+            if (prompt.includes('ALEXA Mini LF')) {
+                patterns.push({ pattern: /ALEXA\s*Mini\s*LF/i, value: prompt, system: systemKey, length: 13 });
+            }
+            if (prompt.includes('ALEXA 35')) {
+                patterns.push({ pattern: /ALEXA\s*35/i, value: prompt, system: systemKey, length: 8 });
+            }
+            if (prompt.includes('ALEXA 65')) {
+                patterns.push({ pattern: /ALEXA\s*65/i, value: prompt, system: systemKey, length: 8 });
+            }
+            if (prompt.includes('V-RAPTOR')) {
+                patterns.push({ pattern: /V[- ]?RAPTOR(?:\s*XL)?/i, value: prompt, system: systemKey, length: 10 });
+            }
+            if (prompt.includes('Komodo')) {
+                patterns.push({ pattern: /\bKomodo\b/i, value: prompt, system: systemKey, length: 6 });
+            }
+            if (prompt.includes('VENICE')) {
+                patterns.push({ pattern: /VENICE\s*2?/i, value: prompt, system: systemKey, length: 8 });
+            }
+            if (prompt.includes('GFX')) {
+                patterns.push({ pattern: /GFX\s*\d+/i, value: prompt, system: systemKey, length: 6 });
+            }
+        }
+    }
+
+    // Sort by length descending to match more specific patterns first
+    patterns.sort((a, b) => b.length - a.length);
+    
+    // Remove duplicates (keep first occurrence which is the longest/most specific)
+    const seen = new Set<string>();
+    return patterns.filter(p => {
+        const key = p.pattern.source;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+}
+
+/**
+ * Build comprehensive lens patterns from camera-systems.json
+ */
+function buildLensPatterns(): { pattern: RegExp; value: string; systems: string[] }[] {
+    const patterns: { pattern: RegExp; value: string; systems: string[]; length: number }[] = [];
+    const systems = cameraSystems.systems as Record<string, CameraSystemData>;
+    const lensMap = new Map<string, { value: string; systems: string[] }>();
+
+    for (const [systemKey, system] of Object.entries(systems)) {
+        for (const lens of system.lenses) {
+            const prompt = lens.prompt;
+            
+            // Extract lens name from prompt
+            // e.g., "with Cooke S4/i — warm organic..." -> "Cooke S4/i"
+            const withMatch = prompt.match(/with (.+?)(?:\s*[—\-–,]|$)/i);
+            if (withMatch) {
+                const lensName = withMatch[1].trim();
+                const key = lensName.toLowerCase();
+                
+                if (lensMap.has(key)) {
+                    lensMap.get(key)!.systems.push(systemKey);
+                } else {
+                    lensMap.set(key, { value: prompt, systems: [systemKey] });
+                }
+                
+                // Create flexible pattern
+                const escapedName = lensName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                patterns.push({
+                    pattern: new RegExp(`(?:with\\s+)?${escapedName}`, 'i'),
+                    value: prompt,
+                    systems: [systemKey],
+                    length: lensName.length
+                });
+            }
+        }
+    }
+
+    // Sort by length descending
+    patterns.sort((a, b) => b.length - a.length);
+    
+    // Remove duplicates
+    const seen = new Set<string>();
+    return patterns.filter(p => {
+        const key = p.pattern.source;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+}
+
+/**
+ * Build comprehensive film stock patterns from camera-systems.json
+ */
+function buildFilmStockPatterns(): { pattern: RegExp; value: string }[] {
+    const patterns: { pattern: RegExp; value: string; length: number }[] = [];
+    const filmStocks = cameraSystems.filmStocks as Record<string, FilmStockData>;
+
+    for (const [, stock] of Object.entries(filmStocks)) {
+        const prompt = stock.prompt;
+        const name = stock.name;
+        
+        // Create pattern from name - handle variations
+        // e.g., "Kodak Portra 400" should match "Kodak Portra 400", "Portra 400", etc.
+        const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        patterns.push({
+            pattern: new RegExp(escapedName, 'i'),
+            value: prompt,
+            length: name.length
+        });
+        
+        // Add variations without brand prefix
+        if (name.includes('Kodak ')) {
+            const withoutBrand = name.replace('Kodak ', '');
+            patterns.push({
+                pattern: new RegExp(withoutBrand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'),
+                value: prompt,
+                length: withoutBrand.length
+            });
+        }
+        if (name.includes('Fujifilm ') || name.includes('Fujichrome ')) {
+            const withoutBrand = name.replace(/Fujifilm |Fujichrome /, '');
+            patterns.push({
+                pattern: new RegExp(withoutBrand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'),
+                value: prompt,
+                length: withoutBrand.length
+            });
+        }
+        if (name.includes('Ilford ')) {
+            const withoutBrand = name.replace('Ilford ', '');
+            patterns.push({
+                pattern: new RegExp(withoutBrand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'),
+                value: prompt,
+                length: withoutBrand.length
+            });
+        }
+    }
+
+    // Add common variations and shorthand
+    const extraPatterns = [
+        { pattern: /Vision\s*3?\s*500\s*T/i, value: (cameraSystems.filmStocks as Record<string, FilmStockData>).kodak_vision3_500t?.prompt || '' },
+        { pattern: /Vision\s*3?\s*250\s*D/i, value: (cameraSystems.filmStocks as Record<string, FilmStockData>).kodak_vision3_250d?.prompt || '' },
+        { pattern: /Vision\s*3?\s*50\s*D/i, value: (cameraSystems.filmStocks as Record<string, FilmStockData>).kodak_vision3_50d?.prompt || '' },
+        { pattern: /5219/i, value: (cameraSystems.filmStocks as Record<string, FilmStockData>).kodak_5219?.prompt || '' },
+        { pattern: /CineStill\s*800\s*T/i, value: (cameraSystems.filmStocks as Record<string, FilmStockData>).cinestill_800t?.prompt || '' },
+        { pattern: /CineStill\s*50\s*D/i, value: (cameraSystems.filmStocks as Record<string, FilmStockData>).cinestill_50d?.prompt || '' },
+        { pattern: /Tri[- ]?X/i, value: (cameraSystems.filmStocks as Record<string, FilmStockData>).kodak_trix?.prompt || '' },
+        { pattern: /T[- ]?Max/i, value: (cameraSystems.filmStocks as Record<string, FilmStockData>).kodak_tmax?.prompt || '' },
+        { pattern: /HP5/i, value: (cameraSystems.filmStocks as Record<string, FilmStockData>).ilford_hp5?.prompt || '' },
+        { pattern: /Delta\s*3200/i, value: (cameraSystems.filmStocks as Record<string, FilmStockData>).ilford_delta?.prompt || '' },
+        { pattern: /Velvia/i, value: (cameraSystems.filmStocks as Record<string, FilmStockData>).fuji_velvia?.prompt || '' },
+        { pattern: /Provia/i, value: (cameraSystems.filmStocks as Record<string, FilmStockData>).fuji_provia?.prompt || '' },
+        { pattern: /Pro\s*400\s*H/i, value: (cameraSystems.filmStocks as Record<string, FilmStockData>).fuji_pro400h?.prompt || '' },
+    ];
+
+    for (const p of extraPatterns) {
+        if (p.value) {
+            patterns.push({ ...p, length: 10 });
+        }
+    }
+
+    // Sort by length descending
+    patterns.sort((a, b) => b.length - a.length);
+    
+    return patterns;
+}
+
+// Cache the built patterns
+let _cameraBodyPatterns: ReturnType<typeof buildCameraBodyPatterns> | null = null;
+let _lensPatterns: ReturnType<typeof buildLensPatterns> | null = null;
+let _filmStockPatterns: ReturnType<typeof buildFilmStockPatterns> | null = null;
+
+function getCameraBodyPatterns() {
+    if (!_cameraBodyPatterns) {
+        _cameraBodyPatterns = buildCameraBodyPatterns();
+    }
+    return _cameraBodyPatterns;
+}
+
+function getLensPatterns() {
+    if (!_lensPatterns) {
+        _lensPatterns = buildLensPatterns();
+    }
+    return _lensPatterns;
+}
+
+function getFilmStockPatterns() {
+    if (!_filmStockPatterns) {
+        _filmStockPatterns = buildFilmStockPatterns();
+    }
+    return _filmStockPatterns;
+}
+
 /**
  * Parse a formatted prompt string back into state fields.
- * Handles new format where style prepends prompt and mood uses "inspired by" directly
+ * Handles new format where style prepends prompt and mood uses "inspired by" directly.
+ * Uses comprehensive pattern matching from camera-systems.json for accurate detection.
  */
 export function parsePromptText(text: string): Partial<PromptBuilderState> {
     if (!text) return {};
@@ -344,91 +581,29 @@ export function parsePromptText(text: string): Partial<PromptBuilderState> {
         remaining = remaining.replace(/\. Lighting: .+?(?=\. |$)/, '');
     }
 
-    // Extract camera body, lens type, and film look
-    // These can appear in various formats, search the whole remaining text
-
-    // Camera body patterns
-    const cameraPatterns = [
-        { pattern: /shot on ARRI ALEXA Mini LF/i, value: 'shot on ARRI ALEXA Mini LF, large format' },
-        { pattern: /ARRI ALEXA Mini LF/i, value: 'shot on ARRI ALEXA Mini LF, large format' },
-        { pattern: /shot on ARRI ALEXA 35/i, value: 'shot on ARRI ALEXA 35, Super 35mm' },
-        { pattern: /ARRI ALEXA 35/i, value: 'shot on ARRI ALEXA 35, Super 35mm' },
-        { pattern: /shot on ARRI ALEXA 65/i, value: 'shot on ARRI ALEXA 65, 65mm large format' },
-        { pattern: /ARRI ALEXA 65/i, value: 'shot on ARRI ALEXA 65, 65mm large format' },
-        { pattern: /shot on RED V-RAPTOR/i, value: 'shot on RED V-RAPTOR 8K' },
-        { pattern: /RED V-RAPTOR/i, value: 'shot on RED V-RAPTOR 8K' },
-        { pattern: /shot on RED Komodo/i, value: 'shot on RED Komodo 6K' },
-        { pattern: /RED Komodo/i, value: 'shot on RED Komodo 6K' },
-        { pattern: /Sony VENICE/i, value: 'shot on Sony VENICE 2, full-frame cinema' },
-        { pattern: /Panavision.*DXL/i, value: 'shot on Panavision Millennium DXL2, 8K large format' },
-        { pattern: /Canon EOS R5/i, value: 'shot on Canon EOS R5' },
-        { pattern: /Sony A7 IV/i, value: 'shot on Sony A7 IV' },
-        { pattern: /Sony A7R IV/i, value: 'shot on Sony A7R IV' },
-        { pattern: /Blackmagic URSA/i, value: 'shot on Blackmagic URSA Mini Pro 12K' },
-        { pattern: /Blackmagic Pocket/i, value: 'shot on Blackmagic Pocket 6K Pro' },
-    ];
-
-    for (const { pattern, value } of cameraPatterns) {
-        if (pattern.test(remaining)) {
+    // Extract camera body using comprehensive patterns from camera-systems.json
+    const cameraBodyPatterns = getCameraBodyPatterns();
+    for (const { pattern, value, system } of cameraBodyPatterns) {
+        if (pattern.test(text)) {  // Search in original text, not remaining
             result.cameraBody = value;
+            result.cameraSystem = system;
             break;
         }
     }
 
-    // Infer camera system from body to populate dropdowns
-    if (result.cameraBody) {
-        if (result.cameraBody.includes("ARRI")) result.cameraSystem = "arri";
-        else if (result.cameraBody.includes("RED")) result.cameraSystem = "red";
-        else if (result.cameraBody.includes("Blackmagic")) result.cameraSystem = "blackmagic";
-        else if (result.cameraBody.includes("Sony VENICE") || result.cameraBody.includes("Sony FX9")) result.cameraSystem = "sony_venice";
-        else if (result.cameraBody.includes("Sony")) result.cameraSystem = "sony";
-        else if (result.cameraBody.includes("Canon")) result.cameraSystem = "canon_dslr";
-        else if (result.cameraBody.includes("Nikon")) result.cameraSystem = "nikon";
-        else if (result.cameraBody.includes("Fujifilm")) result.cameraSystem = "fujifilm";
-        else if (result.cameraBody.includes("Leica")) result.cameraSystem = "leica";
-        else if (result.cameraBody.includes("Panavision") || result.cameraBody.includes("Genesis")) result.cameraSystem = "panavision";
-        else if (result.cameraBody.includes("IMAX")) result.cameraSystem = "imax";
-    }
-
-    // Lens type patterns
-    const lensPatterns = [
-        { pattern: /Cooke S4/i, value: 'with Cooke S4/i prime lenses, warm organic look' },
-        { pattern: /Cooke S7/i, value: 'with Cooke S7/i full-frame lenses' },
-        { pattern: /Cooke Anamorphic/i, value: 'with Cooke Anamorphic lenses, oval bokeh' },
-        { pattern: /Zeiss Master Prime/i, value: 'with Zeiss Master Prime lenses, sharp and clean' },
-        { pattern: /Zeiss Supreme/i, value: 'with Zeiss Supreme Prime lenses' },
-        { pattern: /ARRI Signature/i, value: 'with ARRI Signature Prime lenses' },
-        { pattern: /Panavision Primo 70/i, value: 'with Panavision Primo 70 large format lenses' },
-        { pattern: /Panavision Primo/i, value: 'with Panavision Primo 70 large format lenses' },
-        { pattern: /G Master/i, value: 'with G Master lens' },
-        { pattern: /Canon RF L/i, value: 'with Canon RF L-series lens' },
-        { pattern: /Sigma Art/i, value: 'with Sigma Art lens' },
-        { pattern: /Sigma Cine/i, value: 'with Sigma Cine lenses' },
-    ];
-
+    // Extract lens type using comprehensive patterns
+    const lensPatterns = getLensPatterns();
     for (const { pattern, value } of lensPatterns) {
-        if (pattern.test(remaining)) {
+        if (pattern.test(text)) {
             result.lensType = value;
             break;
         }
     }
 
-    // Film look patterns
-    const filmLookPatterns = [
-        { pattern: /Kodak Vision3 500T/i, value: 'Kodak Vision3 500T motion picture film, tungsten balanced, cinematic colors' },
-        { pattern: /Kodak Vision3 250D/i, value: 'Kodak Vision3 250D motion picture film, daylight balanced, rich tones' },
-        { pattern: /Kodak Vision3 50D/i, value: 'Kodak Vision3 50D motion picture film, finest grain, maximum detail' },
-        { pattern: /Kodak Portra 400/i, value: 'Kodak Portra 400 film look, warm tones, fine grain' },
-        { pattern: /Kodak Portra 800/i, value: 'Kodak Portra 800 film, versatile color negative' },
-        { pattern: /Kodak Ektar/i, value: 'Kodak Ektar 100 film look, vivid colors, fine grain' },
-        { pattern: /Kodak Tri-X/i, value: 'Kodak Tri-X 400 black and white, iconic contrast' },
-        { pattern: /CineStill 800T/i, value: 'CineStill 800T film look, tungsten cinematic, halation glow' },
-        { pattern: /Fujifilm Pro 400H/i, value: 'Fujifilm Pro 400H film look, soft pastel colors' },
-        { pattern: /Ilford HP5/i, value: 'Ilford HP5 Plus black and white, classic grain' },
-    ];
-
-    for (const { pattern, value } of filmLookPatterns) {
-        if (pattern.test(remaining)) {
+    // Extract film stock/look using comprehensive patterns
+    const filmStockPatterns = getFilmStockPatterns();
+    for (const { pattern, value } of filmStockPatterns) {
+        if (pattern.test(text)) {
             result.filmLook = value;
             break;
         }
@@ -436,6 +611,7 @@ export function parsePromptText(text: string): Partial<PromptBuilderState> {
 
     // Remove the film/camera section from remaining
     remaining = remaining.replace(/\. shot on [^.]+/g, '');
+    remaining = remaining.replace(/\. with [^.]+lens[^.]*/gi, '');
 
     // Extract Camera settings
     const cameraMatch = remaining.match(/\. Camera: (.+?)(?=\. |$)/);
@@ -483,14 +659,91 @@ export function parsePromptText(text: string): Partial<PromptBuilderState> {
         remaining = remaining.replace(/\. Camera: .+?(?=\. |$)/, '');
     }
 
+    // Also try to extract focal length from anywhere in the text if not found in Camera section
+    if (!result.focalLength) {
+        const focalMatch = text.match(/\b(\d{2,3})mm\b/);
+        if (focalMatch) {
+            result.focalLength = `${focalMatch[1]}mm`;
+        }
+    }
+
+    // Also try to extract aperture from anywhere in the text if not found in Camera section
+    if (!result.cameraAperture) {
+        const apertureMatch = text.match(/\b(f\/[\d.]+)\b/);
+        if (apertureMatch) {
+            result.cameraAperture = apertureMatch[1];
+        }
+    }
+
     // Extract Style (legacy format: "Style: X")
     const styleMatch = remaining.match(/\. Style: (.+?)(?=\. |$)/);
     if (styleMatch) {
         result.style = styleMatch[1];
         remaining = remaining.replace(/\. Style: .+?(?=\. |$)/, '');
     } else {
-        // Try to detect new style prepend pattern (e.g., "Cinematic photography of ...")
+        // Try to detect style prepend patterns from styles.json format
+        // These are patterns like "a cinematic still of", "an aerial photograph of", etc.
         const stylePatterns = [
+            // Photography styles
+            { pattern: /^a?\s*cinematic\s+(?:still|photograph|photography)\s+of\s*/i, style: 'a cinematic still of' },
+            { pattern: /^an?\s*aerial\s+photograph\s+of\s*/i, style: 'an aerial photograph of' },
+            { pattern: /^an?\s*architectural\s+photograph\s+of\s*/i, style: 'an architectural photograph of' },
+            { pattern: /^a?\s*black\s+and\s+white\s+photograph\s+of\s*/i, style: 'a black and white photograph of' },
+            { pattern: /^a?\s*documentary\s+photograph\s+of\s*/i, style: 'a documentary photograph of' },
+            { pattern: /^an?\s*experimental\s+photograph\s+of\s*/i, style: 'an experimental photograph of' },
+            { pattern: /^a?\s*(?:high\s+)?fashion\s+(?:editorial\s+)?photograph\s+of\s*/i, style: 'a high fashion photograph of' },
+            { pattern: /^a?\s*fine\s+art\s+photograph\s+of\s*/i, style: 'a fine art photograph of' },
+            { pattern: /^a?\s*food\s+photograph\s+of\s*/i, style: 'a food photograph of' },
+            { pattern: /^a?\s*landscape\s+photograph\s+of\s*/i, style: 'a landscape photograph of' },
+            { pattern: /^a?\s*long\s+exposure\s+photograph\s+of\s*/i, style: 'a long exposure photograph of' },
+            { pattern: /^a?\s*low\s+key\s+photograph\s+of\s*/i, style: 'a low key photograph of' },
+            { pattern: /^a?\s*macro\s+photograph\s+of\s*/i, style: 'a macro photograph of' },
+            { pattern: /^a?\s*minimalist\s+photograph\s+of\s*/i, style: 'a minimalist photograph of' },
+            { pattern: /^a?\s*night\s+photograph\s+of\s*/i, style: 'a night photograph of' },
+            { pattern: /^a?\s*(?:cinematic\s+|closeup\s+|fantasy\s+)?portrait\s+(?:photograph\s+)?of\s*/i, style: 'a portrait photograph of' },
+            { pattern: /^a?\s*product\s+photograph\s+of\s*/i, style: 'a product photograph of' },
+            { pattern: /^a?\s*sports?\s+(?:action\s+)?photograph\s+of\s*/i, style: 'a sports action photograph of' },
+            { pattern: /^a?\s*still\s+life\s+photograph\s+of\s*/i, style: 'a still life photograph of' },
+            { pattern: /^a?\s*surreal\s+photograph\s+of\s*/i, style: 'a surreal photograph of' },
+            { pattern: /^an?\s*underwater\s+photograph\s+of\s*/i, style: 'an underwater photograph of' },
+            { pattern: /^a?\s*vintage\s+photograph\s+of\s*/i, style: 'a vintage photograph of' },
+            { pattern: /^a?\s*wildlife\s+photograph\s+of\s*/i, style: 'a wildlife photograph of' },
+            // Painting styles
+            { pattern: /^an?\s*abstract\s+expressionist\s+painting\s+of\s*/i, style: 'an abstract expressionist painting of' },
+            { pattern: /^an?\s*acrylic\s+painting\s+of\s*/i, style: 'an acrylic painting of' },
+            { pattern: /^a?\s*Chinese\s+ink\s+brush\s+painting\s+of\s*/i, style: 'a Chinese ink brush painting of' },
+            { pattern: /^a?\s*digital\s+painting\s+of\s*/i, style: 'a digital painting of' },
+            { pattern: /^a?\s*fantasy\s+painting\s+of\s*/i, style: 'a fantasy painting of' },
+            { pattern: /^a?\s*gouache\s+painting\s+of\s*/i, style: 'a gouache painting of' },
+            { pattern: /^a?\s*graffiti\s+(?:mural|painting)\s+of\s*/i, style: 'a graffiti mural of' },
+            { pattern: /^an?\s*impasto\s+painting\s+of\s*/i, style: 'an impasto painting of' },
+            { pattern: /^an?\s*impressionist\s+painting\s+of\s*/i, style: 'an impressionist painting of' },
+            { pattern: /^an?\s*oil\s+painting\s+of\s*/i, style: 'an oil painting of' },
+            { pattern: /^a?\s*Renaissance\s+(?:oil\s+)?painting\s+of\s*/i, style: 'a Renaissance oil painting of' },
+            { pattern: /^a?\s*Sumi-e\s+(?:ink\s+wash\s+)?painting\s+of\s*/i, style: 'a Sumi-e ink wash painting of' },
+            { pattern: /^a?\s*watercolor\s+painting\s+of\s*/i, style: 'a watercolor painting of' },
+            // Illustration styles
+            { pattern: /^an?\s*(?:realistic\s+|chibi\s+|kawaii\s+)?anime\s+illustration\s+of\s*/i, style: 'an anime illustration of' },
+            { pattern: /^an?\s*Art\s+Deco\s+illustration\s+of\s*/i, style: 'an Art Deco illustration of' },
+            { pattern: /^a?\s*cartoon\s+illustration\s+of\s*/i, style: 'a cartoon illustration of' },
+            { pattern: /^a?\s*children'?s?\s+book\s+illustration\s+of\s*/i, style: "a children's book illustration of" },
+            { pattern: /^a?\s*fantasy\s+illustration\s+of\s*/i, style: 'a fantasy illustration of' },
+            { pattern: /^a?\s*fashion\s+illustration\s+of\s*/i, style: 'a fashion illustration of' },
+            { pattern: /^a?\s*game\s+art\s+illustration\s+of\s*/i, style: 'a game art illustration of' },
+            { pattern: /^a?\s*pop\s+art\s+illustration\s+of\s*/i, style: 'a pop art illustration of' },
+            { pattern: /^a?\s*retro\s+illustration\s+of\s*/i, style: 'a retro illustration of' },
+            // Drawing styles
+            { pattern: /^a?\s*charcoal\s+drawing\s+of\s*/i, style: 'a charcoal drawing of' },
+            { pattern: /^a?\s*colored\s+pencil\s+drawing\s+of\s*/i, style: 'a colored pencil drawing of' },
+            { pattern: /^a?\s*graphite\s+drawing\s+of\s*/i, style: 'a graphite drawing of' },
+            { pattern: /^an?\s*ink\s+drawing\s+of\s*/i, style: 'an ink drawing of' },
+            { pattern: /^a?\s*pastel\s+drawing\s+of\s*/i, style: 'a pastel drawing of' },
+            { pattern: /^a?\s*pencil\s+drawing\s+of\s*/i, style: 'a pencil drawing of' },
+            // 3D styles
+            { pattern: /^an?\s*(?:abstract\s+)?(?:fluid\s+(?:dynamics\s+)?)?3D\s+render\s+of\s*/i, style: 'an abstract 3D render of' },
+            { pattern: /^a?\s*3D\s+architectural\s+render\s+of\s*/i, style: 'a 3D architectural render of' },
+            { pattern: /^a?\s*3D\s+character\s+render\s+of\s*/i, style: 'a 3D character render of' },
+            // Generic photography patterns (fallback)
             { pattern: /^(Cinematic photography)[,.]?\s*/i, style: 'Cinematic photography' },
             { pattern: /^(Aerial photography)[,.]?\s*/i, style: 'Aerial photography' },
             { pattern: /^(Portrait photography)[,.]?\s*/i, style: 'Portrait photography' },
@@ -504,6 +757,51 @@ export function parsePromptText(text: string): Partial<PromptBuilderState> {
             if (match) {
                 result.style = style;
                 remaining = remaining.replace(pattern, '');
+                break;
+            }
+        }
+    }
+
+    // Try to extract camera angle from anywhere in the text if not found
+    if (!result.cameraAngle) {
+        const anglePatterns = [
+            { pattern: /\b(eye[- ]?level)\s*(?:angle|shot|view)?/i, value: 'eye level' },
+            { pattern: /\b(low[- ]?angle)\b/i, value: 'low angle' },
+            { pattern: /\b(high[- ]?angle)\b/i, value: 'high angle' },
+            { pattern: /\b(bird'?s?[- ]?eye)\s*(?:view|angle)?/i, value: "bird's-eye" },
+            { pattern: /\b(worm'?s?[- ]?eye)\s*(?:view|angle)?/i, value: "worm's-eye" },
+            { pattern: /\b(Dutch[- ]?angle)\b/i, value: 'Dutch angle' },
+            { pattern: /\b(over[- ]?the[- ]?shoulder)\b/i, value: 'over-the-shoulder' },
+            { pattern: /\b(overhead|flat[- ]?lay)\b/i, value: 'overhead flat lay' },
+            { pattern: /\b(ground[- ]?level)\b/i, value: 'ground level' },
+            { pattern: /\b(slightly\s+low)\b/i, value: 'slightly low' },
+            { pattern: /\b(slightly\s+high)\b/i, value: 'slightly high' },
+        ];
+        for (const { pattern, value } of anglePatterns) {
+            if (pattern.test(text)) {
+                result.cameraAngle = value;
+                break;
+            }
+        }
+    }
+
+    // Try to extract camera shot from anywhere in the text if not found
+    if (!result.cameraShot) {
+        const shotExtractPatterns = [
+            { pattern: /\b(extreme\s+close[- ]?up)\b/i, value: 'extreme close-up' },
+            { pattern: /\b(medium\s+close[- ]?up)\b/i, value: 'medium close-up' },
+            { pattern: /\b(medium\s+full\s+shot)\b/i, value: 'medium full shot' },
+            { pattern: /\b(medium\s+shot)\b/i, value: 'medium shot' },
+            { pattern: /\b(full\s+body)\b/i, value: 'full body' },
+            { pattern: /\b(wide\s+shot)\b/i, value: 'wide shot' },
+            { pattern: /\b(macro\s+(?:detail|shot))\b/i, value: 'macro detail' },
+            { pattern: /\b(close[- ]?up)\b/i, value: 'close-up' },
+            { pattern: /\b(tracking\s+shot)\b/i, value: 'tracking shot' },
+            { pattern: /\b(action\s+shot)\b/i, value: 'action shot' },
+        ];
+        for (const { pattern, value } of shotExtractPatterns) {
+            if (pattern.test(text)) {
+                result.cameraShot = value;
                 break;
             }
         }

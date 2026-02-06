@@ -25,6 +25,7 @@ export type SpecialModelSpec = {
 };
 
 // Standard KIE task config for Jobs API
+// 15 minute max polling: 225 attempts * 4 seconds = 900 seconds = 15 minutes
 const kieTaskConfig: TaskPollingConfig = {
     statusEndpoint: "/api/v1/jobs/recordInfo",
     statePath: "data.state",
@@ -32,6 +33,7 @@ const kieTaskConfig: TaskPollingConfig = {
     failureStates: ["fail"],
     responseDataPath: "data",
     pollIntervalMs: 4000,
+    maxAttempts: 225,
 };
 
 export const SPECIAL_MODELS: SpecialModelSpec[] = [
@@ -209,7 +211,6 @@ export type SpecialUnifiedPayload = {
     elements?: Array<{
         frontal_image_url?: string;
         reference_image_urls?: string[];
-        video_url?: string;  // For video-based elements
     }>;
     // Kling V3 Pro specific
     generate_audio?: boolean;
@@ -320,20 +321,12 @@ export function buildSpecialModelInput(
             falInput.end_image_url = payload.end_frame_url;
         }
 
-        // Add elements if provided (convert to FAL format)
+        // Add elements if provided
         if (payload.elements && payload.elements.length > 0) {
-            falInput.elements = payload.elements.map(el => {
-                if (el.video_url) {
-                    // Video-based element
-                    return { video_url: el.video_url };
-                } else {
-                    // Image-based element
-                    return {
-                        frontal_image_url: el.frontal_image_url,
-                        reference_image_urls: el.reference_image_urls ?? [],
-                    };
-                }
-            });
+            falInput.elements = payload.elements.map(el => ({
+                frontal_image_url: el.frontal_image_url,
+                reference_image_urls: el.reference_image_urls ?? [],
+            }));
         }
 
         return {
@@ -354,4 +347,3 @@ export function buildSpecialModelInput(
 export function extractSpecialVideoUrl(data: unknown): string | undefined {
     return extractKieVideoUrl(data);
 }
-

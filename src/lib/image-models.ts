@@ -22,6 +22,10 @@ export type UiOption = { value: string; label: string };
 export type ImageJob = {
   prompt: string;
   imageUrls: string[]; // Order matters for some models (e.g. Flux uses the first image as primary reference)
+  elements?: Array<{
+    frontal_image_url: string;
+    reference_image_urls?: string[];
+  }>;
   size?: ImageSizePreset | { width: number; height: number };
   seed?: number;
   temporal?: boolean;
@@ -46,6 +50,7 @@ export type ImageModelSpec = {
   pricing?: string;
   mode: "edit" | "hybrid" | "text";
   maxRefs: number;
+  supportsElements?: boolean;
   taskConfig?: TaskPollingConfig;
   mapInput: (job: ImageJob) => Record<string, unknown>;
   getUrls: (out: unknown) => string[];

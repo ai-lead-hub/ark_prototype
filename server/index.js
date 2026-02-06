@@ -975,7 +975,13 @@ await fs.mkdir(ELEMENTS_DIR, { recursive: true });
 async function loadElements() {
   try {
     const data = await fs.readFile(ELEMENTS_JSON, "utf-8");
-    return JSON.parse(data);
+    const parsed = JSON.parse(data);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((element) => {
+      if (!element || typeof element !== "object") return element;
+      const { videoReferenceUrl: _removedVideoReferenceUrl, ...rest } = element;
+      return rest;
+    });
   } catch {
     return [];
   }
@@ -1007,7 +1013,6 @@ server.post("/elements", async (request, reply) => {
   let name = "";
   let frontalImageUrl = "";
   const referenceImageUrls = [];
-  let videoReferenceUrl = "";
   let characterSheetUrl = "";
 
   try {
@@ -1028,9 +1033,6 @@ server.post("/elements", async (request, reply) => {
           const index = part.fieldname.split("_")[1];
           targetName = `ref_${index}${ext}`;
           referenceImageUrls.push(`/elements/${elementId}/files/${targetName}`);
-        } else if (part.fieldname === "videoReference") {
-          targetName = `video${ext}`;
-          videoReferenceUrl = `/elements/${elementId}/files/${targetName}`;
         } else if (part.fieldname === "characterSheet") {
           targetName = `sheet${ext}`;
           characterSheetUrl = `/elements/${elementId}/files/${targetName}`;
@@ -1040,6 +1042,9 @@ server.post("/elements", async (request, reply) => {
           const targetPath = path.join(elementDir, targetName);
           const writeStream = createWriteStream(targetPath);
           await pipeline(part.file, writeStream);
+        } else {
+          // Drain unknown file fields so multipart processing can continue safely.
+          part.file.resume();
         }
       }
     }
@@ -1060,7 +1065,6 @@ server.post("/elements", async (request, reply) => {
       name,
       frontalImageUrl,
       referenceImageUrls,
-      videoReferenceUrl: videoReferenceUrl || undefined,
       characterSheetUrl: characterSheetUrl || undefined,
       createdAt: now,
       updatedAt: now,

@@ -1,6 +1,6 @@
 /**
  * Element type definitions for the Elements Manager.
- * Elements are reusable characters/objects that can be referenced in video generation.
+ * Elements are reusable characters/objects that can be referenced during generation.
  */
 
 export interface Element {
@@ -12,9 +12,7 @@ export interface Element {
     frontalImageUrl: string;
     /** 2-3 additional reference images from different angles */
     referenceImageUrls: string[];
-    /** Optional video reference URL */
-    videoReferenceUrl?: string;
-    /** Optional character sheet URL (not sent to video models) */
+    /** Optional character sheet URL for image-reference workflows */
     characterSheetUrl?: string;
     /** Creation timestamp */
     createdAt: number;
@@ -26,15 +24,10 @@ export interface ElementInput {
     name: string;
     frontalImage: File;
     referenceImages: File[];
-    videoReference?: File;
     characterSheet?: File;
 }
-
-/** Mode for using an element in generation */
-export type ElementUseMode = "image" | "video";
 
 /** Selected element for generation */
 export interface SelectedElement {
     element: Element;
-    mode: ElementUseMode;
 }

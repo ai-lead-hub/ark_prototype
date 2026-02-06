@@ -7,7 +7,6 @@ import { fetchFileBlob } from "../lib/api/files";
 interface DropZoneState {
     frontal: boolean;
     refs: boolean;
-    video: boolean;
     sheet: boolean;
 }
 
@@ -20,7 +19,6 @@ export default function ElementForm() {
     const [frontalPreview, setFrontalPreview] = useState<string | null>(null);
     const [referenceImages, setReferenceImages] = useState<File[]>([]);
     const [referencePreviews, setReferencePreviews] = useState<string[]>([]);
-    const [videoReference, setVideoReference] = useState<File | null>(null);
     const [characterSheet, setCharacterSheet] = useState<File | null>(null);
     const [sheetPreview, setSheetPreview] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -28,13 +26,11 @@ export default function ElementForm() {
     const [dragOver, setDragOver] = useState<DropZoneState>({
         frontal: false,
         refs: false,
-        video: false,
         sheet: false,
     });
 
     const frontalInputRef = useRef<HTMLInputElement>(null);
     const refInputRef = useRef<HTMLInputElement>(null);
-    const videoInputRef = useRef<HTMLInputElement>(null);
     const sheetInputRef = useRef<HTMLInputElement>(null);
 
     // Fetch file from workspace URL and convert to File object
@@ -108,11 +104,6 @@ export default function ElementForm() {
         setReferencePreviews(files.map((f) => URL.createObjectURL(f)));
     };
 
-    const handleVideoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        setVideoReference(file || null);
-    };
-
     const handleSheetChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
@@ -142,7 +133,6 @@ export default function ElementForm() {
                 name: name.trim(),
                 frontalImage,
                 referenceImages,
-                videoReference: videoReference || undefined,
                 characterSheet: characterSheet || undefined,
             });
         } catch (err) {
@@ -152,12 +142,14 @@ export default function ElementForm() {
     };
 
     // Cleanup object URLs on unmount to prevent memory leaks
+    // We intentionally capture the current preview URLs at unmount time
     useEffect(() => {
         return () => {
             if (frontalPreview) URL.revokeObjectURL(frontalPreview);
             referencePreviews.forEach((url) => URL.revokeObjectURL(url));
             if (sheetPreview) URL.revokeObjectURL(sheetPreview);
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const dropZoneClass = (zone: keyof DropZoneState, baseClass: string) =>
@@ -275,40 +267,6 @@ export default function ElementForm() {
                     accept="image/*"
                     multiple
                     onChange={handleRefImagesChange}
-                    className="hidden"
-                />
-            </div>
-
-            {/* Video Reference */}
-            <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1">
-                    Video Reference <span className="text-slate-500">(optional, for motion)</span>
-                </label>
-                <div
-                    onClick={() => videoInputRef.current?.click()}
-                    onDragOver={(e) => handleDragOver(e, "video")}
-                    onDragLeave={(e) => handleDragLeave(e, "video")}
-                    onDrop={(e) =>
-                        handleDrop(e, "video", (file) => {
-                            setVideoReference(file);
-                        })
-                    }
-                    className={dropZoneClass(
-                        "video",
-                        "flex items-center justify-center border border-dashed border-white/20 rounded-lg h-12 cursor-pointer hover:border-emerald-400 transition"
-                    )}
-                >
-                    {videoReference ? (
-                        <span className="text-emerald-400 text-sm">🎬 {videoReference.name}</span>
-                    ) : (
-                        <span className="text-slate-500 text-sm">Drop video or click</span>
-                    )}
-                </div>
-                <input
-                    ref={videoInputRef}
-                    type="file"
-                    accept="video/*"
-                    onChange={handleVideoChange}
                     className="hidden"
                 />
             </div>

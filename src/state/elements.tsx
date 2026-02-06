@@ -7,7 +7,7 @@ import {
     useState,
     type ReactNode,
 } from "react";
-import type { Element, ElementInput, SelectedElement, ElementUseMode } from "./elementTypes";
+import type { Element, ElementInput, SelectedElement } from "./elementTypes";
 
 const API_BASE = import.meta.env.VITE_FILE_API_BASE ?? "http://localhost:8787";
 const API_TOKEN = import.meta.env.VITE_FILE_API_TOKEN;
@@ -32,7 +32,7 @@ interface ElementsContextType {
     fetchElements: () => Promise<void>;
     addElement: (input: ElementInput) => Promise<Element>;
     deleteElement: (id: string) => Promise<void>;
-    selectElement: (element: Element, mode: ElementUseMode) => void;
+    selectElement: (element: Element) => void;
     deselectElement: (id: string) => void;
     clearSelection: () => void;
     setSelectionMode: (mode: boolean) => void;
@@ -88,9 +88,6 @@ export function ElementsProvider({ children }: { children: ReactNode }) {
         input.referenceImages.forEach((file, i) => {
             formData.append(`referenceImage_${i}`, file);
         });
-        if (input.videoReference) {
-            formData.append("videoReference", input.videoReference);
-        }
         if (input.characterSheet) {
             formData.append("characterSheet", input.characterSheet);
         }
@@ -124,21 +121,13 @@ export function ElementsProvider({ children }: { children: ReactNode }) {
         setSelectedElements((prev) => prev.filter((sel) => sel.element.id !== id));
     }, []);
 
-    const selectElement = useCallback((element: Element, mode: ElementUseMode) => {
+    const selectElement = useCallback((element: Element) => {
         setSelectedElements((prev) => {
-            // If video mode, can only have one element
-            if (mode === "video") {
-                return [{ element, mode }];
-            }
-            // Check if already selected
             const existing = prev.find((sel) => sel.element.id === element.id);
             if (existing) {
-                // Update mode
-                return prev.map((sel) =>
-                    sel.element.id === element.id ? { ...sel, mode } : sel
-                );
+                return prev;
             }
-            return [...prev, { element, mode }];
+            return [...prev, { element }];
         });
     }, []);
 

@@ -122,7 +122,7 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
       // Revert on failure
       void refreshPins();
     }
-  }, [connection, pins, refreshPins]);
+  }, [connection, pins, refreshPins, setPins]);
 
   const refreshReferences = useCallback(() => {
     if (!workspaceKey) return;
