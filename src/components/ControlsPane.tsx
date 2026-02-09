@@ -636,7 +636,7 @@ export default function ControlsPane() {
       ? Math.min(videoReferenceConfig?.max ?? 0, 5)
       : Math.min(selectedImage?.maxRefs ?? 0, 5);
   const imageReferenceLimit = modelKind === "image"
-    ? Math.min(selectedImage?.maxRefs ?? 5, 5)
+    ? Math.min(selectedImage?.maxRefs ?? 0, 5)
     : 5;
   const imageModelSupportsElements =
     modelKind === "image" && selectedImage?.supportsElements === true;
@@ -1948,8 +1948,11 @@ export default function ControlsPane() {
           : undefined;
 
         // Use freshly uploaded reference URLs for image models
-        const imageRefUrls = modelKind === "image" && (selectedImage?.maxRefs ?? 0) !== 0
-          ? uploadedReferenceUrls.slice(0, Math.min(selectedImage?.maxRefs ?? 5, 5))
+        const imageRefUrls = modelKind === "image" && (selectedImage?.maxRefs ?? 0) > 0
+          ? uploadedReferenceUrls.slice(
+            0,
+            Math.min(selectedImage?.maxRefs ?? imageModelSpec.maxRefs, 5)
+          )
           : [];
 
         // Transform @img1, @img2, etc. references in prompt to image_1, image_2, etc.
@@ -2388,7 +2391,7 @@ export default function ControlsPane() {
             provider,
             endpoint,
             payload,
-            { ...callOptions, log }
+            { ...callOptions, log, preferUrlResult: true }
           );
 
           let downloadedBlob: Blob | undefined;
@@ -2398,7 +2401,7 @@ export default function ControlsPane() {
             downloadedBlob = result.blob;
           } else if (result.url) {
             resultUrlStr = result.url;
-            log("Downloading result...");
+            log("Model finished. Downloading result...");
             try {
               downloadedBlob = await downloadBlob(result.url);
             } catch {
@@ -3532,7 +3535,6 @@ export default function ControlsPane() {
 
                     // Use the same file extraction as image uploads (handles both OS and app file browser)
                     const allFiles = await extractFilesFromDataTransfer(event.dataTransfer);
-                    console.log("Dropped files:", allFiles.map(f => ({ name: f.name, type: f.type, size: f.size })));
 
                     // Check MIME type OR file extension for video detection
                     const isVideoFile = (f: File) => {
@@ -3542,7 +3544,6 @@ export default function ControlsPane() {
                     };
 
                     const files = allFiles.filter(isVideoFile);
-                    console.log("Filtered video files:", files.length);
 
                     if (files.length === 0) {
                       setStatus("Please drop video files (mp4, mov, mkv).");
@@ -4144,7 +4145,7 @@ export default function ControlsPane() {
                       {elementsState.selectedElements.map((selectedEl, idx) => (
                         <div key={`${selectedEl.element.id}-${idx}`} className="relative h-14 w-14 overflow-hidden rounded border border-white/10 group">
                           <img
-                            src={`${import.meta.env.VITE_FILE_API_BASE ?? "http://localhost:8787"}${selectedEl.element.frontalImageUrl}?token=${import.meta.env.VITE_FILE_API_TOKEN}`}
+                            src={buildElementAssetUrl(selectedEl.element.frontalImageUrl)}
                             alt={selectedEl.element.name}
                             className="h-full w-full object-cover"
                           />
@@ -4470,7 +4471,7 @@ export default function ControlsPane() {
 
                       const options = elementsState.selectedElements.map((selectedEl, idx) => ({
                         label: `@Element${idx + 1}`,
-                        preview: `${import.meta.env.VITE_FILE_API_BASE ?? "http://localhost:8787"}${selectedEl.element.frontalImageUrl}?token=${import.meta.env.VITE_FILE_API_TOKEN}`,
+                        preview: buildElementAssetUrl(selectedEl.element.frontalImageUrl),
                         name: selectedEl.element.name,
                       }));
 

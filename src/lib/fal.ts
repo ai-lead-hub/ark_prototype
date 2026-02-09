@@ -27,7 +27,8 @@ function ensureFalClient() {
 
 export async function callFal(
   endpoint: string,
-  payload: Record<string, unknown>
+  payload: Record<string, unknown>,
+  options?: ProviderCallOptions
 ): Promise<ProviderCallResult> {
   const key = getFalKey();
   if (!key) {
@@ -69,6 +70,9 @@ export async function callFal(
     extractUrl((data?.result as Record<string, unknown>) ?? {});
 
   if (url) {
+    if (options?.preferUrlResult) {
+      return { url };
+    }
     return {
       url,
       blob: await downloadBlob(url),
@@ -115,6 +119,9 @@ export async function callFalSubscribe(
     // Handle video response (video.url) - LTX-2, etc.
     const video = data?.video as { url?: string } | undefined;
     if (video?.url) {
+      if (options?.preferUrlResult) {
+        return { url: video.url };
+      }
       return {
         url: video.url,
         blob: await downloadBlob(video.url),
@@ -125,6 +132,9 @@ export async function callFalSubscribe(
     const images = data?.images as Array<{ url: string }> | undefined;
     if (images && images.length > 0 && images[0].url) {
       const url = images[0].url;
+      if (options?.preferUrlResult) {
+        return { url };
+      }
       return {
         url,
         blob: await downloadBlob(url),

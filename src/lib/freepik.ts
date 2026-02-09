@@ -13,10 +13,10 @@ import {
 } from "./providers/shared";
 import type { ProviderCallResult } from "./providers/types";
 
-// Use proxy in development to avoid CORS issues
-const FREEPIK_BASE_URL = import.meta.env.DEV
-    ? "/api/freepik/v1/ai"
-    : "https://api.freepik.com/v1/ai";
+// Always use local proxy path:
+// - In development, Vite forwards /api/freepik/* to api.freepik.com.
+// - In production, the Fastify server proxies /api/freepik/*.
+const FREEPIK_BASE_URL = "/api/freepik/v1/ai";
 
 export type MagnificFlavor = "sublime" | "photo" | "photo_denoiser";
 
@@ -73,7 +73,7 @@ async function startUpscaleTask(
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                "x-freepik-api-key": key,
+                ...(key ? { "x-freepik-api-key": key } : {}),
             },
             body: JSON.stringify(payload),
             timeoutMs: 60000,
@@ -113,7 +113,7 @@ async function pollTaskStatus(
         const response = await fetchWithTimeout(endpoint, {
             method: "GET",
             headers: {
-                "x-freepik-api-key": key,
+                ...(key ? { "x-freepik-api-key": key } : {}),
             },
             timeoutMs: 30000,
         });
@@ -156,7 +156,7 @@ export async function callMagnificUpscale(
     log?: (message: string) => void
 ): Promise<ProviderCallResult> {
     const key = getFreepikKey();
-    if (!key) {
+    if (!key && import.meta.env.DEV) {
         throw new Error("Missing VITE_FREEPIK_KEY environment variable");
     }
 

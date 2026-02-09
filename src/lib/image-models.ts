@@ -331,7 +331,7 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
       pollIntervalMs: 4000,
     },
     mode: "edit",
-    maxRefs: 1,
+    maxRefs: 5,
     ui: {
       aspectRatios: [
         { value: "1:1", label: "Square (1:1)" },
@@ -355,7 +355,7 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
         model: isEdit ? "seedream/4.5-edit" : "seedream/4.5-text-to-image",
         input: {
           prompt,
-          ...(isEdit ? { image_urls: imageUrls } : {}),
+          ...(isEdit ? { image_urls: imageUrls.slice(0, 5) } : {}),
           aspect_ratio: aspectRatio ?? "1:1",
           quality: imageResolution ?? "basic",
         },

@@ -703,8 +703,6 @@ export default function ImageEditor({
             return;
         }
 
-        console.log("Starting save with", annotations.length, "annotations, transforms:", { flipH, flipV, rotation });
-
         // Calculate output dimensions (swap for 90/270 rotation)
         const isRotated90or270 = rotation === 90 || rotation === 270;
         const outWidth = isRotated90or270 ? img.naturalHeight : img.naturalWidth;
@@ -819,13 +817,11 @@ export default function ImageEditor({
         const hasTransforms = flipH || flipV || rotation !== 0;
         const transformSuffix = hasTransforms ? "_edited" : "_annotated";
         const filename = `${baseName}${transformSuffix}.png`;
-        console.log("Saving as:", filename, "blob size:", blob.size);
 
         setSaving(true);
         setStatus("Saving image...");
         try {
             await onSave(blob, filename);
-            console.log("Save successful");
             setStatus("Image saved!");
         } catch (err) {
             console.error("Save failed:", err);

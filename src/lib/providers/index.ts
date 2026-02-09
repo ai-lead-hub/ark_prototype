@@ -27,7 +27,7 @@ export async function callModelEndpoint(
   if (provider === "fal-client") {
     return callFalSubscribe(endpoint, payload, options);
   }
-  return callFal(endpoint, payload);
+  return callFal(endpoint, payload, options);
 }
 
 export function getProviderEnvVar(provider: ModelProvider): string {

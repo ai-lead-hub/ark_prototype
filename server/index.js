@@ -1,5 +1,5 @@
 import fs from "node:fs/promises";
-import { createReadStream, createWriteStream } from "node:fs";
+import { constants as fsConstants, createReadStream, createWriteStream } from "node:fs";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import crypto from "node:crypto";
@@ -10,17 +10,55 @@ import mime from "mime-types";
 import dotenv from "dotenv";
 import { createMetaDb } from "./meta-db.js";
 
-// Load env files: .env.server overrides .env if both exist.
+// Load env files with this priority:
+// 1) Existing process environment (highest priority)
+// 2) .env.server
+// 3) .env
 dotenv.config({
   path: path.resolve(process.cwd(), ".env.server"),
-  override: true,
+  override: false,
 });
 dotenv.config({
   path: path.resolve(process.cwd(), ".env"),
   override: false,
 });
 
-const PORT = Number(process.env.FILE_API_PORT ?? 8787);
+const NODE_ENV = process.env.NODE_ENV ?? "development";
+
+function parseBooleanEnv(value, fallback) {
+  if (value === undefined || value === null || value === "") return fallback;
+  return ["1", "true", "yes", "on"].includes(String(value).toLowerCase());
+}
+
+function parseIntegerEnv(value, fallback, { min, max } = {}) {
+  const parsed = Number.parseInt(String(value ?? ""), 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  if (min !== undefined && parsed < min) return min;
+  if (max !== undefined && parsed > max) return max;
+  return parsed;
+}
+
+function buildCorsOriginResolver(raw) {
+  const normalized = String(raw ?? "").trim();
+  if (!normalized || normalized === "*") return true;
+  const allowedOrigins = normalized
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (allowedOrigins.length <= 1) {
+    return allowedOrigins[0] ?? false;
+  }
+  const allowed = new Set(allowedOrigins);
+  return (origin, callback) => {
+    if (!origin || allowed.has(origin)) {
+      callback(null, true);
+      return;
+    }
+    callback(new Error("Not allowed by CORS"), false);
+  };
+}
+
+const PORT = parseIntegerEnv(process.env.FILE_API_PORT, 8787, { min: 1, max: 65535 });
 const STORAGE_ROOT = path.resolve(
   process.env.FILE_STORAGE_ROOT ?? path.join(process.cwd(), "data")
 );
@@ -28,24 +66,64 @@ const META_DB_PATH = path.resolve(
   process.env.FILE_META_DB_PATH ?? path.join(STORAGE_ROOT, "metadata.sqlite")
 );
 const API_TOKEN = process.env.FILE_API_TOKEN;
-const CORS_ORIGIN = process.env.FILE_API_CORS_ORIGIN ?? "http://localhost:5173";
-const MAX_SIZE_MB = Number(process.env.FILE_MAX_SIZE_MB ?? 1024);
-const MAX_SIZE_BYTES = Math.max(1, MAX_SIZE_MB) * 1024 * 1024;
+const REQUIRE_TOKEN = parseBooleanEnv(
+  process.env.FILE_API_REQUIRE_TOKEN,
+  NODE_ENV === "production"
+);
+const CORS_ORIGIN_RAW = process.env.FILE_API_CORS_ORIGIN ?? "http://localhost:5173";
+const CORS_ORIGIN = buildCorsOriginResolver(CORS_ORIGIN_RAW);
+const MAX_SIZE_MB = parseIntegerEnv(process.env.FILE_MAX_SIZE_MB, 256, {
+  min: 1,
+  max: 4096,
+});
+const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
+const CLEAR_TRASH_ON_START = parseBooleanEnv(
+  process.env.FILE_TRASH_CLEAR_ON_START,
+  false
+);
+const ENABLE_CLIENT_LOG_ENDPOINT = parseBooleanEnv(
+  process.env.FILE_ENABLE_CLIENT_LOG_ENDPOINT,
+  NODE_ENV !== "production"
+);
+const MAX_DEBUG_LOG_BYTES = parseIntegerEnv(
+  process.env.FILE_MAX_DEBUG_LOG_BYTES,
+  10 * 1024 * 1024,
+  { min: 1024 * 1024, max: 200 * 1024 * 1024 }
+);
+const TRUST_PROXY = parseBooleanEnv(
+  process.env.FILE_API_TRUST_PROXY,
+  NODE_ENV === "production"
+);
+const REQUEST_TIMEOUT_MS = parseIntegerEnv(process.env.FILE_REQUEST_TIMEOUT_MS, 120000, {
+  min: 10_000,
+  max: 600_000,
+});
+const REQUIRE_META_DB = parseBooleanEnv(process.env.FILE_REQUIRE_META_DB, false);
+
+if (REQUIRE_TOKEN && !API_TOKEN) {
+  throw new Error(
+    "FILE_API_TOKEN is required when FILE_API_REQUIRE_TOKEN is enabled."
+  );
+}
 
 const server = Fastify({
   logger: true,
   bodyLimit: MAX_SIZE_BYTES,
+  trustProxy: TRUST_PROXY,
+  requestTimeout: REQUEST_TIMEOUT_MS,
 });
 
 await fs.mkdir(STORAGE_ROOT, { recursive: true });
 
 // Empty trash on startup
 const TRASH_DIR = path.join(STORAGE_ROOT, "_trash");
-try {
-  await fs.rm(TRASH_DIR, { recursive: true, force: true });
-  console.log("✓ Trash emptied");
-} catch {
-  // Ignore if trash doesn't exist
+if (CLEAR_TRASH_ON_START) {
+  try {
+    await fs.rm(TRASH_DIR, { recursive: true, force: true });
+    console.log("✓ Trash emptied");
+  } catch {
+    // Ignore if trash doesn't exist
+  }
 }
 
 let metaDb = null;
@@ -57,12 +135,31 @@ try {
 }
 
 await server.register(cors, {
-  origin: CORS_ORIGIN === "*" ? true : CORS_ORIGIN,
+  origin: CORS_ORIGIN,
 });
 
 await server.register(multipart, {
   limits: { fileSize: MAX_SIZE_BYTES },
 });
+
+const API_ROUTES = [
+  "/files",
+  "/workspaces",
+  "/publish",
+  "/log",
+  "/meta",
+  "/elements",
+  "/api/freepik",
+];
+
+function isApiPath(pathname) {
+  return API_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+}
+
+function isQueryTokenPathAllowed(pathname, method) {
+  if (method !== "GET") return false;
+  return pathname.startsWith("/files/") || pathname.startsWith("/elements/");
+}
 
 // Serve static frontend files in production
 const distPath = path.resolve(process.cwd(), "dist");
@@ -76,9 +173,12 @@ try {
   });
   // SPA fallback - serve index.html for non-API routes
   server.setNotFoundHandler(async (request, reply) => {
-    if (request.url.startsWith("/files") || request.url.startsWith("/health") ||
-      request.url.startsWith("/workspaces") || request.url.startsWith("/publish") ||
-      request.url.startsWith("/log") || request.url.startsWith("/meta")) {
+    const pathname = request.url.split("?")[0];
+    if (
+      pathname === "/health" ||
+      pathname === "/ready" ||
+      isApiPath(pathname)
+    ) {
       return reply.code(404).send({ error: "Not found" });
     }
     return reply.sendFile("index.html");
@@ -88,19 +188,15 @@ try {
   console.log("ℹ No dist/ folder found, API-only mode");
 }
 
-// API routes that require auth
-const API_ROUTES = ["/files", "/workspaces", "/publish", "/log", "/meta", "/elements"];
-
 server.addHook("onRequest", async (request, reply) => {
   // Get just the pathname (without query string)
   const pathname = request.url.split("?")[0];
 
-  // Health endpoint is public
-  if (pathname === "/health") return;
+  // Health endpoints are public
+  if (pathname === "/health" || pathname === "/ready") return;
 
   // Skip auth for static files (non-API routes)  
-  const isApiRoute = API_ROUTES.some(route => pathname.startsWith(route));
-  if (!isApiRoute) return;
+  if (!isApiPath(pathname)) return;
 
   if (!API_TOKEN) return;
   const auth = request.headers.authorization;
@@ -112,8 +208,19 @@ server.addHook("onRequest", async (request, reply) => {
       typeof request.query.token === "string"
       ? request.query.token
       : undefined;
-  if (auth === expected || queryToken === API_TOKEN) return;
+  if (auth === expected) return;
+  if (queryToken === API_TOKEN && isQueryTokenPathAllowed(pathname, request.method)) {
+    return;
+  }
   return reply.code(401).send({ error: "Unauthorized" });
+});
+
+server.addHook("onSend", async (request, reply, payload) => {
+  reply.header("X-Request-Id", request.id);
+  reply.header("X-Content-Type-Options", "nosniff");
+  reply.header("X-Frame-Options", "DENY");
+  reply.header("Referrer-Policy", "strict-origin-when-cross-origin");
+  return payload;
 });
 
 function sanitizeWorkspaceId(raw) {
@@ -140,8 +247,9 @@ async function ensureWorkspaceDir(workspaceId) {
 }
 
 function toSafePath(workspaceDir, relPath) {
-  const resolved = path.resolve(workspaceDir, relPath);
-  if (!resolved.startsWith(workspaceDir)) {
+  const baseDir = path.resolve(workspaceDir);
+  const resolved = path.resolve(baseDir, relPath);
+  if (resolved !== baseDir && !resolved.startsWith(`${baseDir}${path.sep}`)) {
     throw new Error("Path escapes workspace");
   }
   return resolved;
@@ -186,12 +294,103 @@ async function readTree(baseDir, baseRel = "") {
   return entries;
 }
 
-server.get("/health", async () => ({ ok: true }));
+server.get("/health", async () => ({
+  ok: true,
+  uptimeSec: Math.floor(process.uptime()),
+  timestamp: new Date().toISOString(),
+}));
+
+server.get("/ready", async (_request, reply) => {
+  try {
+    await fs.access(STORAGE_ROOT, fsConstants.W_OK);
+  } catch {
+    return reply.code(503).send({
+      ok: false,
+      reason: "Storage root is not writable.",
+    });
+  }
+
+  if (REQUIRE_META_DB && !metaDb) {
+    return reply.code(503).send({
+      ok: false,
+      reason: "Metadata DB unavailable (required).",
+    });
+  }
+
+  return reply.send({ ok: true, metaDb: Boolean(metaDb) });
+});
+
+server.route({
+  method: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+  url: "/api/freepik/*",
+  handler: async (request, reply) => {
+    const wildcard = request.params["*"] ?? "";
+    const search = request.url.includes("?")
+      ? request.url.slice(request.url.indexOf("?"))
+      : "";
+    const target = new URL(`/${wildcard}${search}`, "https://api.freepik.com");
+
+    const keyFromHeader = request.headers["x-freepik-api-key"];
+    const resolvedKey =
+      (typeof keyFromHeader === "string" && keyFromHeader.trim()) ||
+      process.env.FREEPIK_API_KEY;
+    if (!resolvedKey) {
+      return reply.code(500).send({
+        error: "Missing Freepik API key. Provide x-freepik-api-key or FREEPIK_API_KEY.",
+      });
+    }
+
+    const contentTypeHeader = request.headers["content-type"];
+    const contentType =
+      typeof contentTypeHeader === "string"
+        ? contentTypeHeader
+        : Array.isArray(contentTypeHeader)
+          ? contentTypeHeader[0]
+          : undefined;
+
+    const headers = {
+      "x-freepik-api-key": resolvedKey,
+      ...(contentType ? { "content-type": contentType } : {}),
+    };
+
+    const method = request.method.toUpperCase();
+    const body =
+      method === "GET" || method === "HEAD"
+        ? undefined
+        : request.body === undefined
+          ? undefined
+          : typeof request.body === "string"
+            ? request.body
+            : JSON.stringify(request.body);
+
+    try {
+      const upstreamResponse = await fetch(target.toString(), {
+        method,
+        headers,
+        body,
+      });
+
+      const responseBuffer = Buffer.from(await upstreamResponse.arrayBuffer());
+      const upstreamContentType = upstreamResponse.headers.get("content-type");
+      if (upstreamContentType) {
+        reply.header("Content-Type", upstreamContentType);
+      }
+      reply.code(upstreamResponse.status);
+      return reply.send(responseBuffer);
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(502).send({ error: "Failed to reach Freepik upstream API." });
+    }
+  },
+});
 
 server.get("/workspaces", async () => {
+  const internalDirs = new Set(["publish", "_trash", "_elements"]);
   const dirents = await fs.readdir(STORAGE_ROOT, { withFileTypes: true });
   const workspaces = dirents
     .filter((dirent) => dirent.isDirectory())
+    .filter((dirent) => !dirent.name.startsWith("."))
+    .filter((dirent) => !internalDirs.has(dirent.name))
     .map((dirent) => dirent.name);
   if (!workspaces.includes("default")) {
     workspaces.unshift("default");
@@ -311,8 +510,15 @@ server.get("/files/:workspace/*", async (request, reply) => {
       return;
     }
     const start = Number(match[1]);
-    const end = match[2] ? Number(match[2]) : stats.size - 1;
-    if (Number.isNaN(start) || Number.isNaN(end) || start > end) {
+    const endRaw = match[2] ? Number(match[2]) : stats.size - 1;
+    const end = Math.min(endRaw, stats.size - 1);
+    if (
+      Number.isNaN(start) ||
+      Number.isNaN(end) ||
+      start > end ||
+      start < 0 ||
+      start >= stats.size
+    ) {
       reply.code(416).send({ error: "Invalid range" });
       return;
     }
@@ -334,9 +540,16 @@ server.get("/files/:workspace/*", async (request, reply) => {
 });
 
 server.post("/files", async (request, reply) => {
+  let workspaceId;
+  let relPath;
+  try {
+    workspaceId = sanitizeWorkspaceId(request.query.workspace);
+    relPath = sanitizeRelPath(request.query.path);
+  } catch (error) {
+    return reply.code(400).send({ error: error.message ?? "Invalid input" });
+  }
+
   const parts = request.parts();
-  let workspaceId = request.query.workspace || "default";
-  let relPath = request.query.path;
   let fileProcessed = false;
   let savedStats = null;
   let savedMime = null;
@@ -344,20 +557,6 @@ server.post("/files", async (request, reply) => {
   try {
     for await (const part of parts) {
       if (part.type === "file" && part.fieldname === "file") {
-        if (!relPath) {
-          // If path wasn't in query, we can't save yet.
-          // But we must consume the stream to avoid hanging.
-          await part.toBuffer();
-          continue;
-        }
-
-        try {
-          workspaceId = sanitizeWorkspaceId(workspaceId);
-          relPath = sanitizeRelPath(relPath);
-        } catch (error) {
-          throw new Error(error.message ?? "Invalid input");
-        }
-
         const workspaceDir = await ensureWorkspaceDir(workspaceId);
         const targetPath = toSafePath(workspaceDir, relPath);
         const targetDir = path.dirname(targetPath);
@@ -388,12 +587,9 @@ server.post("/files", async (request, reply) => {
             request.log.warn(error, "Failed to update file index");
           }
         }
-      } else {
-        // Handle fields if needed, but we prefer query params now
-        if (part.type === "field") {
-          if (part.fieldname === "workspace") workspaceId = part.value;
-          if (part.fieldname === "path") relPath = part.value;
-        }
+      } else if (part.type === "file") {
+        // Drain unknown file fields to avoid hanging multipart processing.
+        part.file.resume();
       }
     }
   } catch (error) {
@@ -547,6 +743,22 @@ function sanitizeMetadataField(value, fieldName) {
   return clean;
 }
 
+const DEBUG_LOG_PATH = path.join(process.cwd(), "debug.log");
+
+async function appendDebugLog(entry) {
+  try {
+    const stat = await fs.stat(DEBUG_LOG_PATH);
+    if (stat.size >= MAX_DEBUG_LOG_BYTES) {
+      const rotated = `${DEBUG_LOG_PATH}.1`;
+      await fs.rm(rotated, { force: true }).catch(() => {});
+      await fs.rename(DEBUG_LOG_PATH, rotated);
+    }
+  } catch {
+    // File does not exist yet or cannot be stat'd; append will handle creation/failure.
+  }
+  await fs.appendFile(DEBUG_LOG_PATH, entry);
+}
+
 server.post("/publish", async (request, reply) => {
   let { workspace, path: relPath, project, sequence, shot, version } = request.body ?? {};
 
@@ -588,12 +800,22 @@ server.post("/publish", async (request, reply) => {
 });
 
 server.post("/log", async (request, reply) => {
+  if (!ENABLE_CLIENT_LOG_ENDPOINT) {
+    return reply.code(404).send({ error: "Not found" });
+  }
+
   const { message, level = "info", data } = request.body ?? {};
+  const safeMessage =
+    typeof message === "string" && message.trim()
+      ? message.slice(0, 2000)
+      : "No message";
+  const safeLevel = typeof level === "string" ? level.slice(0, 24) : "info";
   const timestamp = new Date().toISOString();
-  const logEntry = `[${timestamp}] [${level.toUpperCase()}] ${message} ${data ? JSON.stringify(data) : ""}\n`;
+  const serializedData = data ? JSON.stringify(data).slice(0, 20000) : "";
+  const logEntry = `[${timestamp}] [${safeLevel.toUpperCase()}] ${safeMessage} ${serializedData}\n`;
 
   try {
-    await fs.appendFile(path.join(process.cwd(), "debug.log"), logEntry);
+    await appendDebugLog(logEntry);
     return { ok: true };
   } catch (error) {
     request.log.error(error);
@@ -1121,11 +1343,19 @@ server.get("/elements/:id/files/*", async (request, reply) => {
     return reply.code(400).send({ error: "Invalid element ID" });
   }
 
-  if (!filename || filename.includes("..")) {
+  if (!filename) {
     return reply.code(400).send({ error: "Invalid filename" });
   }
 
-  const filePath = path.join(ELEMENTS_DIR, id, filename);
+  let safeFilename;
+  try {
+    safeFilename = sanitizeRelPath(filename);
+  } catch {
+    return reply.code(400).send({ error: "Invalid filename" });
+  }
+
+  const elementDir = path.join(ELEMENTS_DIR, id);
+  const filePath = toSafePath(elementDir, safeFilename);
 
   try {
     const stats = await fs.stat(filePath);
@@ -1154,9 +1384,15 @@ const startServer = async () => {
     console.log(`${"=".repeat(50)}`);
     console.log(`  ✓ Port:          ${PORT}`);
     console.log(`  ✓ Storage:       ${STORAGE_ROOT}`);
-    console.log(`  ✓ Auth:          ${API_TOKEN ? "enabled" : "disabled (no token set)"}`);
-    console.log(`  ✓ CORS:          ${CORS_ORIGIN}`);
+    console.log(`  ✓ Auth:          ${API_TOKEN ? "enabled" : "disabled"}`);
+    console.log(`  ✓ Token required:${REQUIRE_TOKEN ? "yes" : "no"}`);
+    console.log(`  ✓ CORS:          ${CORS_ORIGIN_RAW}`);
     console.log(`  ✓ Max file size: ${MAX_SIZE_MB}MB`);
+    console.log(`  ✓ Request timeout: ${REQUEST_TIMEOUT_MS}ms`);
+    console.log(`  ✓ Trust proxy:   ${TRUST_PROXY ? "enabled" : "disabled"}`);
+    console.log(`  ✓ Client logs:   ${ENABLE_CLIENT_LOG_ENDPOINT ? "enabled" : "disabled"}`);
+    console.log(`  ✓ Trash clear on start: ${CLEAR_TRASH_ON_START ? "enabled" : "disabled"}`);
+    console.log(`  ✓ Require meta DB: ${REQUIRE_META_DB ? "yes" : "no"}`);
     console.log(`${"=".repeat(50)}\n`);
   } catch (error) {
     server.log.error(error);
@@ -1179,9 +1415,17 @@ const shutdown = async (signal) => {
     console.log("Server close timed out, forcing exit...");
     process.exit(1);
   }, 5000);
+  forceExitTimeout.unref();
 
   try {
     await server.close();
+    if (metaDb) {
+      try {
+        metaDb.close();
+      } catch (error) {
+        console.warn("Failed to close metadata DB cleanly:", error);
+      }
+    }
     clearTimeout(forceExitTimeout);
     console.log("Server closed successfully.");
     process.exit(0);

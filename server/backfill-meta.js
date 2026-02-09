@@ -5,10 +5,13 @@ import mime from "mime-types";
 import dotenv from "dotenv";
 import { createMetaDb } from "./meta-db.js";
 
-// Load env files: .env.server overrides .env if both exist.
+// Load env files with this priority:
+// 1) Existing process environment
+// 2) .env.server
+// 3) .env
 dotenv.config({
   path: path.resolve(process.cwd(), ".env.server"),
-  override: true,
+  override: false,
 });
 dotenv.config({
   path: path.resolve(process.cwd(), ".env"),

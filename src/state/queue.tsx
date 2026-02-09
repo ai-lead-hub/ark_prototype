@@ -30,6 +30,7 @@ type QueueContextType = {
 const QueueContext = createContext<QueueContextType | null>(null);
 
 const CONCURRENCY_LIMIT = 5;
+const IS_DEV = import.meta.env.DEV;
 
 export function QueueProvider({ children }: { children: ReactNode }) {
     const [jobs, setJobs] = useState<QueueJob[]>([]);
@@ -37,6 +38,23 @@ export function QueueProvider({ children }: { children: ReactNode }) {
         Record<string, (payload: unknown, log: (msg: string) => void) => Promise<unknown>>
     >({});
     const [isLogOpen, setIsLogOpen] = useState(false);
+    const [schedulerTick, setSchedulerTick] = useState(0);
+    const activeJobsRef = useRef<Set<string>>(new Set());
+
+    const deleteProcessors = useCallback((ids: string[]) => {
+        if (ids.length === 0) return;
+        setProcessors((prev) => {
+            let changed = false;
+            const next = { ...prev };
+            for (const id of ids) {
+                if (id in next) {
+                    delete next[id];
+                    changed = true;
+                }
+            }
+            return changed ? next : prev;
+        });
+    }, []);
 
     const addJob = useCallback(
         (
@@ -58,18 +76,21 @@ export function QueueProvider({ children }: { children: ReactNode }) {
                     logs: ["Job queued."],
                 },
                 ...prev,
-            ].slice(0, 50));
+            ]);
         },
         []
     );
 
     const retryJob = useCallback((id: string) => {
+        activeJobsRef.current.delete(id);
+        setSchedulerTick((prev) => prev + 1);
         setJobs((prev) =>
             prev.map((job) =>
                 job.id === id
                     ? {
                         ...job,
                         status: "pending",
+                        result: undefined,
                         error: undefined,
                         logs: [...job.logs, "Retrying job..."],
                     }
@@ -79,19 +100,27 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const removeJob = useCallback((id: string) => {
+        activeJobsRef.current.delete(id);
+        setSchedulerTick((prev) => prev + 1);
         setJobs((prev) => prev.filter((job) => job.id !== id));
-        setProcessors((prev) => {
-            const next = { ...prev };
-            delete next[id];
-            return next;
-        });
-    }, []);
+        deleteProcessors([id]);
+    }, [deleteProcessors]);
 
     const clearCompleted = useCallback(() => {
-        setJobs((prev) =>
-            prev.filter((job) => job.status !== "completed" && job.status !== "failed")
-        );
-    }, []);
+        setJobs((prev) => {
+            const removedIds = prev
+                .filter((job) => job.status === "completed" || job.status === "failed")
+                .map((job) => job.id);
+            if (removedIds.length > 0) {
+                queueMicrotask(() => {
+                    deleteProcessors(removedIds);
+                });
+            }
+            return prev.filter(
+                (job) => job.status !== "completed" && job.status !== "failed"
+            );
+        });
+    }, [deleteProcessors]);
 
     const toggleLog = useCallback(() => setIsLogOpen((v) => !v), []);
 
@@ -100,14 +129,6 @@ export function QueueProvider({ children }: { children: ReactNode }) {
         () => jobs.filter((j) => j.status === "pending").length,
         [jobs]
     );
-    const processingCount = useMemo(
-        () => jobs.filter((j) => j.status === "processing").length,
-        [jobs]
-    );
-
-    // Use a ref to track currently active jobs for accurate concurrency control
-    // This avoids stale closure issues with processingCount
-    const activeJobsRef = useRef<Set<string>>(new Set());
 
     // Queue Processor - processes multiple jobs up to CONCURRENCY_LIMIT
     useEffect(() => {
@@ -116,7 +137,9 @@ export function QueueProvider({ children }: { children: ReactNode }) {
             const activeCount = activeJobsRef.current.size;
             const slotsAvailable = CONCURRENCY_LIMIT - activeCount;
 
-            console.log(`[Queue] Slots: ${slotsAvailable} (limit: ${CONCURRENCY_LIMIT}, active: ${activeCount}, pending: ${pendingJobCount})`);
+            if (IS_DEV) {
+                console.log(`[Queue] Slots: ${slotsAvailable} (limit: ${CONCURRENCY_LIMIT}, active: ${activeCount}, pending: ${pendingJobCount})`);
+            }
 
             if (slotsAvailable <= 0) return;
             if (pendingJobCount === 0) return;
@@ -155,8 +178,18 @@ export function QueueProvider({ children }: { children: ReactNode }) {
                 // Execute asynchronously
                 (async () => {
                     const localLogs: string[] = [...nextJob.logs];
+                    let slotReleased = false;
+                    const releaseSlot = () => {
+                        if (slotReleased) return;
+                        slotReleased = true;
+                        activeJobsRef.current.delete(nextJob.id);
+                        // Trigger immediate queue refill when a job leaves an active slot.
+                        setSchedulerTick((prev) => prev + 1);
+                    };
                     const log = (msg: string) => {
-                        console.log(`[Queue] ${msg}`);
+                        if (IS_DEV) {
+                            console.log(`[Queue] ${msg}`);
+                        }
                         localLogs.push(msg);
                         setJobs((prev) =>
                             prev.map((j) =>
@@ -168,6 +201,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
                     try {
                         log("Starting processing...");
                         const result = await processor(nextJob.payload, log);
+                        releaseSlot();
                         setJobs((prev) =>
                             prev.map((j) =>
                                 j.id === nextJob.id
@@ -183,13 +217,10 @@ export function QueueProvider({ children }: { children: ReactNode }) {
                         // Auto-fade after 10 seconds
                         setTimeout(() => {
                             setJobs((prev) => prev.filter((j) => j.id !== nextJob.id));
-                            setProcessors((prev) => {
-                                const next = { ...prev };
-                                delete next[nextJob.id];
-                                return next;
-                            });
+                            deleteProcessors([nextJob.id]);
                         }, 10000);
                     } catch (error) {
+                        releaseSlot();
                         const msg = error instanceof Error ? error.message : "Unknown error";
                         localLogs.push(`Failed: ${msg}`);
 
@@ -232,15 +263,14 @@ export function QueueProvider({ children }: { children: ReactNode }) {
                             console.error("Failed to log error to server", e);
                         }
                     } finally {
-                        // Remove from active set when done
-                        activeJobsRef.current.delete(nextJob.id);
+                        releaseSlot();
                     }
                 })();
             }
         };
 
         processQueue();
-    }, [pendingJobCount, processingCount, jobs, processors]);
+    }, [pendingJobCount, jobs, processors, schedulerTick, deleteProcessors]);
 
     const value = useMemo(
         () => ({

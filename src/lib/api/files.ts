@@ -18,7 +18,16 @@ export type WorkspaceConnection = {
   token?: string;
 };
 
-const defaultApiBase = import.meta.env.VITE_FILE_API_BASE?.replace(/\/$/, "");
+function resolveDefaultApiBase(): string | undefined {
+  const envBase = import.meta.env.VITE_FILE_API_BASE?.replace(/\/$/, "");
+  if (envBase) return envBase;
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return window.location.origin.replace(/\/$/, "");
+  }
+  return undefined;
+}
+
+const defaultApiBase = resolveDefaultApiBase();
 const defaultToken = import.meta.env.VITE_FILE_API_TOKEN;
 
 export function authHeaders(token?: string): Record<string, string> {

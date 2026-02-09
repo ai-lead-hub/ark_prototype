@@ -44,7 +44,9 @@ FILE_API_PORT=8787
 FILE_STORAGE_ROOT=./data
 FILE_API_TOKEN=devtoken
 FILE_API_CORS_ORIGIN=http://localhost:5173
-FILE_MAX_SIZE_MB=1024
+FILE_MAX_SIZE_MB=256
+FILE_API_REQUIRE_TOKEN=true
+FILE_TRASH_CLEAR_ON_START=false
 ```
 
 ### 3. Connect to a Workspace
@@ -153,9 +155,14 @@ src/
 
 ```bash
 npm run build
+npm start
 ```
 
-Deploy `dist/` alongside the file API server. Configure CORS and CSP to allow `https://fal.run` and `https://api.kie.ai`.
+Deploy `dist/` alongside the file API server. For cloud deploys:
+- Set `FILE_API_TOKEN` and keep `FILE_API_REQUIRE_TOKEN=true`
+- Set `FILE_API_CORS_ORIGIN` to your frontend origin (or comma-separated origins)
+- Set `FREEPIK_API_KEY` to keep Freepik calls server-side in production
+- Use `/health` for liveness and `/ready` for readiness probes
 
 ## 📚 Documentation
 

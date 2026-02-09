@@ -489,7 +489,7 @@ export default function PreviewPane({
             provider,
             endpoint,
             payload,
-            { ...callOptions, log }
+            { ...callOptions, log, preferUrlResult: true }
           );
 
           let downloadedBlob: Blob | undefined;
@@ -499,7 +499,7 @@ export default function PreviewPane({
             downloadedBlob = result.blob;
           } else if (result.url) {
             resultUrlStr = result.url;
-            log("Downloading result...");
+            log("Model finished. Downloading result...");
             try {
               downloadedBlob = await downloadBlob(result.url);
             } catch {

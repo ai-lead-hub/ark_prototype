@@ -59,4 +59,9 @@ export type TaskPollingConfig = {
 export type ProviderCallOptions = {
   taskConfig?: TaskPollingConfig;
   log?: (message: string) => void;
+  /**
+   * When true, provider clients should return the generated asset URL as soon as it's available
+   * instead of eagerly downloading the blob inside the provider call.
+   */
+  preferUrlResult?: boolean;
 };

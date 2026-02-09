@@ -69,15 +69,13 @@ export async function callKie(
 
   const target = buildProviderUrl(KIE_BASE_URL, endpoint);
   const logger = options?.log;
-  
-  // Log the request payload for debugging
+
+  // Log payload only when an explicit logger is provided.
   if (typeof logger === "function") {
     logger(`KIE Request: POST ${endpoint}`);
     logger(`Payload: ${JSON.stringify(payload, null, 2)}`);
-  } else {
-    console.log(`KIE Request: POST ${endpoint}`, payload);
   }
-  
+
   const response = await withRetry(() =>
     fetchWithTimeout(target, {
       method: "POST",
@@ -119,11 +117,9 @@ export async function callKie(
     throw new Error(`KIE returned invalid JSON: ${responseText.substring(0, 200)}`);
   }
 
-  // Log the response for debugging
+  // Log response only when an explicit logger is provided.
   if (typeof logger === "function") {
     logger(`KIE Response: ${JSON.stringify(data, null, 2)}`);
-  } else {
-    console.log(`KIE Response:`, data);
   }
 
   if (!data || typeof data !== "object") {
@@ -141,6 +137,9 @@ export async function callKie(
   const directUrl =
     extractUrl(data) ?? extractUrl((data.data as Record<string, unknown>) ?? {});
   if (directUrl) {
+    if (options?.preferUrlResult) {
+      return { url: directUrl };
+    }
     try {
       return {
         url: directUrl,
@@ -180,6 +179,9 @@ export async function callKie(
       );
 
     if (taskUrl) {
+      if (options?.preferUrlResult) {
+        return { url: taskUrl };
+      }
       try {
         return {
           url: taskUrl,
@@ -193,6 +195,9 @@ export async function callKie(
 
     const resultJsonUrl = extractUrlFromResultJson(finalData);
     if (resultJsonUrl) {
+      if (options?.preferUrlResult) {
+        return { url: resultJsonUrl };
+      }
       try {
         return {
           url: resultJsonUrl,
@@ -216,8 +221,6 @@ export async function callKie(
 
     if (typeof logger === "function") {
       logger(`KIE finalData: ${JSON.stringify(finalData, null, 2)}`);
-    } else {
-      console.log("KIE finalData:", JSON.stringify(finalData, null, 2));
     }
 
     throw new Error("KIE task completed without a downloadable asset.");

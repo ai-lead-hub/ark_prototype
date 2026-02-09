@@ -285,7 +285,10 @@ export function buildPromptText(data: PromptBuilderData): string {
     const camera = data.camera || {};
     if (Object.keys(camera).length) {
         const desc: string[] = [];
-        if (camera.angle) desc.push(`${camera.angle} angle`);
+        if (camera.angle) {
+            const formattedAngle = formatCameraAngle(camera.angle);
+            if (formattedAngle) desc.push(formattedAngle);
+        }
         if (camera.distance) desc.push(camera.distance);
         if (camera['lens-mm'] !== undefined) desc.push(`${camera['lens-mm']}mm lens`);
         if (camera.lens) desc.push(`${camera.lens} lens`);
@@ -301,6 +304,46 @@ export function buildPromptText(data: PromptBuilderData): string {
     if (data.composition) parts.push(`Composition: ${data.composition}`);
 
     return parts.join(". ");
+}
+
+function normalizeCameraAngleValue(value: string): string {
+    return value
+        .trim()
+        .replace(/\s+/g, " ")
+        .replace(/\b(angle)(\s+\1\b)+/gi, "$1");
+}
+
+function formatCameraAngle(value: string): string {
+    const normalized = normalizeCameraAngleValue(value);
+    if (!normalized) return "";
+    if (/\bangle\b/i.test(normalized)) {
+        return normalized;
+    }
+    return `${normalized} angle`;
+}
+
+const CAMERA_ANGLE_PATTERNS: Array<{ pattern: RegExp; value: string }> = [
+    { pattern: /\b(eye[- ]?level)\s*(?:angle|shot|view)?/i, value: "eye level" },
+    { pattern: /\b(low[- ]?angle)\b/i, value: "low angle" },
+    { pattern: /\b(high[- ]?angle)\b/i, value: "high angle" },
+    { pattern: /\b(bird'?s?[- ]?eye)\s*(?:view|angle)?/i, value: "bird's-eye" },
+    { pattern: /\b(worm'?s?[- ]?eye)\s*(?:view|angle)?/i, value: "worm's-eye" },
+    { pattern: /\b(dutch[- ]?angle)\b/i, value: "Dutch angle" },
+    { pattern: /\b(dynamic[- ]?angle)\b/i, value: "dynamic angle" },
+    { pattern: /\b(over[- ]?the[- ]?shoulder)\b/i, value: "over-the-shoulder" },
+    { pattern: /\b(overhead|flat[- ]?lay)\b/i, value: "overhead flat lay" },
+    { pattern: /\b(ground[- ]?level)\b/i, value: "ground level" },
+    { pattern: /\b(slightly\s+low)\b/i, value: "slightly low" },
+    { pattern: /\b(slightly\s+high)\b/i, value: "slightly high" },
+];
+
+function detectCameraAngle(text: string): string | undefined {
+    for (const { pattern, value } of CAMERA_ANGLE_PATTERNS) {
+        if (pattern.test(text)) {
+            return value;
+        }
+    }
+    return undefined;
 }
 
 // Import camera systems data for comprehensive parsing
@@ -619,9 +662,9 @@ export function parsePromptText(text: string): Partial<PromptBuilderState> {
         const cameraStr = cameraMatch[1];
 
         // Parse angle
-        const angleMatch = cameraStr.match(/(.+?) angle/);
-        if (angleMatch) {
-            result.cameraAngle = angleMatch[1];
+        const parsedAngle = detectCameraAngle(cameraStr);
+        if (parsedAngle) {
+            result.cameraAngle = parsedAngle;
         }
 
         // Parse shot/distance - order from most specific to least specific to avoid false matches
@@ -764,24 +807,9 @@ export function parsePromptText(text: string): Partial<PromptBuilderState> {
 
     // Try to extract camera angle from anywhere in the text if not found
     if (!result.cameraAngle) {
-        const anglePatterns = [
-            { pattern: /\b(eye[- ]?level)\s*(?:angle|shot|view)?/i, value: 'eye level' },
-            { pattern: /\b(low[- ]?angle)\b/i, value: 'low angle' },
-            { pattern: /\b(high[- ]?angle)\b/i, value: 'high angle' },
-            { pattern: /\b(bird'?s?[- ]?eye)\s*(?:view|angle)?/i, value: "bird's-eye" },
-            { pattern: /\b(worm'?s?[- ]?eye)\s*(?:view|angle)?/i, value: "worm's-eye" },
-            { pattern: /\b(Dutch[- ]?angle)\b/i, value: 'Dutch angle' },
-            { pattern: /\b(over[- ]?the[- ]?shoulder)\b/i, value: 'over-the-shoulder' },
-            { pattern: /\b(overhead|flat[- ]?lay)\b/i, value: 'overhead flat lay' },
-            { pattern: /\b(ground[- ]?level)\b/i, value: 'ground level' },
-            { pattern: /\b(slightly\s+low)\b/i, value: 'slightly low' },
-            { pattern: /\b(slightly\s+high)\b/i, value: 'slightly high' },
-        ];
-        for (const { pattern, value } of anglePatterns) {
-            if (pattern.test(text)) {
-                result.cameraAngle = value;
-                break;
-            }
+        const parsedAngle = detectCameraAngle(text);
+        if (parsedAngle) {
+            result.cameraAngle = parsedAngle;
         }
     }
 
@@ -997,4 +1025,3 @@ export function buildCinematicPromptText(state: PromptBuilderState): string {
 
     return lines.join("\n");
 }
-

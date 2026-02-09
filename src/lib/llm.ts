@@ -147,15 +147,15 @@ export async function expandPromptWithPresets(
     for (const imageUrl of referenceImages) {
         if (imageUrl.startsWith('blob:')) {
             try {
-                console.log('[PromptStudio] Uploading blob to FAL...');
                 const response = await fetch(imageUrl);
                 const blob = await response.blob();
                 const file = new File([blob], 'reference.jpg', { type: blob.type || 'image/jpeg' });
                 const falUrl = await uploadToFal(file);
-                console.log('[PromptStudio] Uploaded to FAL:', falUrl);
                 processedImages.push(falUrl);
             } catch (err) {
-                console.warn('[PromptStudio] Failed to upload blob to FAL:', err);
+                if (import.meta.env.DEV) {
+                    console.warn('[PromptStudio] Failed to upload blob to FAL:', err);
+                }
                 // Skip this image if upload fails
             }
         } else if (imageUrl.startsWith('data:') || imageUrl.startsWith('http')) {
@@ -163,8 +163,6 @@ export async function expandPromptWithPresets(
             processedImages.push(imageUrl);
         }
     }
-
-    console.log('[PromptStudio] Processed', processedImages.length, 'of', referenceImages.length, 'images');
 
     // Use the simplified STUDIO_PROMPT with the structured input
     try {
