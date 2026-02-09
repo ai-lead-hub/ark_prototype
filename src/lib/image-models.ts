@@ -118,7 +118,7 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
       pollIntervalMs: 4000,
     },
     mode: "edit",
-    maxRefs: 8,
+    maxRefs: 5,
     ui: {
       aspectRatios: [
         { value: "1:1", label: "1:1" },
@@ -157,7 +157,7 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
         input: {
           prompt,
           ...(imageUrls.length
-            ? { image_input: imageUrls.slice(0, 8) }
+            ? { image_input: imageUrls.slice(0, 5) }
             : {}),
           ...(resolvedAspect ? { aspect_ratio: resolvedAspect } : {}),
           ...(imageResolution ? { resolution: imageResolution } : {}),
@@ -174,7 +174,7 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
     provider: "kie",
     pricing: "$0.02/image",
     mode: "edit",
-    maxRefs: 10,
+    maxRefs: 5,
     ui: {
       aspectRatios: [
         { value: "1:1", label: "Square (1:1)" },
@@ -196,7 +196,7 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
         input: {
           prompt,
           ...(hasRefs
-            ? { image_urls: imageUrls.slice(0, 10) }
+            ? { image_urls: imageUrls.slice(0, 5) }
             : resolvedAspect
               ? { image_size: resolvedAspect }
               : {}),
@@ -229,7 +229,7 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
       pollIntervalMs: 4000,
     },
     mode: "edit",
-    maxRefs: 8,
+    maxRefs: 5,
     ui: {
       aspectRatios: [
         { value: "auto", label: "Auto (Match Input)" },
@@ -256,7 +256,7 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
         model: hasRefs ? "flux-2/pro-image-to-image" : "flux-2/pro-text-to-image",
         input: {
           prompt,
-          ...(hasRefs ? { input_urls: imageUrls.slice(0, 8) } : {}),
+          ...(hasRefs ? { input_urls: imageUrls.slice(0, 5) } : {}),
           aspect_ratio: effectiveAspectRatio,
           resolution: imageResolution ?? "2K",
         },
@@ -279,7 +279,7 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
       pollIntervalMs: 4000,
     },
     mode: "edit",
-    maxRefs: 1,
+    maxRefs: 5,
     ui: {
       aspectRatios: [
         { value: "1:1", label: "Square (1:1)" },
@@ -308,7 +308,7 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
         model: hasRefs ? "gpt-image/1.5-image-to-image" : "gpt-image/1.5-text-to-image",
         input: {
           prompt,
-          ...(hasRefs ? { input_urls: imageUrls.slice(0, 1) } : {}),
+          ...(hasRefs ? { input_urls: imageUrls.slice(0, 5) } : {}),
           aspect_ratio: effectiveAspectRatio,
           quality: imageResolution ?? "medium",
         },
