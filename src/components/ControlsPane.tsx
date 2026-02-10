@@ -78,6 +78,8 @@ type ReferenceUpload = {
   file?: File;
   /** True if restored from saved generation payload (may be expired) */
   restoredFromUrl?: boolean;
+  /** Local workspace path - used for redo to fetch from workspace */
+  sourceRelPath?: string;
 };
 
 const UPLOAD_URL_TTL_MS = 30 * 60 * 1000;
@@ -156,6 +158,8 @@ type UploadSlotState = UploadSlot & {
   createdAt?: number;
   /** File object for deferred upload - uploaded at generation time */
   file?: File;
+  /** Local workspace path - used for redo to fetch from workspace */
+  sourceRelPath?: string;
 };
 
 
@@ -323,6 +327,7 @@ export default function ControlsPane() {
     () => loadPersistedImageReferenceUploads()
   );
   const [videoReferenceUploads, setVideoReferenceUploads] = useState<ReferenceUpload[]>([]);
+  const [specialReferenceUploads, setSpecialReferenceUploads] = useState<ReferenceUpload[]>([]);
   // Video input uploads for Special tab (V2V models)
   const [videoInputUploads, setVideoInputUploads] = useState<ReferenceUpload[]>([]);
 
@@ -406,8 +411,8 @@ export default function ControlsPane() {
   }, [connection]);
 
   const modelKind = activeTab;
-  const referenceUploads = modelKind === "image" ? imageReferenceUploads : videoReferenceUploads;
-  const setReferenceUploads = modelKind === "image" ? setImageReferenceUploads : setVideoReferenceUploads;
+  const referenceUploads = modelKind === "image" ? imageReferenceUploads : modelKind === "special" ? specialReferenceUploads : videoReferenceUploads;
+  const setReferenceUploads = modelKind === "image" ? setImageReferenceUploads : modelKind === "special" ? setSpecialReferenceUploads : setVideoReferenceUploads;
 
   const activeTabRef = useRef(activeTab);
   const modelKeyRef = useRef(modelKey);
@@ -479,6 +484,18 @@ export default function ControlsPane() {
         return next.length === prev.length ? prev : next;
       });
       setVideoReferenceUploads((prev) => {
+        const now = Date.now();
+        const next = prev.filter(
+          (entry) =>
+            !(
+              entry.url &&
+              typeof entry.createdAt === "number" &&
+              now - entry.createdAt > UPLOAD_URL_TTL_MS
+            )
+        );
+        return next.length === prev.length ? prev : next;
+      });
+      setSpecialReferenceUploads((prev) => {
         const now = Date.now();
         const next = prev.filter(
           (entry) =>
@@ -959,7 +976,16 @@ export default function ControlsPane() {
           );
           setActiveTab("video");
           const file = await fetchWorkspaceFile(action.file);
-          await handleStartFrameSelectRef.current(file);
+          // Compress and set start frame with sourceRelPath for redo functionality
+          const compressed = await compressImage(file);
+          const preview = URL.createObjectURL(compressed);
+          setStartFrame({
+            uploading: false,
+            preview,
+            name: file.name,
+            file: compressed,
+            sourceRelPath: action.file.relPath, // Capture workspace path for redo
+          });
           // Record as recent reference for quick access
           const conn = connectionRef.current;
           if (conn) {
@@ -985,7 +1011,16 @@ export default function ControlsPane() {
           );
           setActiveTab("video");
           const file = await fetchWorkspaceFile(action.file);
-          await handleEndFrameSelectRef.current(file);
+          // Compress and set end frame with sourceRelPath for redo functionality
+          const compressed = await compressImage(file);
+          const preview = URL.createObjectURL(compressed);
+          setEndFrame({
+            uploading: false,
+            preview,
+            name: file.name,
+            file: compressed,
+            sourceRelPath: action.file.relPath, // Capture workspace path for redo
+          });
           // Record as recent reference for quick access
           const conn = connectionRef.current;
           if (conn) {
@@ -1020,9 +1055,26 @@ export default function ControlsPane() {
           );
 
           const file = await fetchWorkspaceFile(action.file);
-          const dt = new DataTransfer();
-          dt.items.add(file);
-          await handleReferenceFilesRef.current(dt.files);
+          // Compress and add reference with sourceRelPath for redo functionality
+          const compressed = await compressImage(file);
+          const preview = URL.createObjectURL(compressed);
+          const newRef: ReferenceUpload = {
+            id: Math.random().toString(36).slice(2),
+            preview,
+            name: file.name,
+            uploading: false,
+            file: compressed,
+            sourceRelPath: action.file.relPath, // Capture workspace path for redo
+          };
+          setImageReferenceUploads((prev) => {
+            const maxRefs = 5;
+            if (prev.length >= maxRefs) {
+              setStatus(`Maximum ${maxRefs} reference images allowed.`);
+              setTimeout(() => setStatus(null), 3000);
+              return prev;
+            }
+            return [...prev, newRef];
+          });
           // Record as recent reference for quick access
           const conn = connectionRef.current;
           if (conn) {
@@ -1096,82 +1148,183 @@ export default function ControlsPane() {
             setPrompt(promptValue);
           }
 
-          // === RESTORE REFERENCES FROM SAVED PAYLOAD (graceful fallback) ===
+          // === RESTORE REFERENCES FROM SAVED PAYLOAD ===
           try {
             const payload = (meta.payload ?? {}) as Record<string, unknown>;
-            // Extract the nested input object - this is where the actual reference URLs are stored
             const input = (payload.input ?? payload) as Record<string, unknown>;
 
-            // Try to restore start frame - check both nested input and top-level payload
-            // API keys vary: image_url (FAL Kling), start_image_url, first_frame_image, image (generic)
-            const savedStartFrame =
-              input.image_url ||
-              input.start_image_url ||
-              input.first_frame_image ||
-              input.image ||
-              payload.start_frame_url ||
-              payload.image_url;
-            if (savedStartFrame && typeof savedStartFrame === "string") {
-              setStartFrame({
-                url: savedStartFrame,
-                preview: savedStartFrame,
-                uploading: false,
-                createdAt: Date.now(),
-              });
+            // Check for local workspace paths first (never expire)
+            const sourceRefs = payload._source_refs as {
+              start_frame?: string;
+              end_frame?: string;
+              references?: string[];
+            } | undefined;
+
+            let restoredFromLocal = false;
+
+            // Try to restore start frame from local path
+            if (sourceRefs?.start_frame && conn) {
+              try {
+                const file = await fetchWorkspaceFile({
+                  workspaceId: conn.workspaceId,
+                  relPath: sourceRefs.start_frame,
+                  name: sourceRefs.start_frame.split("/").pop() ?? "frame",
+                  mime: "image/png",
+                });
+                const compressed = await compressImage(file);
+                const preview = URL.createObjectURL(compressed);
+                setStartFrame({
+                  uploading: false,
+                  preview,
+                  name: file.name,
+                  file: compressed,
+                  sourceRelPath: sourceRefs.start_frame,
+                });
+                restoredFromLocal = true;
+              } catch (e) {
+                console.warn("Failed to restore start frame from workspace:", e);
+              }
             }
 
-            // Try to restore end frame
-            // API keys vary: tail_image_url (FAL Kling), end_image_url, last_frame_image
-            const savedEndFrame =
-              input.tail_image_url ||
-              input.end_image_url ||
-              input.last_frame_image ||
-              payload.end_frame_url;
-            if (savedEndFrame && typeof savedEndFrame === "string") {
-              setEndFrame({
-                url: savedEndFrame,
-                preview: savedEndFrame,
-                uploading: false,
-                createdAt: Date.now(),
-              });
-            }
-
-            // Try to restore reference images - use correct setter based on category
-            // API keys vary: image_urls/input_urls/reference_image_urls/control_images/image_url
-            const savedRefsRaw =
-              input.image_urls ||
-              input.input_urls ||
-              input.reference_image_urls ||
-              input.image_url ||
-              input.control_images ||
-              payload.reference_image_urls ||
-              payload.image_urls ||
-              payload.image_url ||
-              [];
-            const savedRefs = Array.isArray(savedRefsRaw)
-              ? savedRefsRaw
-              : typeof savedRefsRaw === "string" && savedRefsRaw.length > 0
-                ? [savedRefsRaw]
-                : [];
-            if (savedRefs.length > 0) {
-              const restoredRefs: ReferenceUpload[] = savedRefs
-                .filter((url: unknown): url is string => typeof url === "string" && url.length > 0)
-                .slice(0, 5)
-                .map((url: string) => ({
-                  id: Math.random().toString(36).slice(2),
-                  url,
-                  preview: url,
-                  name: "restored",
+            // Fallback to URL for start frame if local restore failed
+            if (!restoredFromLocal) {
+              const savedStartFrame =
+                input.image_url ||
+                input.start_image_url ||
+                input.first_frame_image ||
+                input.image ||
+                payload.start_frame_url ||
+                payload.image_url;
+              if (savedStartFrame && typeof savedStartFrame === "string") {
+                setStartFrame({
+                  url: savedStartFrame,
+                  preview: savedStartFrame,
                   uploading: false,
                   createdAt: Date.now(),
-                  restoredFromUrl: true,
-                }));
-              if (restoredRefs.length > 0) {
-                // Use correct setter based on category, not modelKind (which hasn't updated yet)
-                if (category === "image") {
-                  setImageReferenceUploads(restoredRefs);
-                } else {
-                  setVideoReferenceUploads(restoredRefs);
+                });
+              }
+            }
+
+            // Try to restore end frame from local path
+            restoredFromLocal = false;
+            if (sourceRefs?.end_frame && conn) {
+              try {
+                const file = await fetchWorkspaceFile({
+                  workspaceId: conn.workspaceId,
+                  relPath: sourceRefs.end_frame,
+                  name: sourceRefs.end_frame.split("/").pop() ?? "frame",
+                  mime: "image/png",
+                });
+                const compressed = await compressImage(file);
+                const preview = URL.createObjectURL(compressed);
+                setEndFrame({
+                  uploading: false,
+                  preview,
+                  name: file.name,
+                  file: compressed,
+                  sourceRelPath: sourceRefs.end_frame,
+                });
+                restoredFromLocal = true;
+              } catch (e) {
+                console.warn("Failed to restore end frame from workspace:", e);
+              }
+            }
+
+            // Fallback to URL for end frame if local restore failed
+            if (!restoredFromLocal) {
+              const savedEndFrame =
+                input.tail_image_url ||
+                input.end_image_url ||
+                input.last_frame_image ||
+                payload.end_frame_url;
+              if (savedEndFrame && typeof savedEndFrame === "string") {
+                setEndFrame({
+                  url: savedEndFrame,
+                  preview: savedEndFrame,
+                  uploading: false,
+                  createdAt: Date.now(),
+                });
+              }
+            }
+
+            // Try to restore reference images from local paths
+            restoredFromLocal = false;
+            if (sourceRefs?.references?.length && conn) {
+              try {
+                const restoredRefs: ReferenceUpload[] = [];
+                for (const refPath of sourceRefs.references.slice(0, 5)) {
+                  try {
+                    const file = await fetchWorkspaceFile({
+                      workspaceId: conn.workspaceId,
+                      relPath: refPath,
+                      name: refPath.split("/").pop() ?? "ref",
+                      mime: "image/png",
+                    });
+                    const compressed = await compressImage(file);
+                    const preview = URL.createObjectURL(compressed);
+                    restoredRefs.push({
+                      id: Math.random().toString(36).slice(2),
+                      preview,
+                      name: file.name,
+                      uploading: false,
+                      file: compressed,
+                      sourceRelPath: refPath,
+                    });
+                  } catch (e) {
+                    console.warn(`Failed to restore reference ${refPath}:`, e);
+                  }
+                }
+                if (restoredRefs.length > 0) {
+                  if (category === "image") {
+                    setImageReferenceUploads(restoredRefs);
+                  } else {
+                    setVideoReferenceUploads(restoredRefs);
+                  }
+                  restoredFromLocal = true;
+                }
+              } catch (e) {
+                console.warn("Failed to restore references from workspace:", e);
+              }
+            }
+
+            // Fallback to URLs for references if local restore failed
+            if (!restoredFromLocal) {
+              // API keys vary by model - check all possible keys including image_input for Nano Banana Pro
+              const savedRefsRaw =
+                input.image_input ||
+                input.image_urls ||
+                input.input_urls ||
+                input.reference_image_urls ||
+                input.image_url ||
+                input.control_images ||
+                payload.reference_image_urls ||
+                payload.image_urls ||
+                payload.image_url ||
+                [];
+              const savedRefs = Array.isArray(savedRefsRaw)
+                ? savedRefsRaw
+                : typeof savedRefsRaw === "string" && savedRefsRaw.length > 0
+                  ? [savedRefsRaw]
+                  : [];
+              if (savedRefs.length > 0) {
+                const restoredRefs: ReferenceUpload[] = savedRefs
+                  .filter((url: unknown): url is string => typeof url === "string" && url.length > 0)
+                  .slice(0, 5)
+                  .map((url: string) => ({
+                    id: Math.random().toString(36).slice(2),
+                    url,
+                    preview: url,
+                    name: "restored",
+                    uploading: false,
+                    createdAt: Date.now(),
+                    restoredFromUrl: true,
+                  }));
+                if (restoredRefs.length > 0) {
+                  if (category === "image") {
+                    setImageReferenceUploads(restoredRefs);
+                  } else {
+                    setVideoReferenceUploads(restoredRefs);
+                  }
                 }
               }
             }
@@ -1810,82 +1963,78 @@ export default function ControlsPane() {
 
     setIsSubmitting(true);
 
-    // Artificial delay for UX
-    await new Promise((resolve) => setTimeout(resolve, 600));
-
     if (!isMounted.current) return;
 
     try {
       // === DEFERRED UPLOADS: Upload files that haven't been uploaded yet ===
       setStatus("Preparing files...");
 
-      // Upload start frame if it has a file but no URL
+      // Upload start frame and end frame in parallel
       let uploadedStartFrameUrl = startFrame.url;
-      if (startFrame.file && !startFrame.url) {
-        try {
-          uploadedStartFrameUrl = await uploadToFal(startFrame.file);
-          setStartFrame((prev) => ({
-            ...prev,
-            url: uploadedStartFrameUrl,
-            createdAt: Date.now(),
-          }));
-        } catch (error) {
-          console.error("Failed to upload start frame:", error);
-          setStatus("Failed to upload start frame. Please try again.");
-          setIsSubmitting(false);
-          setTimeout(() => setStatus(null), 3000);
-          return;
-        }
-      }
-
-      // Upload end frame if it has a file but no URL
       let uploadedEndFrameUrl = endFrame.url;
+      const frameUploadPromises: Promise<void>[] = [];
+
+      if (startFrame.file && !startFrame.url) {
+        frameUploadPromises.push(
+          uploadToFal(startFrame.file).then((url) => {
+            uploadedStartFrameUrl = url;
+            setStartFrame((prev) => ({ ...prev, url, createdAt: Date.now() }));
+          })
+        );
+      }
       if (endFrame.file && !endFrame.url) {
+        frameUploadPromises.push(
+          uploadToFal(endFrame.file).then((url) => {
+            uploadedEndFrameUrl = url;
+            setEndFrame((prev) => ({ ...prev, url, createdAt: Date.now() }));
+          })
+        );
+      }
+
+      if (frameUploadPromises.length > 0) {
         try {
-          uploadedEndFrameUrl = await uploadToFal(endFrame.file);
-          setEndFrame((prev) => ({
-            ...prev,
-            url: uploadedEndFrameUrl,
-            createdAt: Date.now(),
-          }));
+          await Promise.all(frameUploadPromises);
         } catch (error) {
-          console.error("Failed to upload end frame:", error);
-          setStatus("Failed to upload end frame. Please try again.");
+          console.error("Failed to upload frame(s):", error);
+          setStatus("Failed to upload frame(s). Please try again.");
           setIsSubmitting(false);
           setTimeout(() => setStatus(null), 3000);
           return;
         }
       }
 
-      // Upload reference images that have files but no URLs
+      // Upload reference images in parallel
       // Use standardized filenames (image_1.jpg, image_2.jpg, etc.) so models can understand reference order
-      const uploadedReferenceUrls: string[] = [];
-      let refIndex = 1;
-      for (const ref of referenceUploads) {
+      const uploadedReferenceUrls: string[] = new Array(referenceUploads.length);
+      const refUploadPromises: Promise<void>[] = [];
+
+      referenceUploads.forEach((ref, idx) => {
         if (ref.file && !ref.url) {
-          try {
-            // Get file extension from original file or default to jpg
-            const ext = ref.file.name.split('.').pop()?.toLowerCase() || 'jpg';
-            const standardizedName = `image_${refIndex}.${ext}`;
-            const uploadedUrl = await uploadToFal(ref.file, standardizedName);
-            uploadedReferenceUrls.push(uploadedUrl);
-            setReferenceUploads((prev) =>
-              prev.map((item) =>
-                item.id === ref.id
-                  ? { ...item, url: uploadedUrl, createdAt: Date.now() }
-                  : item
-              )
-            );
-            refIndex++;
-          } catch (error) {
-            console.error(`Failed to upload reference ${ref.name}:`, error);
-            // Continue with other references, skip failed ones
-          }
+          const ext = ref.file.name.split('.').pop()?.toLowerCase() || 'jpg';
+          const standardizedName = `image_${idx + 1}.${ext}`;
+          refUploadPromises.push(
+            uploadToFal(ref.file, standardizedName).then((uploadedUrl) => {
+              uploadedReferenceUrls[idx] = uploadedUrl;
+              setReferenceUploads((prev) =>
+                prev.map((item) =>
+                  item.id === ref.id
+                    ? { ...item, url: uploadedUrl, createdAt: Date.now() }
+                    : item
+                )
+              );
+            }).catch((error) => {
+              console.error(`Failed to upload reference ${ref.name}:`, error);
+              // Leave slot empty — will be filtered out below
+            })
+          );
         } else if (ref.url) {
-          uploadedReferenceUrls.push(ref.url);
-          refIndex++;
+          uploadedReferenceUrls[idx] = ref.url;
         }
-      }
+      });
+
+      await Promise.all(refUploadPromises);
+      // Filter out empty slots from failed uploads
+      const filteredReferenceUrls = uploadedReferenceUrls.filter(Boolean);
 
       setStatus(null);
       const modelId = modelKey.replace(/^(image:|video:|special:|upscale:)/, "");
@@ -1913,7 +2062,7 @@ export default function ControlsPane() {
 
         // For video models, use uploaded video reference URLs
         const videoRefUrls = modelKind === "video" && referenceLimit > 0
-          ? uploadedReferenceUrls.slice(0, referenceLimit)
+          ? filteredReferenceUrls.slice(0, referenceLimit)
           : [];
 
         const unifiedPayload: UnifiedPayload = {
@@ -1949,7 +2098,7 @@ export default function ControlsPane() {
 
         // Use freshly uploaded reference URLs for image models
         const imageRefUrls = modelKind === "image" && (selectedImage?.maxRefs ?? 0) > 0
-          ? uploadedReferenceUrls.slice(
+          ? filteredReferenceUrls.slice(
             0,
             Math.min(selectedImage?.maxRefs ?? imageModelSpec.maxRefs, 5)
           )
@@ -2153,65 +2302,69 @@ export default function ControlsPane() {
           setStatus("Uploading reference images...");
 
           // Upload reference style images that have files but no URLs
-          const uploadedImageUrls: string[] = [];
-          for (const img of referenceStyleImages) {
+          const uploadedImageUrls: string[] = new Array(referenceStyleImages.length);
+          const styleUploadPromises: Promise<void>[] = [];
+          referenceStyleImages.forEach((img, idx) => {
             if (img.file && !img.url) {
-              try {
-                const uploadedUrl = await uploadToFal(img.file);
-                uploadedImageUrls.push(uploadedUrl);
-                setReferenceStyleImages((prev) => prev.map((i) => i.id === img.id ? { ...i, url: uploadedUrl, uploading: false } : i));
-              } catch (error) {
-                console.error(`Failed to upload reference image:`, error);
-                // Skip failed uploads
-              }
+              styleUploadPromises.push(
+                uploadToFal(img.file).then((uploadedUrl) => {
+                  uploadedImageUrls[idx] = uploadedUrl;
+                  setReferenceStyleImages((prev) => prev.map((i) => i.id === img.id ? { ...i, url: uploadedUrl, uploading: false } : i));
+                }).catch((error) => {
+                  console.error(`Failed to upload reference image:`, error);
+                })
+              );
             } else if (img.url) {
-              uploadedImageUrls.push(img.url);
+              uploadedImageUrls[idx] = img.url;
             }
-          }
+          });
+          await Promise.all(styleUploadPromises);
+          const filteredImageUrls = uploadedImageUrls.filter(Boolean);
 
           setStatus("Uploading elements...");
 
           // Upload element images that have files but no URLs
           const uploadedElements: Array<{ frontal_image_url: string; reference_image_urls: string[] }> = [];
-          for (const el of elements) {
-            // Upload frontal image
-            let frontalUrl = el.frontalUrl;
-            if (el.frontalFile && !el.frontalUrl) {
-              try {
+          const elementUploadResults = await Promise.allSettled(
+            elements.map(async (el) => {
+              // Upload frontal image
+              let frontalUrl = el.frontalUrl;
+              if (el.frontalFile && !el.frontalUrl) {
                 frontalUrl = await uploadToFal(el.frontalFile);
                 setElements((prev) => prev.map((e) => e.id === el.id ? { ...e, frontalUrl, frontalUploading: false } : e));
-              } catch (error) {
-                console.error(`Failed to upload element frontal:`, error);
-                continue; // Skip this element entirely
               }
+              if (!frontalUrl) return null;
+
+              // Upload element reference images in parallel
+              const refResults = await Promise.all(
+                el.referenceImages.map(async (ref) => {
+                  if (ref.file && !ref.url) {
+                    const uploadedUrl = await uploadToFal(ref.file);
+                    setElements((prev) => prev.map((e) => e.id === el.id ? {
+                      ...e,
+                      referenceImages: e.referenceImages.map((r) => r.id === ref.id ? { ...r, url: uploadedUrl, uploading: false } : r)
+                    } : e));
+                    return uploadedUrl;
+                  } else if (ref.url) {
+                    return ref.url;
+                  }
+                  return null;
+                })
+              );
+
+              return {
+                frontal_image_url: frontalUrl,
+                reference_image_urls: refResults.filter((u): u is string => u !== null),
+              };
+            })
+          );
+
+          for (const result of elementUploadResults) {
+            if (result.status === "fulfilled" && result.value) {
+              uploadedElements.push(result.value);
+            } else if (result.status === "rejected") {
+              console.error(`Failed to upload element:`, result.reason);
             }
-
-            if (!frontalUrl) continue;
-
-            // Upload element reference images
-            const refUrls: string[] = [];
-            for (const ref of el.referenceImages) {
-              if (ref.file && !ref.url) {
-                try {
-                  const uploadedUrl = await uploadToFal(ref.file);
-                  refUrls.push(uploadedUrl);
-                  setElements((prev) => prev.map((e) => e.id === el.id ? {
-                    ...e,
-                    referenceImages: e.referenceImages.map((r) => r.id === ref.id ? { ...r, url: uploadedUrl, uploading: false } : r)
-                  } : e));
-                } catch (error) {
-                  console.error(`Failed to upload element reference:`, error);
-                  // Skip failed reference
-                }
-              } else if (ref.url) {
-                refUrls.push(ref.url);
-              }
-            }
-
-            uploadedElements.push({
-              frontal_image_url: frontalUrl,
-              reference_image_urls: refUrls,
-            });
           }
 
           setStatus(null);
@@ -2219,7 +2372,7 @@ export default function ControlsPane() {
           const specialPayload = buildSpecialModelInput(selectedSpecial, {
             modelId: selectedSpecial.id,
             prompt: prompt.trim(),
-            image_urls: uploadedImageUrls,
+            image_urls: filteredImageUrls,
             elements: uploadedElements,
             duration: paramValues.duration as string | undefined,
             aspect_ratio: paramValues.aspect_ratio as string | undefined,
@@ -2232,29 +2385,34 @@ export default function ControlsPane() {
           // Kling V3 Pro - Start/End frames + Elements + Multishot
           setStatus("Uploading frames...");
 
-          // Upload start frame if needed
+          // Upload start + end frame in parallel
           let uploadedStartFrameUrl = startFrame.url;
+          let uploadedEndFrameUrl = endFrame.url;
+          const klingFramePromises: Promise<void>[] = [];
+
           if (startFrame.file && !startFrame.url) {
-            try {
-              uploadedStartFrameUrl = await uploadToFal(startFrame.file);
-              setStartFrame((prev) => ({ ...prev, url: uploadedStartFrameUrl, createdAt: Date.now() }));
-            } catch (error) {
-              console.error("Failed to upload start frame:", error);
-              setStatus("Failed to upload start frame");
-              setIsSubmitting(false);
-              return;
-            }
+            klingFramePromises.push(
+              uploadToFal(startFrame.file).then((url) => {
+                uploadedStartFrameUrl = url;
+                setStartFrame((prev) => ({ ...prev, url, createdAt: Date.now() }));
+              })
+            );
+          }
+          if (endFrame.file && !endFrame.url) {
+            klingFramePromises.push(
+              uploadToFal(endFrame.file).then((url) => {
+                uploadedEndFrameUrl = url;
+                setEndFrame((prev) => ({ ...prev, url, createdAt: Date.now() }));
+              })
+            );
           }
 
-          // Upload end frame if needed
-          let uploadedEndFrameUrl = endFrame.url;
-          if (endFrame.file && !endFrame.url) {
+          if (klingFramePromises.length > 0) {
             try {
-              uploadedEndFrameUrl = await uploadToFal(endFrame.file);
-              setEndFrame((prev) => ({ ...prev, url: uploadedEndFrameUrl, createdAt: Date.now() }));
+              await Promise.all(klingFramePromises);
             } catch (error) {
-              console.error("Failed to upload end frame:", error);
-              setStatus("Failed to upload end frame");
+              console.error("Failed to upload frame(s):", error);
+              setStatus("Failed to upload frame(s). Please try again.");
               setIsSubmitting(false);
               return;
             }
@@ -2268,44 +2426,48 @@ export default function ControlsPane() {
             reference_image_urls?: string[];
           }> = [];
 
-          // Process selected elements from Elements Manager - UPLOAD TO FAL
-          for (const selectedEl of elementsState.selectedElements) {
-            const el = selectedEl.element;
+          // Process selected elements from Elements Manager - UPLOAD TO FAL (in parallel)
+          setStatus(`Uploading element images...`);
+          try {
+            const elementResults = await Promise.all(
+              elementsState.selectedElements.map(async (selectedEl) => {
+                const el = selectedEl.element;
 
-            // Upload frontal + reference images to FAL
-            setStatus(`Uploading images for element: ${el.name}...`);
-            try {
-              // Upload frontal image
-              const frontalUrl = buildElementAssetUrl(el.frontalImageUrl);
-              const frontalResponse = await fetch(frontalUrl);
-              const frontalBlob = await frontalResponse.blob();
-              const frontalFile = new File([frontalBlob], `${el.name}_frontal.png`, { type: frontalBlob.type });
-              const uploadedFrontalUrl = await uploadToFal(frontalFile);
+                // Upload frontal image
+                const frontalUrl = buildElementAssetUrl(el.frontalImageUrl);
+                const frontalResponse = await fetch(frontalUrl);
+                const frontalBlob = await frontalResponse.blob();
+                const frontalFile = new File([frontalBlob], `${el.name}_frontal.png`, { type: frontalBlob.type });
+                const uploadedFrontalUrl = await uploadToFal(frontalFile);
 
-              // Upload reference images
-              const uploadedRefUrls: string[] = [];
-              if (el.referenceImageUrls?.length > 0) {
-                for (const refUrl of el.referenceImageUrls) {
-                  const refFullUrl = buildElementAssetUrl(refUrl);
-                  const refResponse = await fetch(refFullUrl);
-                  const refBlob = await refResponse.blob();
-                  const refFile = new File([refBlob], `${el.name}_ref.png`, { type: refBlob.type });
-                  const uploadedRefUrl = await uploadToFal(refFile);
-                  uploadedRefUrls.push(uploadedRefUrl);
+                // Upload reference images in parallel
+                const uploadedRefUrls: string[] = [];
+                if (el.referenceImageUrls?.length > 0) {
+                  const refResults = await Promise.all(
+                    el.referenceImageUrls.map(async (refUrl: string) => {
+                      const refFullUrl = buildElementAssetUrl(refUrl);
+                      const refResponse = await fetch(refFullUrl);
+                      const refBlob = await refResponse.blob();
+                      const refFile = new File([refBlob], `${el.name}_ref.png`, { type: refBlob.type });
+                      return uploadToFal(refFile);
+                    })
+                  );
+                  uploadedRefUrls.push(...refResults);
                 }
-              }
 
-              uploadedElements.push({
-                frontal_image_url: uploadedFrontalUrl,
-                reference_image_urls: uploadedRefUrls,
-              });
-            } catch (error) {
-              console.error(`Failed to upload element images ${el.name}:`, error);
-              setStatus(`Failed to upload images for ${el.name}`);
-              setIsSubmitting(false);
-              setTimeout(() => setStatus(null), 3000);
-              return;
-            }
+                return {
+                  frontal_image_url: uploadedFrontalUrl,
+                  reference_image_urls: uploadedRefUrls,
+                };
+              })
+            );
+            uploadedElements.push(...elementResults);
+          } catch (error) {
+            console.error(`Failed to upload element images:`, error);
+            setStatus(`Failed to upload element images`);
+            setIsSubmitting(false);
+            setTimeout(() => setStatus(null), 3000);
+            return;
           }
 
           setStatus(null);
@@ -2342,6 +2504,19 @@ export default function ControlsPane() {
         throw new Error(
           `Missing ${getProviderEnvVar(provider)}. Add it to .env.local and restart the app.`
         );
+      }
+
+      // Add source refs for redo functionality - allows restoring from workspace instead of expired URLs
+      const sourceRefs = {
+        start_frame: startFrame?.sourceRelPath,
+        end_frame: endFrame?.sourceRelPath,
+        references: referenceUploads
+          .filter((r) => r.sourceRelPath)
+          .map((r) => r.sourceRelPath),
+      };
+      // Only add if we have any source paths
+      if (sourceRefs.start_frame || sourceRefs.end_frame || sourceRefs.references.length > 0) {
+        payload = { ...payload, _source_refs: sourceRefs };
       }
 
       addToHistory(prompt);
@@ -2609,49 +2784,60 @@ export default function ControlsPane() {
                 />
 
                 {/* Previews */}
-                {referenceUploads.map((entry) => (
-                  <div
-                    key={entry.id}
-                    className="group relative h-10 w-10 shrink-0 overflow-hidden rounded-md border border-white/10 bg-black/20"
-                    title={entry.name}
-                  >
-                    <img
-                      src={entry.preview}
-                      alt={entry.name}
-                      className="h-full w-full object-cover"
-                    />
-                    {entry.uploading && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-                        <Spinner size="sm" />
-                      </div>
-                    )}
-                    <button
-                      type="button"
-                      className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 transition-opacity group-hover:opacity-100"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        removeReference(entry.id);
-                      }}
-                      disabled={isSubmitting || isExpanding}
+                {referenceUploads.map((entry) => {
+                  const entryAgeMs = entry.createdAt ? Date.now() - entry.createdAt : 0;
+                  const entryRemainingMs = entry.url && entry.createdAt ? UPLOAD_URL_TTL_MS - entryAgeMs : Infinity;
+                  const entryRemainingMins = Math.floor(entryRemainingMs / 60000);
+                  const isExpiring = entry.url && entryRemainingMs < Infinity && entryRemainingMins <= 10 && entryRemainingMins > 0;
+                  return (
+                    <div
+                      key={entry.id}
+                      className={`group relative h-10 w-10 shrink-0 overflow-hidden rounded-md border bg-black/20 ${isExpiring ? "border-amber-500/60" : "border-white/10"}`}
+                      title={isExpiring ? `${entry.name} — expires in ~${entryRemainingMins} min` : entry.name}
                     >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="3"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className="text-white hover:text-rose-400"
+                      <img
+                        src={entry.preview}
+                        alt={entry.name}
+                        className="h-full w-full object-cover"
+                      />
+                      {isExpiring && (
+                        <div className="absolute bottom-0 left-0 right-0 bg-amber-600/80 text-[8px] text-center text-white leading-tight py-px pointer-events-none">
+                          {entryRemainingMins}m
+                        </div>
+                      )}
+                      {entry.uploading && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                          <Spinner size="sm" />
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 transition-opacity group-hover:opacity-100"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeReference(entry.id);
+                        }}
+                        disabled={isSubmitting || isExpanding}
                       >
-                        <path d="M18 6 6 18" />
-                        <path d="m6 6 12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                ))}
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="3"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="text-white hover:text-rose-400"
+                        >
+                          <path d="M18 6 6 18" />
+                          <path d="m6 6 12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  );
+                })}
 
                 {/* Add Button */}
                 {referenceUploads.length < imageReferenceLimit && (
@@ -2688,6 +2874,26 @@ export default function ControlsPane() {
                   </span>
                 )}
               </div>
+              {/* Reference Upload Expiration Warning */}
+              {(() => {
+                const expiringRefs = referenceUploads.filter((e) => {
+                  if (!e.url || typeof e.createdAt !== "number") return false;
+                  const rem = UPLOAD_URL_TTL_MS - (Date.now() - e.createdAt);
+                  return rem > 0 && rem <= 10 * 60 * 1000;
+                });
+                if (expiringRefs.length > 0) {
+                  const minRemaining = Math.min(
+                    ...expiringRefs.map((e) => Math.floor((UPLOAD_URL_TTL_MS - (Date.now() - e.createdAt!)) / 60000))
+                  );
+                  return (
+                    <div className="text-xs text-amber-400 flex items-center gap-1 mt-1">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
+                      {expiringRefs.length === 1 ? "1 reference expires" : `${expiringRefs.length} references expire`} in ~{minRemaining} min. Re-upload if needed.
+                    </div>
+                  );
+                }
+                return null;
+              })()}
             </div>
 
             {imageModelSupportsElements && (
@@ -2826,6 +3032,11 @@ export default function ControlsPane() {
                           return;
                         }
                       }
+                    }
+                    // ⌘+Enter (Mac) / Ctrl+Enter to generate
+                    if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && !isSubmitting) {
+                      event.preventDefault();
+                      formRef.current?.requestSubmit();
                     }
                   }}
                   placeholder="Type @ to reference uploaded images (e.g., @img1)..."
@@ -3128,6 +3339,13 @@ export default function ControlsPane() {
                   value={prompt}
                   onChange={(event) => setPrompt(event.target.value)}
                   onBlur={() => addToHistory(prompt)}
+                  onKeyDown={(event) => {
+                    // ⌘+Enter (Mac) / Ctrl+Enter to generate
+                    if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && !isSubmitting) {
+                      event.preventDefault();
+                      formRef.current?.requestSubmit();
+                    }
+                  }}
                   rows={4}
                   disabled={isSubmitting || isExpanding}
                   className={`w-full rounded-2xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 pb-10 ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
@@ -3444,34 +3662,45 @@ export default function ControlsPane() {
                     </div>
                   ) : (
                     <div className="flex flex-wrap items-center gap-2">
-                      {referenceUploads.map((entry) => (
-                        <div
-                          key={entry.id}
-                          className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md border border-white/10 bg-black/20 group"
-                          title={entry.name}
-                        >
-                          <img
-                            src={entry.preview}
-                            alt={entry.name}
-                            className="h-full w-full object-cover"
-                          />
-                          {entry.uploading && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-                              <Spinner size="sm" />
-                            </div>
-                          )}
-                          <button
-                            type="button"
-                            className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity hover:bg-rose-500 group-hover:opacity-100"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              removeReference(entry.id);
-                            }}
+                      {referenceUploads.map((entry) => {
+                        const entryAgeMs = entry.createdAt ? Date.now() - entry.createdAt : 0;
+                        const entryRemainingMs = entry.url && entry.createdAt ? UPLOAD_URL_TTL_MS - entryAgeMs : Infinity;
+                        const entryRemainingMins = Math.floor(entryRemainingMs / 60000);
+                        const isExpiring = entry.url && entryRemainingMs < Infinity && entryRemainingMins <= 10 && entryRemainingMins > 0;
+                        return (
+                          <div
+                            key={entry.id}
+                            className={`relative h-12 w-12 shrink-0 overflow-hidden rounded-md border bg-black/20 group ${isExpiring ? "border-amber-500/60" : "border-white/10"}`}
+                            title={isExpiring ? `${entry.name} — expires in ~${entryRemainingMins} min` : entry.name}
                           >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
-                          </button>
-                        </div>
-                      ))}
+                            <img
+                              src={entry.preview}
+                              alt={entry.name}
+                              className="h-full w-full object-cover"
+                            />
+                            {isExpiring && (
+                              <div className="absolute bottom-0 left-0 right-0 bg-amber-600/80 text-[8px] text-center text-white leading-tight py-px pointer-events-none">
+                                {entryRemainingMins}m
+                              </div>
+                            )}
+                            {entry.uploading && (
+                              <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                                <Spinner size="sm" />
+                              </div>
+                            )}
+                            <button
+                              type="button"
+                              className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity hover:bg-rose-500 group-hover:opacity-100"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeReference(entry.id);
+                              }}
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+                            </button>
+                          </div>
+                        );
+                      })}
 
                       {/* Add more button (small square) */}
                       {referenceUploads.length < 5 && (
@@ -3487,6 +3716,26 @@ export default function ControlsPane() {
                     </div>
                   )}
                 </div>
+                {/* Video Reference Upload Expiration Warning */}
+                {(() => {
+                  const expiringRefs = referenceUploads.filter((e) => {
+                    if (!e.url || typeof e.createdAt !== "number") return false;
+                    const rem = UPLOAD_URL_TTL_MS - (Date.now() - e.createdAt);
+                    return rem > 0 && rem <= 10 * 60 * 1000;
+                  });
+                  if (expiringRefs.length > 0) {
+                    const minRemaining = Math.min(
+                      ...expiringRefs.map((e) => Math.floor((UPLOAD_URL_TTL_MS - (Date.now() - e.createdAt!)) / 60000))
+                    );
+                    return (
+                      <div className="text-xs text-amber-400 flex items-center gap-1 mt-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
+                        {expiringRefs.length === 1 ? "1 reference expires" : `${expiringRefs.length} references expire`} in ~{minRemaining} min. Re-upload if needed.
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
             ) : null}
           </div>
@@ -4300,6 +4549,11 @@ export default function ControlsPane() {
                             return;
                           }
                         }
+                      }
+                      // ⌘+Enter (Mac) / Ctrl+Enter to generate
+                      if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && !isSubmitting) {
+                        event.preventDefault();
+                        formRef.current?.requestSubmit();
                       }
                     }}
                     placeholder="Type @ to insert references (e.g., @Image1, @Element1)..."
