@@ -200,7 +200,7 @@ export function resolveTaskConfig(
       config?.taskIdLocation ??
       (config?.method && config.method === "POST" ? "body" : "query"),
     pollIntervalMs: config?.pollIntervalMs ?? 5000,
-    maxAttempts: config?.maxAttempts ?? 120,
+    maxAttempts: config?.maxAttempts ?? 300,
     successStates: config?.successStates ?? ["success"],
     failureStates: config?.failureStates ?? ["fail"],
     statePath: config?.statePath ?? "data.state",

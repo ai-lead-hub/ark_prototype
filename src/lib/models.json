@@ -266,7 +266,7 @@
         },
         "fixed_lens": {
           "type": "boolean",
-          "default": false,
+          "default": true,
           "uiKey": "camera_fixed"
         },
         "generate_audio": {

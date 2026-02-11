@@ -1963,6 +1963,9 @@ export default function ControlsPane() {
 
     setIsSubmitting(true);
 
+    // Brief delay so the user sees the submitting state before uploads begin
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
     if (!isMounted.current) return;
 
     try {
@@ -2119,9 +2122,9 @@ export default function ControlsPane() {
         if (imageModelSpec.supportsElements && elementsState.selectedElements.length > 0) {
           setStatus("Uploading elements...");
 
-          for (const selectedEl of elementsState.selectedElements) {
-            const el = selectedEl.element;
-            try {
+          const elementResults = await Promise.all(
+            elementsState.selectedElements.map(async (selectedEl) => {
+              const el = selectedEl.element;
               const frontalResponse = await fetch(buildElementAssetUrl(el.frontalImageUrl));
               if (!frontalResponse.ok) {
                 throw new Error(`Failed to fetch frontal image (${frontalResponse.status})`);
@@ -2137,32 +2140,32 @@ export default function ControlsPane() {
 
               const uploadedRefUrls: string[] = [];
               if (el.referenceImageUrls?.length) {
-                for (const refUrl of el.referenceImageUrls) {
-                  const refResponse = await fetch(buildElementAssetUrl(refUrl));
-                  if (!refResponse.ok) {
-                    throw new Error(`Failed to fetch element reference image (${refResponse.status})`);
-                  }
-                  const refBlob = await refResponse.blob();
-                  const refExt = extensionFromMime(refBlob.type || "image/png");
-                  const refFile = new File(
-                    [refBlob],
-                    `${el.name}_ref.${refExt === "bin" ? "png" : refExt}`,
-                    { type: refBlob.type || "image/png" }
-                  );
-                  const uploadedRefUrl = await uploadToFal(refFile);
-                  uploadedRefUrls.push(uploadedRefUrl);
-                }
+                const refResults = await Promise.all(
+                  el.referenceImageUrls.map(async (refUrl: string) => {
+                    const refResponse = await fetch(buildElementAssetUrl(refUrl));
+                    if (!refResponse.ok) {
+                      throw new Error(`Failed to fetch element reference image (${refResponse.status})`);
+                    }
+                    const refBlob = await refResponse.blob();
+                    const refExt = extensionFromMime(refBlob.type || "image/png");
+                    const refFile = new File(
+                      [refBlob],
+                      `${el.name}_ref.${refExt === "bin" ? "png" : refExt}`,
+                      { type: refBlob.type || "image/png" }
+                    );
+                    return uploadToFal(refFile);
+                  })
+                );
+                uploadedRefUrls.push(...refResults);
               }
 
-              imageElements.push({
+              return {
                 frontal_image_url: uploadedFrontalUrl,
                 reference_image_urls: uploadedRefUrls,
-              });
-            } catch (error) {
-              console.error(`Failed to upload image model element ${el.name}:`, error);
-              throw new Error(`Failed to upload element "${el.name}" for this model.`);
-            }
-          }
+              };
+            })
+          );
+          imageElements.push(...elementResults);
 
           setStatus(null);
         }

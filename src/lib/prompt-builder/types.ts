@@ -239,7 +239,9 @@ export function buildPromptData(state: PromptBuilderState): PromptBuilderData {
 
     if (state.cameraAngle) camera.angle = state.cameraAngle;
     if (state.cameraShot) camera.distance = state.cameraShot;
-    if (state.focalLength) {
+    // Only include focal length in Camera section if no Camera System lens type is set,
+    // because the lens type prompt already fully describes the lens (avoids duplication).
+    if (state.focalLength && !state.lensType) {
         const digits = `${state.focalLength}`.replace(/[^0-9]/g, "");
         if (digits) camera['lens-mm'] = parseInt(digits, 10);
         else camera.lens = state.focalLength;
@@ -374,7 +376,7 @@ function buildCameraBodyPatterns(): { pattern: RegExp; value: string; system: st
         for (const body of system.bodies) {
             // Extract key identifiers from the prompt to build a flexible regex
             const prompt = body.prompt;
-            
+
             // Create patterns from the prompt text - extract the camera name portion
             // e.g., "shot on ARRI ALEXA 35 — organic color..." -> match "ARRI ALEXA 35"
             const shotOnMatch = prompt.match(/shot on (.+?)(?:\s*[—\-–,]|$)/i);
@@ -390,7 +392,7 @@ function buildCameraBodyPatterns(): { pattern: RegExp; value: string; system: st
                     length: cameraName.length
                 });
             }
-            
+
             // Also add patterns for common variations
             // Handle specific camera names that might appear differently
             if (prompt.includes('ALEXA Mini LF')) {
@@ -419,7 +421,7 @@ function buildCameraBodyPatterns(): { pattern: RegExp; value: string; system: st
 
     // Sort by length descending to match more specific patterns first
     patterns.sort((a, b) => b.length - a.length);
-    
+
     // Remove duplicates (keep first occurrence which is the longest/most specific)
     const seen = new Set<string>();
     return patterns.filter(p => {
@@ -441,20 +443,20 @@ function buildLensPatterns(): { pattern: RegExp; value: string; systems: string[
     for (const [systemKey, system] of Object.entries(systems)) {
         for (const lens of system.lenses) {
             const prompt = lens.prompt;
-            
+
             // Extract lens name from prompt
             // e.g., "with Cooke S4/i — warm organic..." -> "Cooke S4/i"
             const withMatch = prompt.match(/with (.+?)(?:\s*[—\-–,]|$)/i);
             if (withMatch) {
                 const lensName = withMatch[1].trim();
                 const key = lensName.toLowerCase();
-                
+
                 if (lensMap.has(key)) {
                     lensMap.get(key)!.systems.push(systemKey);
                 } else {
                     lensMap.set(key, { value: prompt, systems: [systemKey] });
                 }
-                
+
                 // Create flexible pattern
                 const escapedName = lensName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 patterns.push({
@@ -469,7 +471,7 @@ function buildLensPatterns(): { pattern: RegExp; value: string; systems: string[
 
     // Sort by length descending
     patterns.sort((a, b) => b.length - a.length);
-    
+
     // Remove duplicates
     const seen = new Set<string>();
     return patterns.filter(p => {
@@ -490,7 +492,7 @@ function buildFilmStockPatterns(): { pattern: RegExp; value: string }[] {
     for (const [, stock] of Object.entries(filmStocks)) {
         const prompt = stock.prompt;
         const name = stock.name;
-        
+
         // Create pattern from name - handle variations
         // e.g., "Kodak Portra 400" should match "Kodak Portra 400", "Portra 400", etc.
         const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -499,7 +501,7 @@ function buildFilmStockPatterns(): { pattern: RegExp; value: string }[] {
             value: prompt,
             length: name.length
         });
-        
+
         // Add variations without brand prefix
         if (name.includes('Kodak ')) {
             const withoutBrand = name.replace('Kodak ', '');
@@ -552,7 +554,7 @@ function buildFilmStockPatterns(): { pattern: RegExp; value: string }[] {
 
     // Sort by length descending
     patterns.sort((a, b) => b.length - a.length);
-    
+
     return patterns;
 }
 
@@ -702,17 +704,18 @@ export function parsePromptText(text: string): Partial<PromptBuilderState> {
         remaining = remaining.replace(/\. Camera: .+?(?=\. |$)/, '');
     }
 
-    // Also try to extract focal length from anywhere in the text if not found in Camera section
+    // Also try to extract focal length from remaining text (not original text,
+    // because original may contain mm values in camera body prompts like "65mm large format").
     if (!result.focalLength) {
-        const focalMatch = text.match(/\b(\d{2,3})mm\b/);
+        const focalMatch = remaining.match(/\b(\d{2,3})mm\b/);
         if (focalMatch) {
             result.focalLength = `${focalMatch[1]}mm`;
         }
     }
 
-    // Also try to extract aperture from anywhere in the text if not found in Camera section
+    // Also try to extract aperture from remaining text
     if (!result.cameraAperture) {
-        const apertureMatch = text.match(/\b(f\/[\d.]+)\b/);
+        const apertureMatch = remaining.match(/\b(f\/[\d.]+)\b/);
         if (apertureMatch) {
             result.cameraAperture = apertureMatch[1];
         }
