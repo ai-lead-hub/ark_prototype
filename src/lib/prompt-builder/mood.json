@@ -153,6 +153,18 @@
     {
       "name": "Parasite",
       "prompt": "inspired by the class-contrast architectural green-tinted look of Parasite"
+    },
+    {
+      "name": "Jojo Rabbit",
+      "prompt": "inspired by the whimsical pastel wartime satire storybook look of Jojo Rabbit"
+    },
+    {
+      "name": "Midsommar",
+      "prompt": "inspired by the sun-drenched oversaturated folk-horror pastoral look of Midsommar"
+    },
+    {
+      "name": "Knives Out",
+      "prompt": "inspired by the warm amber autumnal cozy mystery mansion look of Knives Out"
     }
   ],
   "Contemporary (2020s)": [
@@ -183,6 +195,18 @@
     {
       "name": "Past Lives",
       "prompt": "inspired by the soft naturalistic intimate Korean-American look of Past Lives"
+    },
+    {
+      "name": "The French Dispatch",
+      "prompt": "inspired by the obsessively composed pastel magazine-illustration look of The French Dispatch"
+    },
+    {
+      "name": "Nope",
+      "prompt": "inspired by the wide-open sky ominous Western vast spectacle look of Nope"
+    },
+    {
+      "name": "Aftersun",
+      "prompt": "inspired by the hazy sun-bleached nostalgic home-video intimate look of Aftersun"
     }
   ],
   "Genre-Specific Looks": [

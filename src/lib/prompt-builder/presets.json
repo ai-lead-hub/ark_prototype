@@ -457,5 +457,213 @@
       "mood": "sensual mood, intimate atmosphere, passionate feeling, artistic expression"
     },
     "composition": "artistic nude composition, curves and shadows, tasteful framing, fine art aesthetic"
+  },
+  "jojo_rabbit": {
+    "name": "Jojo Rabbit",
+    "prompt": "A child in a crisp Hitler Youth uniform stands in a whimsical pastel-colored German village square, butterflies and propaganda posters coexisting in absurd harmony, saturated candy-colored buildings with hand-painted signs, the entire scene radiating Taika Waititi's signature blend of dark humor and childlike innocence with meticulous Wes Anderson-inspired symmetry.",
+    "style": "Cinematic photography, whimsical satire, storybook quality, bold saturated colors, pastel tones mixed with wartime aesthetics, playful framing with serious undertones, theatrical staging",
+    "camera": {
+      "angle": "eye level",
+      "shot": "medium shot",
+      "lens": "35mm",
+      "aperture": "f/4",
+      "iso": "200",
+      "focus": "Sharp throughout with storybook clarity",
+      "model": "shot on ARRI Alexa Mini with Zeiss Master Prime 35mm"
+    },
+    "lighting": "soft diffused daylight, warm pastel tones, theatrical stage lighting quality, painterly illumination",
+    "colors": {
+      "palette": [
+        "#E8B5CE",
+        "#7BC8E0",
+        "#F5D76E",
+        "#C0392B",
+        "#F5F5DC"
+      ],
+      "mood": "whimsical wartime nostalgia, childlike wonder mixed with dark satire, storybook innocence"
+    },
+    "composition": "centered symmetrical composition, Wes Anderson style framing, precise geometric staging"
+  },
+  "blade_runner_2049": {
+    "name": "Blade Runner 2049",
+    "prompt": "A lone figure in a long coat walks through a vast irradiated orange wasteland, colossal fallen statues half-buried in dust, thick atmospheric haze diffusing all light into a monochromatic amber glow, the scale dwarfing the human form, desolate post-apocalyptic grandeur with Roger Deakins' masterful use of negative space and environmental storytelling.",
+    "style": "Cinematic photography, neo-noir science fiction, vast desolate landscapes, monochromatic color washes, atmospheric depth, environmental storytelling, contemplative mood, epic scale",
+    "camera": {
+      "angle": "low angle",
+      "shot": "wide shot",
+      "lens": "24mm",
+      "aperture": "f/5.6",
+      "iso": "400",
+      "focus": "Deep focus, sharp foreground and background with atmospheric haze",
+      "model": "shot on ARRI Alexa 65 with Panavision Primo 70 24mm anamorphic"
+    },
+    "lighting": "diffused monochromatic ambient light, thick atmospheric haze, no visible light source, environmental glow",
+    "colors": {
+      "palette": [
+        "#D4760A",
+        "#1A1A2E",
+        "#E8A317",
+        "#0D3B66",
+        "#4A4A4A"
+      ],
+      "mood": "vast desolation, existential loneliness, post-apocalyptic melancholy, contemplative silence"
+    },
+    "composition": "extreme negative space composition, lone figure against vast landscape, scale contrast"
+  },
+  "wes_anderson": {
+    "name": "Wes Anderson",
+    "prompt": "A meticulously designed hotel lobby in perfect bilateral symmetry, pastel pink walls with ornate gold trim, a concierge in a perfectly pressed purple uniform standing at exact center behind a marble counter, vintage luggage stacked with geometric precision, every element placed with obsessive intentionality and dollhouse-like framing.",
+    "style": "Cinematic photography, obsessive symmetry, dollhouse framing, pastel color palette, retro-kitsch aesthetic, deadpan staging, meticulous production design, storybook quality",
+    "camera": {
+      "angle": "straight on",
+      "shot": "medium shot",
+      "lens": "40mm",
+      "aperture": "f/5.6",
+      "iso": "200",
+      "focus": "Sharp throughout, graphic flatness",
+      "model": "shot on ARRI Alexa Mini with Zeiss Super Speed 40mm, centered and locked off"
+    },
+    "lighting": "flat even studio lighting, soft fill, no harsh shadows, theatrical illumination",
+    "colors": {
+      "palette": [
+        "#FFB6C1",
+        "#DDA0DD",
+        "#F0E68C",
+        "#87CEEB",
+        "#F5F5DC"
+      ],
+      "mood": "whimsical nostalgia, melancholic beauty, dry humor, obsessive order"
+    },
+    "composition": "perfect bilateral symmetry, centered framing, geometric precision, planimetric composition"
+  },
+  "dune_epic": {
+    "name": "Dune",
+    "prompt": "A vast desert landscape stretching to infinity under a hazy amber sky, towering sand dunes casting long geometric shadows, a procession of tiny robed figures crossing the ridge in a ceremonial line, the sheer scale of the environment overwhelming human presence, ancient and alien yet grounded in naturalistic cinematography.",
+    "style": "Epic cinematic photography, ancient-future aesthetic, overwhelming scale, naturalistic lighting, muted earth tones, grand environmental storytelling, mythic quality",
+    "camera": {
+      "angle": "low angle",
+      "shot": "extreme wide shot",
+      "lens": "18mm",
+      "aperture": "f/8",
+      "iso": "100",
+      "focus": "Deep focus, everything sharp with atmospheric perspective",
+      "model": "shot on ARRI Alexa LF with Panavision Ultra Vista anamorphic"
+    },
+    "lighting": "harsh directional sunlight, long dramatic shadows, hazy atmospheric diffusion, brutal overhead light",
+    "colors": {
+      "palette": [
+        "#C4A565",
+        "#8B7355",
+        "#2C2C2C",
+        "#D4C5A0",
+        "#1A1A1A"
+      ],
+      "mood": "ancient mysticism, overwhelming scale, harsh beauty, ceremonial gravity"
+    },
+    "composition": "extreme wide composition, overwhelming negative space, human figures dwarfed by environment"
+  },
+  "drive_neon": {
+    "name": "Drive",
+    "prompt": "A lone driver in a satin scorpion jacket sits behind the wheel of a vintage muscle car on an empty Los Angeles boulevard at night, the dashboard lit by pink and cyan neon reflections from roadside motels, a toothpick in his mouth, the city's nocturnal glow painting everything in synthwave colors with cool detachment and simmering violence.",
+    "style": "Neo-noir cinematic photography, synthwave aesthetic, 1980s retro-futurism, neon color grading, cool detachment, stylized violence, contemplative stillness, Michael Mann meets Nicolas Winding Refn",
+    "camera": {
+      "angle": "eye level",
+      "shot": "medium close-up",
+      "lens": "50mm",
+      "aperture": "f/2",
+      "iso": "800",
+      "focus": "Sharp on driver's face, soft neon bokeh in background",
+      "model": "shot on ARRI Alexa with Cooke S4 50mm"
+    },
+    "lighting": "neon ambient lighting, pink and cyan color wash, practical car interior lighting, urban night glow",
+    "colors": {
+      "palette": [
+        "#FF69B4",
+        "#00CED1",
+        "#1C1C1C",
+        "#FFD700",
+        "#2F0047"
+      ],
+      "mood": "cool detachment, simmering tension, nocturnal romance, synthwave melancholy"
+    },
+    "composition": "intimate car interior composition, neon reflections on glass, noir framing"
+  },
+  "amelie_paris": {
+    "name": "Amélie",
+    "prompt": "A young woman with a pixie haircut and mischievous smile skips down a narrow Montmartre cobblestone street, warm golden-green sunlight filtering through cafe awnings, vintage Parisian storefronts with hand-painted signs, the entire scene bathed in Jean-Pierre Jeunet's signature warm green-gold color grading that makes Paris feel like a living painting.",
+    "style": "Whimsical cinematic photography, warm saturated color grading, green-gold tones, Parisian romance, storybook realism, playful camera angles, magical realism aesthetic",
+    "camera": {
+      "angle": "slightly low",
+      "shot": "medium shot",
+      "lens": "25mm",
+      "aperture": "f/4",
+      "iso": "200",
+      "focus": "Sharp on subject, stylized soft background",
+      "model": "shot on ARRI Alexa with Angenieux Optimo 25mm"
+    },
+    "lighting": "warm diffused daylight, green-gold color temperature, soft window light, ambient Parisian glow",
+    "colors": {
+      "palette": [
+        "#8DB600",
+        "#DAA520",
+        "#DC143C",
+        "#8B4513",
+        "#FFFDD0"
+      ],
+      "mood": "whimsical Parisian magic, warm nostalgia, playful mischief, romantic optimism"
+    },
+    "composition": "dynamic slightly tilted composition, playful framing, environmental Parisian storytelling"
+  },
+  "matrix_digital": {
+    "name": "The Matrix",
+    "prompt": "A figure in a long black leather coat and mirrored sunglasses stands in a vast white void that stretches infinitely, green digital rain code cascading in the background, the stark contrast between the figure's black silhouette and the sterile white environment, reality bending at the edges with subtle digital distortion artifacts.",
+    "style": "Sci-fi cinematic photography, digital reality aesthetic, green-tinted color grading, bullet-time frozen action, stark contrast, philosophical noir, cyberpunk minimalism",
+    "camera": {
+      "angle": "slightly low",
+      "shot": "full body",
+      "lens": "21mm",
+      "aperture": "f/4",
+      "iso": "200",
+      "focus": "Tack sharp throughout, hyper-reality clarity",
+      "model": "shot on Panavision Millennium with Primo 21mm"
+    },
+    "lighting": "flat sterile overhead lighting, green-tinted ambient, stark clinical illumination, digital glow",
+    "colors": {
+      "palette": [
+        "#003B00",
+        "#00FF41",
+        "#1C1C1C",
+        "#FFFFFF",
+        "#0D0D0D"
+      ],
+      "mood": "digital unease, philosophical questioning, sterile control, simulated reality"
+    },
+    "composition": "stark symmetrical composition, figure against infinite void, minimalist cyberpunk staging"
+  },
+  "moonlight_intimate": {
+    "name": "Moonlight",
+    "prompt": "A young man sits alone on a moonlit Miami beach at the water's edge, blue-teal light washing over his skin from the ocean reflection, the warm magenta glow of distant city lights behind him, an expression of quiet vulnerability and self-discovery, the intimate close framing making the vast beach feel like a private confession.",
+    "style": "Intimate cinematic photography, poetic realism, teal-magenta color contrast, extreme close-up portraiture, emotional vulnerability, lyrical visual storytelling, painterly skin tones",
+    "camera": {
+      "angle": "eye level",
+      "shot": "close-up",
+      "lens": "65mm",
+      "aperture": "f/1.4",
+      "iso": "800",
+      "focus": "Razor sharp on eyes, dreamy shallow depth of field",
+      "model": "shot on ARRI Alexa Mini with a 65mm Master Prime"
+    },
+    "lighting": "cool teal moonlight from ocean, warm magenta backlight from city, mixed color temperature, intimate skin illumination",
+    "colors": {
+      "palette": [
+        "#008B8B",
+        "#FF1493",
+        "#1C1C1C",
+        "#4169E1",
+        "#D4A574"
+      ],
+      "mood": "intimate vulnerability, quiet self-discovery, poetic melancholy, tender revelation"
+    },
+    "composition": "extreme close-up portrait composition, intimate framing, face filling frame, emotional proximity"
   }
 }

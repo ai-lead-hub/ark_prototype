@@ -349,6 +349,8 @@ export function PromptBuilderV2({
         }));
     }, []);
 
+
+
     // Handle apply
     const handleApply = useCallback(() => {
         let text: string;
@@ -553,6 +555,7 @@ export function PromptBuilderV2({
                         ) : (
                             /* DEFAULT MODE UI */
                             <>
+
                                 {/* Main Prompt */}
                                 <div>
                                     <label className="block text-[10px] uppercase tracking-wider text-slate-500 mb-1.5">Main Prompt</label>

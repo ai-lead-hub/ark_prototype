@@ -239,9 +239,7 @@ export function buildPromptData(state: PromptBuilderState): PromptBuilderData {
 
     if (state.cameraAngle) camera.angle = state.cameraAngle;
     if (state.cameraShot) camera.distance = state.cameraShot;
-    // Only include focal length in Camera section if no Camera System lens type is set,
-    // because the lens type prompt already fully describes the lens (avoids duplication).
-    if (state.focalLength && !state.lensType) {
+    if (state.focalLength) {
         const digits = `${state.focalLength}`.replace(/[^0-9]/g, "");
         if (digits) camera['lens-mm'] = parseInt(digits, 10);
         else camera.lens = state.focalLength;
