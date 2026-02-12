@@ -27,7 +27,6 @@ import { getModelPricingLabel } from "../lib/pricing";
 import { uploadToFal } from "../lib/fal";
 import { extensionFromMime } from "../lib/mime";
 import { buildFilename } from "../lib/filename";
-import { compressImage } from "../lib/image-utils";
 import { useCatalog } from "../state/useCatalog";
 import { Spinner } from "./ui/Spinner";
 import {
@@ -107,6 +106,19 @@ function buildElementAssetUrl(assetPath: string): string {
 function getFileNameFromPath(filePath: string, fallback: string): string {
   const fileName = filePath.split("/").filter(Boolean).pop();
   return fileName && fileName.length > 0 ? fileName : fallback;
+}
+
+function isUploadUrlExpired(createdAt?: number): boolean {
+  return typeof createdAt === "number" && Date.now() - createdAt > UPLOAD_URL_TTL_MS;
+}
+
+function payloadContainsAllUrls(
+  payload: Record<string, unknown>,
+  urls: string[]
+): boolean {
+  if (urls.length === 0) return true;
+  const serialized = JSON.stringify(payload);
+  return urls.every((url) => serialized.includes(url));
 }
 
 type PersistedHistory = {
@@ -797,18 +809,14 @@ export default function ControlsPane() {
       });
       if (!file) return;
 
-      // Compress the image for later upload
-      const compressed = await compressImage(file);
+      // Keep original file for full-quality upload and create a local preview.
+      const preview = registerPreview(URL.createObjectURL(file));
 
-      // Register preview immediately for responsiveness - keep blob URL for display
-      const preview = registerPreview(URL.createObjectURL(compressed));
-
-      // Store compressed file for deferred upload at generation time
       setStartFrame({
         uploading: false,
         preview,
         name: file.name,
-        file: compressed,
+        file,
         // No url yet - will be uploaded when Generate is pressed
       });
     },
@@ -825,18 +833,14 @@ export default function ControlsPane() {
       });
       if (!file) return;
 
-      // Compress the image for later upload
-      const compressed = await compressImage(file);
+      // Keep original file for full-quality upload and create a local preview.
+      const preview = registerPreview(URL.createObjectURL(file));
 
-      // Register preview immediately for responsiveness
-      const preview = registerPreview(URL.createObjectURL(compressed));
-
-      // Store compressed file for deferred upload at generation time
       setEndFrame({
         uploading: false,
         preview,
         name: file.name,
-        file: compressed,
+        file,
         // No url yet - will be uploaded when Generate is pressed
       });
     },
@@ -869,17 +873,16 @@ export default function ControlsPane() {
         setTimeout(() => setStatus(null), 3000);
       }
 
-      // Compress and store files for deferred upload
+      // Keep original files for full-quality upload.
       const entries: ReferenceUpload[] = [];
       for (const file of filesToAdd) {
-        const compressed = await compressImage(file);
-        const preview = registerPreview(URL.createObjectURL(compressed));
+        const preview = registerPreview(URL.createObjectURL(file));
         entries.push({
           id: Math.random().toString(36).slice(2),
           preview,
           name: file.name,
           uploading: false,
-          file: compressed,
+          file,
           // No url yet - will be uploaded when Generate is pressed
         });
       }
@@ -976,14 +979,12 @@ export default function ControlsPane() {
           );
           setActiveTab("video");
           const file = await fetchWorkspaceFile(action.file);
-          // Compress and set start frame with sourceRelPath for redo functionality
-          const compressed = await compressImage(file);
-          const preview = URL.createObjectURL(compressed);
+          const preview = URL.createObjectURL(file);
           setStartFrame({
             uploading: false,
             preview,
             name: file.name,
-            file: compressed,
+            file,
             sourceRelPath: action.file.relPath, // Capture workspace path for redo
           });
           // Record as recent reference for quick access
@@ -1011,14 +1012,12 @@ export default function ControlsPane() {
           );
           setActiveTab("video");
           const file = await fetchWorkspaceFile(action.file);
-          // Compress and set end frame with sourceRelPath for redo functionality
-          const compressed = await compressImage(file);
-          const preview = URL.createObjectURL(compressed);
+          const preview = URL.createObjectURL(file);
           setEndFrame({
             uploading: false,
             preview,
             name: file.name,
-            file: compressed,
+            file,
             sourceRelPath: action.file.relPath, // Capture workspace path for redo
           });
           // Record as recent reference for quick access
@@ -1055,15 +1054,13 @@ export default function ControlsPane() {
           );
 
           const file = await fetchWorkspaceFile(action.file);
-          // Compress and add reference with sourceRelPath for redo functionality
-          const compressed = await compressImage(file);
-          const preview = URL.createObjectURL(compressed);
+          const preview = URL.createObjectURL(file);
           const newRef: ReferenceUpload = {
             id: Math.random().toString(36).slice(2),
             preview,
             name: file.name,
             uploading: false,
-            file: compressed,
+            file,
             sourceRelPath: action.file.relPath, // Capture workspace path for redo
           };
           setImageReferenceUploads((prev) => {
@@ -1171,13 +1168,12 @@ export default function ControlsPane() {
                   name: sourceRefs.start_frame.split("/").pop() ?? "frame",
                   mime: "image/png",
                 });
-                const compressed = await compressImage(file);
-                const preview = URL.createObjectURL(compressed);
+                const preview = URL.createObjectURL(file);
                 setStartFrame({
                   uploading: false,
                   preview,
                   name: file.name,
-                  file: compressed,
+                  file,
                   sourceRelPath: sourceRefs.start_frame,
                 });
                 restoredFromLocal = true;
@@ -1215,13 +1211,12 @@ export default function ControlsPane() {
                   name: sourceRefs.end_frame.split("/").pop() ?? "frame",
                   mime: "image/png",
                 });
-                const compressed = await compressImage(file);
-                const preview = URL.createObjectURL(compressed);
+                const preview = URL.createObjectURL(file);
                 setEndFrame({
                   uploading: false,
                   preview,
                   name: file.name,
-                  file: compressed,
+                  file,
                   sourceRelPath: sourceRefs.end_frame,
                 });
                 restoredFromLocal = true;
@@ -1260,14 +1255,13 @@ export default function ControlsPane() {
                       name: refPath.split("/").pop() ?? "ref",
                       mime: "image/png",
                     });
-                    const compressed = await compressImage(file);
-                    const preview = URL.createObjectURL(compressed);
+                    const preview = URL.createObjectURL(file);
                     restoredRefs.push({
                       id: Math.random().toString(36).slice(2),
                       preview,
                       name: file.name,
                       uploading: false,
-                      file: compressed,
+                      file,
                       sourceRelPath: refPath,
                     });
                   } catch (e) {
@@ -1976,8 +1970,18 @@ export default function ControlsPane() {
       let uploadedStartFrameUrl = startFrame.url;
       let uploadedEndFrameUrl = endFrame.url;
       const frameUploadPromises: Promise<void>[] = [];
+      const startFrameUrlExpired =
+        Boolean(startFrame.url) && isUploadUrlExpired(startFrame.createdAt);
+      const endFrameUrlExpired = Boolean(endFrame.url) && isUploadUrlExpired(endFrame.createdAt);
 
-      if (startFrame.file && !startFrame.url) {
+      if (startFrameUrlExpired && !startFrame.file) {
+        throw new Error("Start frame upload expired. Re-upload the image and try again.");
+      }
+      if (endFrameUrlExpired && !endFrame.file) {
+        throw new Error("End frame upload expired. Re-upload the image and try again.");
+      }
+
+      if (startFrame.file && (!startFrame.url || startFrameUrlExpired)) {
         frameUploadPromises.push(
           uploadToFal(startFrame.file).then((url) => {
             uploadedStartFrameUrl = url;
@@ -1985,7 +1989,7 @@ export default function ControlsPane() {
           })
         );
       }
-      if (endFrame.file && !endFrame.url) {
+      if (endFrame.file && (!endFrame.url || endFrameUrlExpired)) {
         frameUploadPromises.push(
           uploadToFal(endFrame.file).then((url) => {
             uploadedEndFrameUrl = url;
@@ -2012,7 +2016,11 @@ export default function ControlsPane() {
       const refUploadPromises: Promise<void>[] = [];
 
       referenceUploads.forEach((ref, idx) => {
-        if (ref.file && !ref.url) {
+        const refUrlExpired = Boolean(ref.url) && isUploadUrlExpired(ref.createdAt);
+        if (refUrlExpired && !ref.file) {
+          return;
+        }
+        if (ref.file && (!ref.url || refUrlExpired)) {
           const ext = ref.file.name.split('.').pop()?.toLowerCase() || 'jpg';
           const standardizedName = `image_${idx + 1}.${ext}`;
           refUploadPromises.push(
@@ -2025,19 +2033,33 @@ export default function ControlsPane() {
                     : item
                 )
               );
-            }).catch((error) => {
-              console.error(`Failed to upload reference ${ref.name}:`, error);
-              // Leave slot empty — will be filtered out below
             })
           );
-        } else if (ref.url) {
+        } else if (ref.url && !refUrlExpired) {
           uploadedReferenceUrls[idx] = ref.url;
         }
       });
 
-      await Promise.all(refUploadPromises);
-      // Filter out empty slots from failed uploads
-      const filteredReferenceUrls = uploadedReferenceUrls.filter(Boolean);
+      try {
+        await Promise.all(refUploadPromises);
+      } catch (error) {
+        console.error("Failed to upload reference image(s):", error);
+        throw new Error("Failed to upload reference image(s). Please try again.");
+      }
+
+      const missingReferences = referenceUploads
+        .map((ref, idx) => ({ ref, idx }))
+        .filter(({ ref, idx }) => (ref.file || ref.url) && !uploadedReferenceUrls[idx])
+        .map(({ ref, idx }) => ref.name || `image_${idx + 1}`);
+      if (missingReferences.length > 0) {
+        throw new Error(
+          `Some references could not be sent: ${missingReferences.join(", ")}. Re-upload and try again.`
+        );
+      }
+
+      const filteredReferenceUrls = uploadedReferenceUrls.filter(
+        (url): url is string => Boolean(url)
+      );
 
       setStatus(null);
       const modelId = modelKey.replace(/^(image:|video:|special:|upscale:)/, "");
@@ -2083,6 +2105,14 @@ export default function ControlsPane() {
         };
 
         payload = buildModelInput(modelSpec, unifiedPayload);
+        if (
+          videoRefUrls.length > 0 &&
+          !payloadContainsAllUrls(payload, videoRefUrls)
+        ) {
+          throw new Error(
+            `The selected video model did not include ${videoRefUrls.length} reference image URL(s).`
+          );
+        }
 
         // Use dynamic endpoint from adapter if available (e.g., LTX-2 T2V/I2V switching)
         if (modelSpec.adapter?.getEndpoint) {
@@ -2182,6 +2212,14 @@ export default function ControlsPane() {
         };
 
         payload = imageModelSpec.mapInput(imageJob);
+        if (
+          imageRefUrls.length > 0 &&
+          !payloadContainsAllUrls(payload, imageRefUrls)
+        ) {
+          throw new Error(
+            `The selected image model did not include ${imageRefUrls.length} reference image URL(s).`
+          );
+        }
 
       } else if (selectedSpecial) {
         // Handle special models (V2V, T2V/I2V like Sora 2)
