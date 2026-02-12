@@ -145,6 +145,45 @@ Generates video from a reference image. Supports multiple generation modes inclu
 ---
 
 
+### Grok Imagine 720p (FAL)
+**Provider**: FAL
+**Endpoint**: `xai/grok-imagine-video/image-to-video`
+**Pricing**: Varies by FAL account pricing
+
+Higher-resolution Grok Imagine image-to-video generation (720p output).
+
+#### Parameters
+| Parameter | Type | Required | Description | Example |
+| :--- | :--- | :--- | :--- | :--- |
+| `prompt` | string | Yes | Text prompt describing motion and scene changes. | `"The camera slowly pushes in as the subject smiles and blinks."` |
+| `image_url` | string | Yes | Start frame image URL. | `"https://example.com/start.png"` |
+| `duration` | number | No | Duration in seconds. Options: `6`, `10`. Default: `6`. | `6` |
+| `aspect_ratio` | string | No | Aspect ratio. Options: `"auto"`, `"16:9"`, `"4:3"`, `"3:2"`, `"1:1"`, `"2:3"`, `"3:4"`, `"9:16"`. Default: `"auto"`. | `"16:9"` |
+| `resolution` | string | No | Output resolution. Currently `"720p"` only. | `"720p"` |
+
+#### Request Example
+```json
+{
+  "prompt": "The camera slowly pushes in as the subject smiles and waves.",
+  "image_url": "https://example.com/start.png",
+  "duration": 6,
+  "aspect_ratio": "16:9",
+  "resolution": "720p"
+}
+```
+
+#### Response Example
+```json
+{
+  "video": {
+    "url": "https://v3.fal.media/files/example/output.mp4"
+  }
+}
+```
+
+---
+
+
 ### Kling O1 Reference-to-Video
 **Provider**: FAL
 **Endpoint**: `fal-ai/kling-video/o1/reference-to-video`
@@ -238,28 +277,130 @@ Generate video from a start frame with optional reference images for style and e
 
 ---
 
-### Kling V2.6 Pro (I2V)
-**Provider**: FAL
-**Endpoint**: `fal-ai/kling-video/v2.6/pro/image-to-video`
-**Pricing**: $0.07/sec (audio off), $0.14/sec (audio on)
+### Kling 3.0
+**Provider**: KIE
+**Endpoint**: `/api/v1/jobs/createTask`
+**Model**: `"kling-3.0/video"`
+**Pricing**:
+- Standard: no-audio 20 credits ($0.1)/s, with audio 30 credits ($0.15)/s
+- Pro: no-audio 27 credits ($0.135)/s, with audio 40 credits ($0.2)/s
+
+Kling 3.0 flow exposed in the Video tab with optional multi-shot and element controls.
 
 #### Parameters
 | Parameter | Type | Required | Description | Example |
 | :--- | :--- | :--- | :--- | :--- |
-| `prompt` | string | Yes | Text description for video generation. | `"A king walks slowly..."` |
-| `image_url` | string | Yes | URL of the start frame image. | `"https://..."` |
-| `duration` | string | No | Video duration. Options: `"5"`, `"10"`. Default: `"5"`. | `"5"` |
-| `generate_audio` | boolean | No | Generate native audio. Default: `false`. | `true` |
-| `negative_prompt` | string | No | Elements to avoid. | `"blur, distort"` |
+| `model` | string | Yes | Model ID | `"kling-3.0/video"` |
+| `input.prompt` | string | Yes | Prompt for single-shot generation (max 2500 chars). | `"A cinematic dolly-in as the dancer turns toward camera."` |
+| `input.mode` | string | No | Quality mode: `"std"` or `"pro"`. Default: `"pro"`. | `"pro"` |
+| `input.image_urls` | array(string) | No | Optional start/end frame URLs. Use `[start]` or `[start, end]`. | `["https://...start.png", "https://...end.png"]` |
+| `input.duration` | string | Yes | Single-shot duration (3-15s) or total multi-shot duration. Default: `"5"`. | `"5"` |
+| `input.sound` | boolean | No | Generate audio. Default: `true`. | `true` |
+| `input.aspect_ratio` | string | No | Aspect ratio: `"16:9"`, `"9:16"`, `"1:1"`. | `"16:9"` |
+| `input.kling_elements` | array(object) | No | Optional elements. `description` is optional and can be the same as `name`. | See below |
+| `input.multi_shots` | boolean | No | Enable multi-shot mode. | `false` |
+| `input.multi_prompt` | array(object) | Conditional | Required when `multi_shots` is `true`. Each shot has `prompt` + `duration` (1-12s). Total must be 3-15s. | See below |
+| `callBackUrl` | string | No | Callback URL for notifications. | `"https://..."` |
+
+**Element Structure (optional):**
+```json
+{
+  "name": "ElementName",
+  "description": "ElementName",
+  "element_input_urls": [
+    "https://example.com/element-front.png",
+    "https://example.com/element-ref-1.png"
+  ]
+}
+```
+
+**Multi Prompt Structure (when `multi_shots: true`):**
+```json
+[
+  {
+    "prompt": "Shot 1 prompt",
+    "duration": 3
+  },
+  {
+    "prompt": "Shot 2 prompt",
+    "duration": 2
+  }
+]
+```
 
 #### Request Example
 ```json
 {
-  "prompt": "A king walks slowly and says \"My people, here I am!\"",
-  "image_url": "https://v3b.fal.media/files/...",
-  "duration": "5",
-  "generate_audio": true,
-  "negative_prompt": "blur, distort, and low quality"
+  "model": "kling-3.0/video",
+  "callBackUrl": "https://your-domain.com/api/callback",
+  "input": {
+    "mode": "pro",
+    "image_urls": [
+      "https://static.aiquickdraw.com/tools/example/start.png",
+      "https://static.aiquickdraw.com/tools/example/end.png"
+    ],
+    "prompt": "In a bright rehearsal room, sunlight streams through the windows as the camera pushes in.",
+    "duration": "5",
+    "multi_shots": false,
+    "kling_elements": [
+      {
+        "name": "Element1",
+        "description": "Element1",
+        "element_input_urls": [
+          "https://example.com/element-front.png",
+          "https://example.com/element-ref-1.png"
+        ]
+      }
+    ],
+    "sound": true,
+    "aspect_ratio": "16:9"
+  }
+}
+```
+
+#### Response Example
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "taskId": "task_12345678"
+  }
+}
+```
+
+---
+
+### Kling V2.6 I2V (Image-to-Video)
+**Provider**: KIE
+**Endpoint**: `/api/v1/jobs/createTask`
+**Pricing**: $0.28 (5s), $0.55 (10s) / with audio: 2x
+
+Generates video from a reference image.
+
+#### Parameters
+| Parameter | Type | Required | Description | Example |
+| :--- | :--- | :--- | :--- | :--- |
+| `model` | string | Yes | Model ID | `"kling-2.6/image-to-video"` |
+| `input.prompt` | string | Yes | Text prompt. Max 1000 chars. | `"A king walks slowly..."` |
+| `input.image_urls` | array(URL) | Yes | Start frame image URL array (single image). | `["https://..."]` |
+| `input.duration` | string | Yes | Duration. Options: `"5"`, `"10"`. | `"5"` |
+| `input.aspect_ratio` | string | No | Aspect ratio. Options: `"1:1"`, `"16:9"`, `"9:16"`. Default: `"16:9"`. | `"16:9"` |
+| `input.sound` | boolean | No | Generate audio. Default: `false`. | `false` |
+| `callBackUrl` | string | No | Callback URL for notifications. | `"https://..."` |
+
+#### Request Example
+```json
+{
+  "model": "kling-2.6/image-to-video",
+  "callBackUrl": "https://your-domain.com/api/callback",
+  "input": {
+    "prompt": "A king walks slowly and says \"My people, here I am!\"",
+    "image_urls": ["https://v3b.fal.media/files/..."],
+    "duration": "5",
+    "aspect_ratio": "16:9",
+    "sound": false
+  }
 }
 ```
 
@@ -1389,6 +1530,7 @@ The following models support both Text-to-Video (T2V) and Image-to-Video (I2V) m
 | :--- | :--- | :--- |
 | Sora 2 | `sora-2-text-to-video` | `sora-2-image-to-video` |
 | Kling 2.6 | `kling-2.6/text-to-video` | `kling-2.6/image-to-video` |
+| Kling 3.0 | `kling-3.0/video` | `kling-3.0/video` |
 | Wan 2.5 | `wan/2-5-text-to-video` | `wan/2-5-image-to-video` |
 | Wan 2.6 | `wan/2-6-text-to-video` | `wan/2-6-image-to-video` |
 | Seedance V1 Pro | `bytedance/v1-pro-text-to-video` | `bytedance/v1-pro-image-to-video` |

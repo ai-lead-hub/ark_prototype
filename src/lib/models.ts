@@ -236,6 +236,16 @@ const jsonSpecs =
                 input[paramKey] = value;
               } else if (definition.default !== undefined) {
                 input[paramKey] = definition.default;
+              } else if (
+                definition.required &&
+                definition.type === "enum" &&
+                definition.values &&
+                definition.values.length > 0
+              ) {
+                // Keep payloads valid by falling back to first allowed enum value.
+                input[paramKey] = definition.values[0];
+              } else if (definition.required) {
+                throw new Error(`Missing required param: ${String(uiKey)} → ${paramKey}`);
               }
             }
 
@@ -261,10 +271,20 @@ const jsonSpecs =
               const uiKey = definition.uiKey ?? (paramKey as keyof UnifiedPayload);
               const value = unified[uiKey];
 
-              // Skip if value is undefined and not required
-              if (value === undefined) {
+              // Handle missing values
+              if (value === undefined || value === null) {
                 if (definition.default !== undefined) {
                   input[paramKey] = definition.default;
+                } else if (
+                  definition.required &&
+                  definition.type === "enum" &&
+                  definition.values &&
+                  definition.values.length > 0
+                ) {
+                  // Keep payloads valid by falling back to first allowed enum value.
+                  input[paramKey] = definition.values[0];
+                } else if (definition.required) {
+                  throw new Error(`Missing required param: ${String(uiKey)} → ${paramKey}`);
                 }
                 continue;
               }
@@ -274,6 +294,8 @@ const jsonSpecs =
                 const num = Number(value);
                 if (!isNaN(num)) {
                   input[paramKey] = num;
+                } else if (definition.required) {
+                  throw new Error(`Invalid number for ${paramKey}: ${value}`);
                 }
               } else if (definition.type === "string" && typeof value === "number") {
                 input[paramKey] = String(value);
@@ -287,10 +309,10 @@ const jsonSpecs =
                   // Fallback to default if available
                   if (definition.default !== undefined) {
                     input[paramKey] = definition.default;
+                  } else if (definition.values.length > 0) {
+                    input[paramKey] = definition.values[0];
                   } else if (definition.required) {
-                    // If required and no default, we might want to throw or just pass it through (risky)
-                    // For now, let's pass it through but log a warning if we could
-                    input[paramKey] = value;
+                    throw new Error(`Invalid enum value for ${paramKey}: ${valStr}`);
                   }
                 }
               } else {
@@ -302,6 +324,10 @@ const jsonSpecs =
             const kieModelMap: Record<string, { i2v: string; t2v?: string }> = {
               "grok-imagine/image-to-video": { i2v: "grok-imagine/image-to-video" },
               "kling-2.5-pro": { i2v: "kling/v2-5-turbo-image-to-video-pro" },
+              "kling-3.0": {
+                i2v: "kling-3.0/video",
+                t2v: "kling-3.0/video"
+              },
               "hailuo-2.3-pro": { i2v: "hailuo/2-3-image-to-video-pro" }, // T2V unavailable
               "hailuo-02-pro": {
                 i2v: "hailuo/02-image-to-video-pro",
@@ -335,6 +361,8 @@ const jsonSpecs =
               delete input.image_url;
               delete input.image_urls;
               delete input.tail_image_url;
+              delete input.end_image_url;
+              delete input.last_frame_url;
             }
 
             // Special handling for Kling 2.6 I2V - image_urls must be an array
@@ -358,6 +386,21 @@ const jsonSpecs =
               const imageUrl = input.image_urls ?? unified.start_frame_url;
               if (typeof imageUrl === "string") {
                 input.image_urls = [imageUrl];
+              }
+            }
+
+            // Kling 3.0 simple: use image_urls array and allow optional end frame as 2nd image.
+            if (model.id === "kling-3.0") {
+              if (unified.end_frame_url && !unified.start_frame_url) {
+                throw new Error("Start frame is required when end frame is provided.");
+              }
+              const urls: string[] = [];
+              if (unified.start_frame_url) urls.push(unified.start_frame_url);
+              if (unified.end_frame_url) urls.push(unified.end_frame_url);
+              if (urls.length > 0) {
+                input.image_urls = urls;
+              } else {
+                delete input.image_urls;
               }
             }
 

@@ -259,7 +259,7 @@ export default function ControlsPane() {
   const historyRef = useRef<string[]>([]);
   const historyIndexRef = useRef(-1);
 
-  // Multishot prompts state for Kling V3
+  // Multishot prompts state for Kling 3.0
   const [multishotPrompts, setMultishotPrompts] = useState<Array<{ prompt: string; duration: number }>>([]);
   const [currentMultishotPrompt, setCurrentMultishotPrompt] = useState("");
   const [currentMultishotDuration, setCurrentMultishotDuration] = useState(5);
@@ -641,17 +641,19 @@ export default function ControlsPane() {
 
 
   const pricingLabel = useMemo(() => {
-    if (selectedVideo) return getModelPricingLabel(selectedVideo.id);
+    if (selectedVideo) {
+      if (selectedVideo.id === "kling-3.0") {
+        const mode = String(paramValues.mode ?? selectedVideo.params.mode?.default ?? "pro");
+        if (mode !== "pro") return undefined;
+        const generateAudio = Boolean(
+          paramValues.generate_audio ?? selectedVideo.params.sound?.default ?? true
+        );
+        return generateAudio ? "Pro: $0.2/s (audio)" : "Pro: $0.135/s (no audio)";
+      }
+      return getModelPricingLabel(selectedVideo.id);
+    }
     if (selectedImage) return getModelPricingLabel(selectedImage.id);
     if (selectedSpecial) {
-      // Kling V3 Pro has dynamic pricing based on duration and audio
-      if (selectedSpecial.id === "kling-v3-pro") {
-        const duration = Number(paramValues.duration ?? selectedSpecial.params.duration?.default ?? 5);
-        const generateAudio = paramValues.generate_audio ?? selectedSpecial.params.generate_audio?.default ?? true;
-        const rate = generateAudio ? 0.336 : 0.224;
-        const total = (duration * rate).toFixed(2);
-        return `$${total} (${duration}s, ${generateAudio ? "audio on" : "audio off"})`;
-      }
       return selectedSpecial.pricing;
     }
     return undefined;
@@ -669,6 +671,8 @@ export default function ControlsPane() {
     : 5;
   const imageModelSupportsElements =
     modelKind === "image" && selectedImage?.supportsElements === true;
+  const videoModelSupportsMultishot =
+    modelKind === "video" && selectedVideo?.id === "kling-3.0";
 
   const registerPreview = useCallback((url: string) => {
     if (url.startsWith("blob:")) {
@@ -1817,13 +1821,13 @@ export default function ControlsPane() {
     setIsExpanding(true);
     try {
       // Determine the mode based on tab and model type
-      // For special tab, check if it's a video-type model (kling-v3, video input, etc.)
+      // For special tab, check if it's a video-type model (video input, etc.)
       let mode: "video" | "image" = "image";
       if (modelKind === "video") {
         mode = "video";
       } else if (modelKind === "special" && selectedSpecial) {
         // Special models that are video-based should use video mode
-        const videoInputTypes = ["kling-v3", "video", "both"];
+        const videoInputTypes = ["video", "both"];
         if (videoInputTypes.includes(selectedSpecial.inputType)) {
           mode = "video";
         }
@@ -2065,6 +2069,7 @@ export default function ControlsPane() {
       const modelId = modelKey.replace(/^(image:|video:|special:|upscale:)/, "");
       const modelSpec = MODEL_SPECS.find((m) => m.id === modelId);
       const imageModelSpec = IMAGE_MODELS.find((m) => m.id === modelId);
+      const trimmedPrompt = prompt.trim();
 
 
       let endpoint = "";
@@ -2084,15 +2089,26 @@ export default function ControlsPane() {
         // Use freshly uploaded URLs (deferred upload)
         const startFrameUrl = supportsStartFrame !== false ? uploadedStartFrameUrl : undefined;
         const endFrameUrl = supportsEndFrame === true ? uploadedEndFrameUrl : undefined;
+        if (endFrameUrl && !startFrameUrl) {
+          throw new Error("Start frame is required when end frame is provided.");
+        }
 
         // For video models, use uploaded video reference URLs
         const videoRefUrls = modelKind === "video" && referenceLimit > 0
           ? filteredReferenceUrls.slice(0, referenceLimit)
           : [];
 
+        const isKling3 = modelSpec.id === "kling-3.0";
+        const kling3UseMultishot =
+          isKling3 && useMultishot && multishotPrompts.length > 0;
+        if (modelSpec.params.prompt?.required && !trimmedPrompt && !kling3UseMultishot) {
+          throw new Error("Prompt is required.");
+        }
+
         const unifiedPayload: UnifiedPayload = {
           modelId,
-          prompt,
+          // Kling 3.0 multishot removes prompt before submit, but adapter expects a value while mapping.
+          prompt: trimmedPrompt || (kling3UseMultishot ? "multishot sequence" : ""),
           aspect_ratio: aspectRatio,
           resolution: imageResolution,
           start_frame_url: startFrameUrl,
@@ -2103,8 +2119,114 @@ export default function ControlsPane() {
           generate_audio: paramValues.generate_audio as boolean | undefined,
           character_id_list: paramValues.character_id_list as string[] | undefined,
         };
+        const kling3Mode = isKling3
+          ? String(paramValues.mode ?? modelSpec.params.mode?.default ?? "pro")
+          : undefined;
+
+        let klingElements:
+          | Array<{ name: string; description: string; element_input_urls: string[] }>
+          | undefined;
+        if (isKling3 && elementsState.selectedElements.length > 0) {
+          setStatus("Uploading elements...");
+          const elementResults = await Promise.all(
+            elementsState.selectedElements.map(async (selectedEl, idx) => {
+              const el = selectedEl.element;
+              const frontalResponse = await fetch(buildElementAssetUrl(el.frontalImageUrl));
+              if (!frontalResponse.ok) {
+                throw new Error(`Failed to fetch element frontal image (${frontalResponse.status})`);
+              }
+              const frontalBlob = await frontalResponse.blob();
+              const frontalExt = extensionFromMime(frontalBlob.type || "image/png");
+              const frontalFile = new File(
+                [frontalBlob],
+                `${el.name}_frontal.${frontalExt === "bin" ? "png" : frontalExt}`,
+                { type: frontalBlob.type || "image/png" }
+              );
+              const uploadedFrontalUrl = await uploadToFal(frontalFile);
+
+              const uploadedRefUrls: string[] = [];
+              if (el.referenceImageUrls?.length > 0) {
+                const refResults = await Promise.all(
+                  el.referenceImageUrls.map(async (refUrl: string) => {
+                    const refResponse = await fetch(buildElementAssetUrl(refUrl));
+                    if (!refResponse.ok) {
+                      throw new Error(`Failed to fetch element reference image (${refResponse.status})`);
+                    }
+                    const refBlob = await refResponse.blob();
+                    const refExt = extensionFromMime(refBlob.type || "image/png");
+                    const refFile = new File(
+                      [refBlob],
+                      `${el.name}_ref.${refExt === "bin" ? "png" : refExt}`,
+                      { type: refBlob.type || "image/png" }
+                    );
+                    return uploadToFal(refFile);
+                  })
+                );
+                uploadedRefUrls.push(...refResults);
+              }
+
+              const elementInputUrls = [uploadedFrontalUrl, ...uploadedRefUrls].slice(0, 4);
+              const fallbackName = `Element${idx + 1}`;
+              const safeName =
+                (el.name || fallbackName).replace(/[^a-zA-Z0-9_]/g, "_") || fallbackName;
+              return {
+                name: safeName,
+                // API marks description optional; we default it to element name for compatibility.
+                description: safeName,
+                element_input_urls: elementInputUrls,
+              };
+            })
+          );
+          klingElements = elementResults.filter((entry) => entry.element_input_urls.length > 0);
+          setStatus(null);
+        }
 
         payload = buildModelInput(modelSpec, unifiedPayload);
+        if (isKling3) {
+          const inputRecord = payload.input as Record<string, unknown> | undefined;
+          if (!inputRecord || typeof inputRecord !== "object") {
+            throw new Error("Kling 3.0 payload is missing an input object.");
+          }
+
+          inputRecord.mode = kling3Mode ?? "pro";
+
+          if (kling3UseMultishot) {
+            const normalizedShots = multishotPrompts
+              .map((shot) => ({
+                prompt: shot.prompt.trim(),
+                duration: Math.max(1, Math.min(12, Number(shot.duration) || 1)),
+              }))
+              .filter((shot) => shot.prompt.length > 0);
+
+            if (normalizedShots.length === 0) {
+              throw new Error("Add at least one valid multishot prompt.");
+            }
+
+            const totalDuration = normalizedShots.reduce((sum, shot) => sum + shot.duration, 0);
+            if (totalDuration < 3 || totalDuration > 15) {
+              throw new Error("Total multishot duration must be between 3s and 15s.");
+            }
+
+            inputRecord.multi_shots = true;
+            inputRecord.multi_prompt = normalizedShots;
+            inputRecord.duration = String(totalDuration);
+            delete inputRecord.prompt;
+          } else {
+            inputRecord.multi_shots = false;
+            delete inputRecord.multi_prompt;
+            const trimmedPrompt = prompt.trim();
+            if (!trimmedPrompt) {
+              throw new Error("Prompt is required.");
+            }
+            inputRecord.prompt = trimmedPrompt;
+          }
+
+          if (klingElements?.length) {
+            inputRecord.kling_elements = klingElements;
+          } else {
+            delete inputRecord.kling_elements;
+          }
+        }
         if (
           videoRefUrls.length > 0 &&
           !payloadContainsAllUrls(payload, videoRefUrls)
@@ -2227,6 +2349,9 @@ export default function ControlsPane() {
         category = "video"; // All special models output video
         provider = selectedSpecial.provider as ModelProvider;
         callOptions = selectedSpecial.taskConfig ? { taskConfig: selectedSpecial.taskConfig } : undefined;
+        if (selectedSpecial.params.prompt?.required && !trimmedPrompt) {
+          throw new Error("Prompt is required.");
+        }
 
         if (selectedSpecial.inputType === "video") {
           // V2V models - require video input
@@ -2245,7 +2370,7 @@ export default function ControlsPane() {
 
           const specialPayload = buildSpecialModelInput(selectedSpecial, {
             modelId: selectedSpecial.id,
-            prompt: prompt.trim(),
+            prompt: trimmedPrompt,
             video_urls: validVideoUrls,
             duration: paramValues.duration as string | undefined,
             resolution: paramValues.resolution as string | undefined,
@@ -2277,7 +2402,7 @@ export default function ControlsPane() {
 
           const specialPayload = buildSpecialModelInput(selectedSpecial, {
             modelId: selectedSpecial.id,
-            prompt: prompt.trim(),
+            prompt: trimmedPrompt,
             start_frame_url: uploadedStartFrameUrl,
             duration: paramValues.duration as string | undefined,
             aspect_ratio: paramValues.aspect_ratio as string | undefined,
@@ -2328,7 +2453,7 @@ export default function ControlsPane() {
 
           const specialPayload = buildSpecialModelInput(selectedSpecial, {
             modelId: selectedSpecial.id,
-            prompt: prompt.trim(),
+            prompt: trimmedPrompt,
             start_frame_url: uploadedStartFrameUrl,
             video_urls: validVideoUrls,
             character_orientation: paramValues.character_orientation as string | undefined,
@@ -2412,7 +2537,7 @@ export default function ControlsPane() {
 
           const specialPayload = buildSpecialModelInput(selectedSpecial, {
             modelId: selectedSpecial.id,
-            prompt: prompt.trim(),
+            prompt: trimmedPrompt,
             image_urls: filteredImageUrls,
             elements: uploadedElements,
             duration: paramValues.duration as string | undefined,
@@ -2421,115 +2546,6 @@ export default function ControlsPane() {
 
           // For fal-client provider, use just the input part since callFalSubscribe wraps it
           // For kie provider, use the full payload structure
-          payload = selectedSpecial.provider === "fal-client" ? specialPayload.input : specialPayload;
-        } else if (selectedSpecial.inputType === "kling-v3") {
-          // Kling V3 Pro - Start/End frames + Elements + Multishot
-          setStatus("Uploading frames...");
-
-          // Upload start + end frame in parallel
-          let uploadedStartFrameUrl = startFrame.url;
-          let uploadedEndFrameUrl = endFrame.url;
-          const klingFramePromises: Promise<void>[] = [];
-
-          if (startFrame.file && !startFrame.url) {
-            klingFramePromises.push(
-              uploadToFal(startFrame.file).then((url) => {
-                uploadedStartFrameUrl = url;
-                setStartFrame((prev) => ({ ...prev, url, createdAt: Date.now() }));
-              })
-            );
-          }
-          if (endFrame.file && !endFrame.url) {
-            klingFramePromises.push(
-              uploadToFal(endFrame.file).then((url) => {
-                uploadedEndFrameUrl = url;
-                setEndFrame((prev) => ({ ...prev, url, createdAt: Date.now() }));
-              })
-            );
-          }
-
-          if (klingFramePromises.length > 0) {
-            try {
-              await Promise.all(klingFramePromises);
-            } catch (error) {
-              console.error("Failed to upload frame(s):", error);
-              setStatus("Failed to upload frame(s). Please try again.");
-              setIsSubmitting(false);
-              return;
-            }
-          }
-
-          setStatus("Processing elements...");
-
-          // Process elements from Elements Manager
-          const uploadedElements: Array<{
-            frontal_image_url?: string;
-            reference_image_urls?: string[];
-          }> = [];
-
-          // Process selected elements from Elements Manager - UPLOAD TO FAL (in parallel)
-          setStatus(`Uploading element images...`);
-          try {
-            const elementResults = await Promise.all(
-              elementsState.selectedElements.map(async (selectedEl) => {
-                const el = selectedEl.element;
-
-                // Upload frontal image
-                const frontalUrl = buildElementAssetUrl(el.frontalImageUrl);
-                const frontalResponse = await fetch(frontalUrl);
-                const frontalBlob = await frontalResponse.blob();
-                const frontalFile = new File([frontalBlob], `${el.name}_frontal.png`, { type: frontalBlob.type });
-                const uploadedFrontalUrl = await uploadToFal(frontalFile);
-
-                // Upload reference images in parallel
-                const uploadedRefUrls: string[] = [];
-                if (el.referenceImageUrls?.length > 0) {
-                  const refResults = await Promise.all(
-                    el.referenceImageUrls.map(async (refUrl: string) => {
-                      const refFullUrl = buildElementAssetUrl(refUrl);
-                      const refResponse = await fetch(refFullUrl);
-                      const refBlob = await refResponse.blob();
-                      const refFile = new File([refBlob], `${el.name}_ref.png`, { type: refBlob.type });
-                      return uploadToFal(refFile);
-                    })
-                  );
-                  uploadedRefUrls.push(...refResults);
-                }
-
-                return {
-                  frontal_image_url: uploadedFrontalUrl,
-                  reference_image_urls: uploadedRefUrls,
-                };
-              })
-            );
-            uploadedElements.push(...elementResults);
-          } catch (error) {
-            console.error(`Failed to upload element images:`, error);
-            setStatus(`Failed to upload element images`);
-            setIsSubmitting(false);
-            setTimeout(() => setStatus(null), 3000);
-            return;
-          }
-
-          setStatus(null);
-
-          // Build multi_prompt if useMultishot is true and multishotPrompts has items
-          const multiPrompt = useMultishot && multishotPrompts.length > 0
-            ? multishotPrompts.map((shot) => ({ prompt: shot.prompt, duration: String(shot.duration) }))
-            : undefined;
-
-          const specialPayload = buildSpecialModelInput(selectedSpecial, {
-            modelId: selectedSpecial.id,
-            prompt: prompt.trim(),
-            start_frame_url: uploadedStartFrameUrl,
-            end_frame_url: uploadedEndFrameUrl,
-            elements: uploadedElements,
-            duration: paramValues.duration as string | undefined,
-            aspect_ratio: paramValues.aspect_ratio as string | undefined,
-            generate_audio: paramValues.generate_audio as boolean | undefined,
-            multi_prompt: multiPrompt,
-          });
-
           payload = selectedSpecial.provider === "fal-client" ? specialPayload.input : specialPayload;
         }
 
@@ -3779,6 +3795,193 @@ export default function ControlsPane() {
                 })()}
               </div>
             ) : null}
+
+            {/* Kling 3.0 extras (bottom): multishot + elements */}
+            {videoModelSupportsMultishot && (
+              <div className="space-y-3 rounded-lg border border-white/10 bg-black/20 p-3">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      Multishot
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setUseMultishot(!useMultishot)}
+                      disabled={isSubmitting || isExpanding}
+                      className={`text-xs transition ${useMultishot
+                        ? "text-sky-400 hover:text-sky-300"
+                        : "text-slate-500 hover:text-slate-400"
+                        }`}
+                    >
+                      {useMultishot ? "Disable" : "Enable"}
+                    </button>
+                  </div>
+
+                  {useMultishot ? (
+                    <div className="space-y-2 rounded-lg border border-white/10 bg-black/30 p-2">
+                      <div className="flex items-center justify-between border-b border-white/10 pb-1 text-[10px]">
+                        <span className="text-slate-400">Total Duration</span>
+                        <span
+                          className={`font-medium ${multishotPrompts.reduce((sum, s) => sum + s.duration, 0) > 15
+                            ? "text-amber-400"
+                            : "text-emerald-400"
+                            }`}
+                        >
+                          {multishotPrompts.reduce((sum, s) => sum + s.duration, 0)}s / 15s
+                        </span>
+                      </div>
+                      {multishotPrompts.length === 0 ? (
+                        <p className="text-xs text-slate-500">
+                          Add shots below. Each shot is 1-12s, total must stay between 3-15s.
+                        </p>
+                      ) : (
+                        multishotPrompts.map((shot, index) => (
+                          <div key={index} className="flex items-start gap-2">
+                            <input
+                              type="text"
+                              value={shot.prompt}
+                              onChange={(event) => {
+                                const newPrompts = [...multishotPrompts];
+                                newPrompts[index] = { ...shot, prompt: event.target.value };
+                                setMultishotPrompts(newPrompts);
+                              }}
+                              placeholder={`Shot ${index + 1} prompt...`}
+                              disabled={isSubmitting || isExpanding}
+                              className="flex-1 rounded-lg border border-white/10 bg-black/40 px-3 py-1.5 text-xs text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
+                            />
+                            <select
+                              value={shot.duration}
+                              onChange={(event) => {
+                                const newPrompts = [...multishotPrompts];
+                                newPrompts[index] = {
+                                  ...shot,
+                                  duration: Number(event.target.value),
+                                };
+                                setMultishotPrompts(newPrompts);
+                              }}
+                              disabled={isSubmitting || isExpanding}
+                              className="w-20 rounded-lg border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-white outline-none focus:border-sky-400"
+                            >
+                              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((d) => (
+                                <option key={d} value={d}>{d}s</option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMultishotPrompts((prev) => prev.filter((_, i) => i !== index));
+                              }}
+                              disabled={isSubmitting || isExpanding}
+                              className="flex h-7 w-7 items-center justify-center rounded-lg border border-rose-500/30 bg-rose-500/20 text-rose-200 transition hover:bg-rose-500/30 disabled:opacity-50"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+                            </button>
+                          </div>
+                        ))
+                      )}
+                      <div className="flex items-start gap-2 border-t border-white/10 pt-2">
+                        <input
+                          type="text"
+                          value={currentMultishotPrompt}
+                          onChange={(event) => setCurrentMultishotPrompt(event.target.value)}
+                          placeholder="New shot prompt..."
+                          disabled={isSubmitting || isExpanding}
+                          className="flex-1 rounded-lg border border-white/10 bg-black/40 px-3 py-1.5 text-xs text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
+                        />
+                        <select
+                          value={currentMultishotDuration}
+                          onChange={(event) => setCurrentMultishotDuration(Number(event.target.value))}
+                          disabled={isSubmitting || isExpanding}
+                          className="w-20 rounded-lg border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-white outline-none focus:border-sky-400"
+                        >
+                          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((d) => (
+                            <option key={d} value={d}>{d}s</option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!currentMultishotPrompt.trim()) return;
+                            setMultishotPrompts((prev) => [
+                              ...prev,
+                              {
+                                prompt: currentMultishotPrompt.trim(),
+                                duration: Math.max(1, Math.min(12, currentMultishotDuration)),
+                              },
+                            ]);
+                            setCurrentMultishotPrompt("");
+                          }}
+                          disabled={isSubmitting || isExpanding || !currentMultishotPrompt.trim()}
+                          className="flex h-7 w-7 items-center justify-center rounded-lg border border-sky-500/30 bg-sky-500/20 text-sky-200 transition hover:bg-sky-500/30 disabled:opacity-50"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14" /><path d="M5 12h14" /></svg>
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-slate-500">
+                        When multishot is enabled, the single prompt above is ignored.
+                      </p>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="space-y-2 border-t border-white/10 pt-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      Elements
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        elementsState.setSelectionMode(true);
+                        if (!elementsState.isManagerOpen) {
+                          elementsState.toggleManager();
+                        }
+                      }}
+                      className="text-xs text-sky-400 hover:text-sky-300"
+                    >
+                      + Add from Elements
+                    </button>
+                  </div>
+                  {elementsState.selectedElements.length === 0 ? (
+                    <p className="text-xs text-slate-500">
+                      Optional. Use element tags in prompt, e.g. `@ElementName`.
+                    </p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {elementsState.selectedElements.map((selectedEl) => {
+                        const safeName =
+                          (selectedEl.element.name || "Element").replace(/[^a-zA-Z0-9_]/g, "_");
+                        return (
+                          <div
+                            key={selectedEl.element.id}
+                            className="relative h-16 w-16 overflow-hidden rounded border border-white/10 group"
+                          >
+                            <img
+                              src={buildElementAssetUrl(selectedEl.element.frontalImageUrl)}
+                              alt={selectedEl.element.name}
+                              className="h-full w-full object-cover"
+                            />
+                            <div className="absolute top-0 left-0 bg-amber-500/80 px-1 text-[8px] text-white font-bold">
+                              @{safeName}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => elementsState.deselectElement(selectedEl.element.id)}
+                              className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white opacity-0 hover:bg-rose-500 group-hover:opacity-100"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <p className="text-[10px] text-slate-500">
+                    `description` is optional and defaults to the element name.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         ) : null
         }
@@ -4384,134 +4587,6 @@ export default function ControlsPane() {
               </div>
             )}
 
-            {/* Kling V3 Input */}
-            {selectedSpecial.inputType === "kling-v3" && (
-              <div className="space-y-4">
-                {/* Start/End Frames */}
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="min-w-0">
-                    <UploadZone
-                      label="Start frame"
-                      accept="image/*"
-                      slot={startFrame}
-                      onFile={handleStartFrameSelect}
-                      extractFiles={extractFilesFromDataTransfer}
-                    />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <UploadZone
-                      label="End frame (optional)"
-                      accept="image/*"
-                      slot={endFrame}
-                      onFile={handleEndFrameSelect}
-                      extractFiles={extractFilesFromDataTransfer}
-                    />
-                  </div>
-                </div>
-
-                {/* Elements Section */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                      Elements
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        elementsState.setSelectionMode(true);
-                        if (!elementsState.isManagerOpen) {
-                          elementsState.toggleManager();
-                        }
-                      }}
-                      className="text-xs text-sky-400 hover:text-sky-300"
-                    >
-                      + Add from Elements
-                    </button>
-                  </div>
-                  {elementsState.selectedElements.length === 0 ? (
-                    <p className="text-xs text-slate-500">No elements selected. Click "Add from Elements" to select characters/objects.</p>
-                  ) : (
-                    <div className="flex flex-wrap gap-2">
-                      {elementsState.selectedElements.map((selectedEl, idx) => (
-                        <div key={`${selectedEl.element.id}-${idx}`} className="relative h-14 w-14 overflow-hidden rounded border border-white/10 group">
-                          <img
-                            src={buildElementAssetUrl(selectedEl.element.frontalImageUrl)}
-                            alt={selectedEl.element.name}
-                            className="h-full w-full object-cover"
-                          />
-                          <div className="absolute top-0 left-0 bg-amber-500/80 px-1 text-[8px] text-white font-bold">
-                            @{idx + 1}
-                          </div>
-                          <div className="absolute bottom-0 left-0 right-0 bg-black/70 px-1 text-[8px] text-white truncate">
-                            {selectedEl.element.name}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => elementsState.deselectElement(selectedEl.element.id)}
-                            className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white opacity-0 hover:bg-rose-500 group-hover:opacity-100"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Duration, Aspect Ratio, Audio Toggle */}
-                <div className="grid grid-cols-3 gap-2">
-                  {selectedSpecial.params.duration && selectedSpecial.params.duration.values && (
-                    <div className="space-y-1">
-                      <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">Duration</label>
-                      <select
-                        value={paramValues.duration === undefined ? String(selectedSpecial.params.duration.default ?? "5") : String(paramValues.duration)}
-                        onChange={(event) => handleParamChange("duration", event.target.value)}
-                        disabled={isSubmitting || isExpanding}
-                        className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
-                      >
-                        {selectedSpecial.params.duration.values.map((val) => (
-                          <option key={String(val)} value={String(val)}>{String(val)}s</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-
-                  {selectedSpecial.params.aspect_ratio && selectedSpecial.params.aspect_ratio.values && (
-                    <div className="space-y-1">
-                      <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">Aspect Ratio</label>
-                      <select
-                        value={paramValues.aspect_ratio === undefined ? String(selectedSpecial.params.aspect_ratio.default ?? "16:9") : String(paramValues.aspect_ratio)}
-                        onChange={(event) => handleParamChange("aspect_ratio", event.target.value)}
-                        disabled={isSubmitting || isExpanding}
-                        className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
-                      >
-                        {selectedSpecial.params.aspect_ratio.values.map((val) => (
-                          <option key={String(val)} value={String(val)}>{String(val)}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-
-                  {selectedSpecial.params.generate_audio && (
-                    <div className="space-y-1">
-                      <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">Audio</label>
-                      <button
-                        type="button"
-                        onClick={() => handleParamChange("generate_audio", !(paramValues.generate_audio ?? selectedSpecial.params.generate_audio?.default ?? true))}
-                        disabled={isSubmitting || isExpanding}
-                        className={`w-full rounded-lg border px-3 py-2 text-sm font-medium transition ${paramValues.generate_audio ?? selectedSpecial.params.generate_audio?.default ?? true
-                          ? "border-emerald-500/30 bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30"
-                          : "border-white/10 bg-black/40 text-slate-400 hover:bg-white/5"
-                          }`}
-                      >
-                        {(paramValues.generate_audio ?? selectedSpecial.params.generate_audio?.default ?? true) ? "On" : "Off"}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
             {/* Prompt */}
             <div className="space-y-1">
               {/* For references models, prompt with autocomplete popup */}
@@ -4681,342 +4756,6 @@ export default function ControlsPane() {
                     )}
                   </button>
                 </div>
-              ) : selectedSpecial.inputType === "kling-v3" ? (
-                <div className="space-y-2">
-                  <div className="relative">
-                    <textarea
-                      ref={promptTextareaRef}
-                      value={prompt}
-                      onChange={(event) => {
-                        const newValue = event.target.value;
-                        setPrompt(newValue);
-
-                        // Check if we should show autocomplete (typing @)
-                        const cursorPos = event.target.selectionStart;
-                        const textBefore = newValue.slice(0, cursorPos);
-                        const atMatch = textBefore.match(/@([a-zA-Z]*)$/);
-
-                        if (atMatch) {
-                          setShowAutocomplete(true);
-                          setAutocompleteIndex(0);
-                        } else {
-                          setShowAutocomplete(false);
-                        }
-                      }}
-                      onBlur={() => {
-                        addToHistory(prompt);
-                        setTimeout(() => setShowAutocomplete(false), 150);
-                      }}
-                      onKeyDown={(event) => {
-                        if (showAutocomplete) {
-                          // Build options list - only @Element for Kling V3
-                          const managerElementCount = elementsState.selectedElements.length;
-                          const options: string[] = [];
-                          for (let i = 1; i <= managerElementCount; i++) options.push(`@Element${i}`);
-
-                          if (options.length > 0) {
-                            if (event.key === "ArrowDown") {
-                              event.preventDefault();
-                              setAutocompleteIndex((prev) => (prev + 1) % options.length);
-                              return;
-                            }
-                            if (event.key === "ArrowUp") {
-                              event.preventDefault();
-                              setAutocompleteIndex((prev) => (prev - 1 + options.length) % options.length);
-                              return;
-                            }
-                            if (event.key === "Enter" || event.key === "Tab") {
-                              event.preventDefault();
-                              const selected = options[autocompleteIndex];
-                              const textarea = event.target as HTMLTextAreaElement;
-                              const cursorPos = textarea.selectionStart;
-                              const textBefore = prompt.slice(0, cursorPos);
-                              const atMatch = textBefore.match(/@([a-zA-Z]*)$/);
-                              if (atMatch) {
-                                const before = textBefore.slice(0, -atMatch[0].length);
-                                const after = prompt.slice(cursorPos);
-                                const newPrompt = before + selected + " " + after;
-                                setPrompt(newPrompt);
-                                setShowAutocomplete(false);
-                                setTimeout(() => {
-                                  const newPos = before.length + selected.length + 1;
-                                  textarea.setSelectionRange(newPos, newPos);
-                                }, 0);
-                              }
-                              return;
-                            }
-                            if (event.key === "Escape") {
-                              event.preventDefault();
-                              setShowAutocomplete(false);
-                              return;
-                            }
-                          }
-                        }
-                      }}
-                      placeholder="Type @ to insert elements (e.g., @Element1, @Element2)..."
-                      rows={4}
-                      disabled={isSubmitting || isExpanding}
-                      className={`w-full rounded-2xl border border-white/10 bg-black/40 px-3 py-3 pb-10 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
-                    />
-
-                    {/* Autocomplete popup for Kling V3 */}
-                    {showAutocomplete && (() => {
-                      const managerElementCount = elementsState.selectedElements.length;
-                      if (managerElementCount === 0) return null;
-
-                      const options = elementsState.selectedElements.map((selectedEl, idx) => ({
-                        label: `@Element${idx + 1}`,
-                        preview: buildElementAssetUrl(selectedEl.element.frontalImageUrl),
-                        name: selectedEl.element.name,
-                      }));
-
-                      return (
-                        <div className="absolute left-3 top-full mt-1 z-50 rounded-lg border border-white/20 bg-slate-900 shadow-xl overflow-hidden max-w-[280px]">
-                          {options.map((opt, idx) => (
-                            <button
-                              key={opt.label}
-                              type="button"
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                const textarea = promptTextareaRef.current;
-                                if (!textarea) return;
-                                const cursorPos = textarea.selectionStart;
-                                const textBefore = prompt.slice(0, cursorPos);
-                                const atMatch = textBefore.match(/@([a-zA-Z]*)$/);
-                                if (atMatch) {
-                                  const before = textBefore.slice(0, -atMatch[0].length);
-                                  const after = prompt.slice(cursorPos);
-                                  const newPrompt = before + opt.label + " " + after;
-                                  setPrompt(newPrompt);
-                                  setShowAutocomplete(false);
-                                }
-                              }}
-                              className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition ${idx === autocompleteIndex ? "bg-sky-500/30 text-white" : "text-slate-300 hover:bg-white/10"}`}
-                            >
-                              <img src={opt.preview} alt={opt.name} className="h-8 w-8 rounded object-cover" />
-                              <div className="flex flex-col">
-                                <span className="font-medium">{opt.label}</span>
-                                <span className="text-xs text-slate-400">{opt.name}</span>
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                      );
-                    })()}
-
-                    {/* Prompt tools - Bottom Right */}
-                    <div className="absolute bottom-2 right-2 flex gap-1">
-                      <button
-                        type="button"
-                        onClick={undo}
-                        disabled={historyIndex <= 0 || isExpanding || isSubmitting}
-                        className="flex h-7 w-7 items-center justify-center rounded-md border border-rose-500/30 bg-rose-500/20 text-rose-200 transition hover:bg-rose-500/30 hover:text-white disabled:opacity-30 disabled:hover:bg-rose-500/20"
-                        title="Undo"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6" /><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" /></svg>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={redo}
-                        disabled={historyIndex >= history.length - 1 || isExpanding || isSubmitting}
-                        className="flex h-7 w-7 items-center justify-center rounded-md border border-rose-500/30 bg-rose-500/20 text-rose-200 transition hover:bg-rose-500/30 hover:text-white disabled:opacity-30 disabled:hover:bg-rose-500/20"
-                        title="Redo"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 7v6h-6" /><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13" /></svg>
-                      </button>
-                      <div className="w-px bg-white/10 mx-1" />
-                      {/* Prompt Mode Toggle - Video modes: photoreal, audiogen, timestep */}
-                      <button
-                        type="button"
-                        onClick={() => setSpecialPromptMode((prev) =>
-                          prev === "photoreal" ? "audiogen" : prev === "audiogen" ? "timestep" : "photoreal"
-                        )}
-                        disabled={isExpanding}
-                        className={`flex h-7 w-7 items-center justify-center rounded-md border transition disabled:opacity-50 ${specialPromptMode === "photoreal"
-                          ? "border-emerald-500/30 bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/40 hover:text-white"
-                          : specialPromptMode === "audiogen"
-                            ? "border-purple-500/30 bg-purple-500/20 text-purple-200 hover:bg-purple-500/40 hover:text-white"
-                            : "border-amber-500/30 bg-amber-500/20 text-amber-200 hover:bg-amber-500/40 hover:text-white"
-                          }`}
-                        title={`Current Mode: ${specialPromptMode === "photoreal"
-                          ? "Photorealistic (Camera Aware)"
-                          : specialPromptMode === "audiogen"
-                            ? "Audio-Gen (Sound Aware)"
-                            : "Timestep (Beat-by-Beat)"
-                          }`}
-                      >
-                        {specialPromptMode === "photoreal" ? (
-                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" /><circle cx="12" cy="13" r="3" /></svg>
-                        ) : specialPromptMode === "audiogen" ? (
-                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 10v3" /><path d="M6 6v11" /><path d="M10 3v18" /><path d="M14 8v7" /><path d="M18 5v13" /><path d="M22 10v3" /></svg>
-                        ) : (
-                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
-                        )}
-                      </button>
-                      <div className="w-px bg-white/10 mx-1" />
-                      <button
-                        type="button"
-                        onClick={() => handleExpandPrompt("natural")}
-                        disabled={isExpanding || isSubmitting || !prompt.trim()}
-                        className="flex h-7 w-7 items-center justify-center rounded-md border border-indigo-500/30 bg-indigo-500/20 text-indigo-200 transition hover:bg-indigo-500/40 hover:text-white disabled:opacity-50"
-                        title="Expand with Natural Language"
-                      >
-                        {isExpanding ? (
-                          <Spinner size="sm" />
-                        ) : (
-                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" /><path d="M5 3v4" /><path d="M9 3v4" /><path d="M3 5h4" /><path d="M3 9h4" /></svg>
-                        )}
-                      </button>
-                    </div>
-
-                    {/* Camera Movement Button - Bottom Left */}
-                    <div className="absolute bottom-2 left-2">
-                      <button
-                        type="button"
-                        onClick={() => setShowCameraSelector(!showCameraSelector)}
-                        disabled={isSubmitting || isExpanding}
-                        className={`flex h-7 w-9 items-center justify-center rounded-md border transition ${showCameraSelector
-                          ? "border-sky-500 bg-sky-500/40 text-white"
-                          : "border-sky-500/30 bg-sky-500/20 text-sky-200 hover:bg-sky-500/40 hover:text-white"
-                          } disabled:opacity-50`}
-                        title="Add Camera Movement"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m22 8-6 4 6 4V8Z" /><rect width="14" height="12" x="2" y="6" rx="2" ry="2" /></svg>
-                      </button>
-
-                      {/* Camera Selector Popover */}
-                      {showCameraSelector && (
-                        <div className="absolute top-full left-0 mt-2 z-50">
-                          <CameraMovementSelector
-                            onSelect={(text: string) => {
-                              const instruction = `Rewrite the prompt to completely REPLACE any existing camera movement with this one: "${text}". Keep the rest of the visual details intact.`;
-                              void handleAlter(instruction);
-                              setShowCameraSelector(false);
-                            }}
-                            onClose={() => setShowCameraSelector(false)}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Multishot Section - OUTSIDE the relative div */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                        Multishot Prompts
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => setUseMultishot(!useMultishot)}
-                        disabled={isSubmitting || isExpanding}
-                        className={`text-xs transition ${useMultishot ? "text-sky-400 hover:text-sky-300" : "text-slate-500 hover:text-slate-400"}`}
-                      >
-                        {useMultishot ? "Disable" : "Enable"}
-                      </button>
-                    </div>
-
-                    {useMultishot && (
-                      <div className="space-y-2 rounded-lg border border-white/10 bg-black/20 p-2">
-                        {/* Total Duration Display */}
-                        <div className="flex justify-between items-center text-[10px] pb-1 border-b border-white/10">
-                          <span className="text-slate-400">Total Duration</span>
-                          <span className={`font-medium ${multishotPrompts.reduce((sum, s) => sum + s.duration, 0) >= 15 ? "text-amber-400" : "text-emerald-400"}`}>
-                            {multishotPrompts.reduce((sum, s) => sum + s.duration, 0)}s / 15s
-                          </span>
-                        </div>
-                        {multishotPrompts.length === 0 && (
-                          <p className="text-xs text-slate-500">No shots added. Add shots below (min 3s each, max 15s total).</p>
-                        )}
-                        {multishotPrompts.map((shot, index) => (
-                          <div key={index} className="flex gap-2 items-start">
-                            <div className="flex-1 space-y-1">
-                              <input
-                                type="text"
-                                value={shot.prompt}
-                                onChange={(event) => {
-                                  const newPrompts = [...multishotPrompts];
-                                  newPrompts[index] = { ...shot, prompt: event.target.value };
-                                  setMultishotPrompts(newPrompts);
-                                }}
-                                placeholder={`Shot ${index + 1} prompt...`}
-                                disabled={isSubmitting || isExpanding}
-                                className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-1.5 text-xs text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
-                              />
-                            </div>
-                            <select
-                              value={shot.duration}
-                              onChange={(event) => {
-                                const newPrompts = [...multishotPrompts];
-                                newPrompts[index] = { ...shot, duration: Number(event.target.value) };
-                                setMultishotPrompts(newPrompts);
-                              }}
-                              disabled={isSubmitting || isExpanding}
-                              className="w-20 rounded-lg border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-white outline-none focus:border-sky-400"
-                            >
-                              {[3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map((d) => (
-                                <option key={d} value={d}>{d}s</option>
-                              ))}
-                            </select>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const newPrompts = multishotPrompts.filter((_, i) => i !== index);
-                                setMultishotPrompts(newPrompts);
-                              }}
-                              disabled={isSubmitting || isExpanding}
-                              className="flex h-7 w-7 items-center justify-center rounded-lg border border-rose-500/30 bg-rose-500/20 text-rose-200 transition hover:bg-rose-500/30 disabled:opacity-50"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
-                            </button>
-                          </div>
-                        ))}
-
-                        {/* Add New Shot */}
-                        <div className="flex gap-2 items-start pt-2 border-t border-white/10">
-                          <div className="flex-1 space-y-1">
-                            <input
-                              type="text"
-                              value={currentMultishotPrompt}
-                              onChange={(event) => setCurrentMultishotPrompt(event.target.value)}
-                              placeholder="New shot prompt..."
-                              disabled={isSubmitting || isExpanding}
-                              className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-1.5 text-xs text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
-                            />
-                          </div>
-                          <select
-                            value={currentMultishotDuration}
-                            onChange={(event) => setCurrentMultishotDuration(Number(event.target.value))}
-                            disabled={isSubmitting || isExpanding}
-                            className="w-20 rounded-lg border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-white outline-none focus:border-sky-400"
-                          >
-                            {[3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map((d) => (
-                              <option key={d} value={d}>{d}s</option>
-                            ))}
-                          </select>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (currentMultishotPrompt.trim()) {
-                                // Calculate current total and check cap (max 15s total)
-                                const currentTotal = multishotPrompts.reduce((sum, s) => sum + s.duration, 0);
-                                const allowedDuration = Math.min(currentMultishotDuration, 15 - currentTotal);
-                                if (allowedDuration >= 3) {
-                                  setMultishotPrompts([...multishotPrompts, { prompt: currentMultishotPrompt.trim(), duration: allowedDuration }]);
-                                  setCurrentMultishotPrompt("");
-                                }
-                              }
-                            }}
-                            disabled={isSubmitting || isExpanding || !currentMultishotPrompt.trim()}
-                            className="flex h-7 w-7 items-center justify-center rounded-lg border border-sky-500/30 bg-sky-500/20 text-sky-200 transition hover:bg-sky-500/30 disabled:opacity-50"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14" /><path d="M5 12h14" /></svg>
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
               ) : (
                 <div className="relative">
                   <textarea
@@ -5057,7 +4796,7 @@ export default function ControlsPane() {
                     <button
                       type="button"
                       onClick={() => setSpecialPromptMode((prev) => {
-                        // For non-Kling-V3 models, cycle through image modes
+                        // Cycle through image-oriented prompt modes
                         if (prev === "photoreal") return "editing";
                         if (prev === "editing") return "general";
                         return "photoreal";
