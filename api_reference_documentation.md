@@ -66,12 +66,12 @@ Supports both Text-to-Video (T2V) and Image-to-Video (I2V). When `image_urls` is
 ---
 
 
-### Grok Imagine I2V
+### Grok Imagine
 **Provider**: KIE
 **Endpoint**: `/api/v1/jobs/createTask`
 **Pricing**: $0.10 (6s), $0.15 (10s)
 
-Generates video from a reference image. Supports multiple generation modes including "spicy" mode for internal task_id images only (not supported with external image URLs).
+Generates video from a reference image. Supports `480p` and `720p` output via the same KIE endpoint.
 
 #### Parameters
 | Parameter | Type | Required | Description | Example |
@@ -83,6 +83,7 @@ Generates video from a reference image. Supports multiple generation modes inclu
 | `input.prompt` | string | No | Text prompt describing desired video motion. Max 5000 chars. | `"POV hand comes into frame..."` |
 | `input.mode` | string | No | Generation mode. Options: `"normal"`, `"fun"`, `"spicy"`. Default: `"normal"`. **Note:** Spicy mode not supported with external image_urls. | `"normal"` |
 | `input.duration` | string | No | Duration in seconds. Options: `"6"`, `"10"`. Default: `"6"`. | `"6"` |
+| `input.resolution` | string | No | Output resolution. Options: `"480p"`, `"720p"`. Default: `"480p"`. | `"720p"` |
 | `callBackUrl` | string | No | Callback URL for notifications. | `"https://..."` |
 
 #### Request Example (External Image)
@@ -94,7 +95,8 @@ Generates video from a reference image. Supports multiple generation modes inclu
     "image_urls": ["https://example.com/my-image.png"],
     "prompt": "POV hand comes into frame handing the girl a cup of take away coffee, the girl steps out of the screen looking tired, then takes it and she says happily: 'thanks! Back to work' she exits the frame and walks right to a different part of the office.",
     "mode": "normal",
-    "duration": "6"
+    "duration": "6",
+    "resolution": "720p"
   }
 }
 ```
@@ -109,7 +111,8 @@ Generates video from a reference image. Supports multiple generation modes inclu
     "index": 0,
     "prompt": "The subject walks towards the camera with a confident smile",
     "mode": "spicy",
-    "duration": "10"
+    "duration": "10",
+    "resolution": "480p"
   }
 }
 ```
@@ -139,45 +142,6 @@ Generates video from a reference image. Supports multiple generation modes inclu
     "taskId": "e989621f54392584b05867f87b160672"
   },
   "msg": "Playground task completed successfully."
-}
-```
-
----
-
-
-### Grok Imagine 720p (FAL)
-**Provider**: FAL
-**Endpoint**: `xai/grok-imagine-video/image-to-video`
-**Pricing**: Varies by FAL account pricing
-
-Higher-resolution Grok Imagine image-to-video generation (720p output).
-
-#### Parameters
-| Parameter | Type | Required | Description | Example |
-| :--- | :--- | :--- | :--- | :--- |
-| `prompt` | string | Yes | Text prompt describing motion and scene changes. | `"The camera slowly pushes in as the subject smiles and blinks."` |
-| `image_url` | string | Yes | Start frame image URL. | `"https://example.com/start.png"` |
-| `duration` | number | No | Duration in seconds. Options: `6`, `10`. Default: `6`. | `6` |
-| `aspect_ratio` | string | No | Aspect ratio. Options: `"auto"`, `"16:9"`, `"4:3"`, `"3:2"`, `"1:1"`, `"2:3"`, `"3:4"`, `"9:16"`. Default: `"auto"`. | `"16:9"` |
-| `resolution` | string | No | Output resolution. Currently `"720p"` only. | `"720p"` |
-
-#### Request Example
-```json
-{
-  "prompt": "The camera slowly pushes in as the subject smiles and waves.",
-  "image_url": "https://example.com/start.png",
-  "duration": 6,
-  "aspect_ratio": "16:9",
-  "resolution": "720p"
-}
-```
-
-#### Response Example
-```json
-{
-  "video": {
-    "url": "https://v3.fal.media/files/example/output.mp4"
-  }
 }
 ```
 
