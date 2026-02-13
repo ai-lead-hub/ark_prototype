@@ -31,6 +31,7 @@ Quick reference for adding and managing image/video generation models.
 | Seedance V1 Pro | KIE | $0.35 | T2V, I2V |
 | Seedance 1.5 Pro | KIE | $0.14-$0.28 | T2V, I2V, Audio |
 | Grok Imagine | KIE | $0.10-$0.15 | I2V |
+| Grok Imagine (FAL) | FAL | Varies | I2V |
 | Veo 3.1 Fast | KIE | $0.30 | T2V, I2V |
 | LTX-2 | FAL | ~$0.30 | T2V, I2V, Audio |
 

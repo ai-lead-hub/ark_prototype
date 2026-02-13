@@ -148,6 +148,45 @@ Generates video from a reference image. Supports `480p` and `720p` output via th
 ---
 
 
+### Grok Imagine (FAL 720p)
+**Provider**: FAL
+**Endpoint**: `xai/grok-imagine-video/image-to-video`
+**Pricing**: Varies by FAL account pricing
+
+Alternative Grok Imagine I2V pipeline via FAL.
+
+#### Parameters
+| Parameter | Type | Required | Description | Example |
+| :--- | :--- | :--- | :--- | :--- |
+| `prompt` | string | Yes | Text prompt for motion and scene dynamics. | `"The camera slowly pushes in as the subject smiles."` |
+| `image_url` | string | Yes | Start frame image URL. | `"https://example.com/start.png"` |
+| `duration` | number | No | Duration. Options: `6`, `10`. Default: `6`. | `6` |
+| `aspect_ratio` | string | No | Aspect ratio. Options: `"auto"`, `"16:9"`, `"4:3"`, `"3:2"`, `"1:1"`, `"2:3"`, `"3:4"`, `"9:16"`. Default: `"auto"`. | `"16:9"` |
+| `resolution` | string | No | Output resolution. `"720p"` only. Default: `"720p"`. | `"720p"` |
+
+#### Request Example
+```json
+{
+  "prompt": "The camera slowly pushes in as the subject smiles and waves.",
+  "image_url": "https://example.com/start.png",
+  "duration": 6,
+  "aspect_ratio": "16:9",
+  "resolution": "720p"
+}
+```
+
+#### Response Example
+```json
+{
+  "video": {
+    "url": "https://v3.fal.media/files/example/output.mp4"
+  }
+}
+```
+
+---
+
+
 ### Kling O1 Reference-to-Video
 **Provider**: FAL
 **Endpoint**: `fal-ai/kling-video/o1/reference-to-video`
