@@ -87,6 +87,7 @@ const VIDEO_START_FRAME_KEY = "controls_videoStartFrame_v1";
 const VIDEO_END_FRAME_KEY = "controls_videoEndFrame_v1";
 const IMAGE_HISTORY_KEY = "controls_imageHistory_v1";
 const VIDEO_HISTORY_KEY = "controls_videoHistory_v1";
+const SPECIAL_HISTORY_KEY = "controls_specialHistory_v1";
 const HISTORY_MAX_SIZE = 50;
 const ELEMENTS_API_BASE = import.meta.env.VITE_FILE_API_BASE ?? "http://localhost:8787";
 const ELEMENTS_API_TOKEN = import.meta.env.VITE_FILE_API_TOKEN;
@@ -126,10 +127,10 @@ type PersistedHistory = {
   index: number;
 };
 
-function loadHistoryFromStorage(tab: "image" | "video"): PersistedHistory {
+function loadHistoryFromStorage(tab: "image" | "video" | "special"): PersistedHistory {
   if (typeof localStorage === "undefined") return { entries: [], index: -1 };
   try {
-    const key = tab === "image" ? IMAGE_HISTORY_KEY : VIDEO_HISTORY_KEY;
+    const key = tab === "image" ? IMAGE_HISTORY_KEY : tab === "video" ? VIDEO_HISTORY_KEY : SPECIAL_HISTORY_KEY;
     const raw = localStorage.getItem(key);
     if (!raw) return { entries: [], index: -1 };
     const parsed = JSON.parse(raw) as PersistedHistory;
@@ -143,10 +144,10 @@ function loadHistoryFromStorage(tab: "image" | "video"): PersistedHistory {
   }
 }
 
-function saveHistoryToStorage(tab: "image" | "video", entries: string[], index: number): void {
+function saveHistoryToStorage(tab: "image" | "video" | "special", entries: string[], index: number): void {
   if (typeof localStorage === "undefined") return;
   try {
-    const key = tab === "image" ? IMAGE_HISTORY_KEY : VIDEO_HISTORY_KEY;
+    const key = tab === "image" ? IMAGE_HISTORY_KEY : tab === "video" ? VIDEO_HISTORY_KEY : SPECIAL_HISTORY_KEY;
     localStorage.setItem(key, JSON.stringify({ entries: entries.slice(-HISTORY_MAX_SIZE), index }));
   } catch {
     // Ignore storage errors
@@ -387,12 +388,17 @@ export default function ControlsPane() {
   const [autocompleteIndex, setAutocompleteIndex] = useState(0);
   const promptTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const imagePromptTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const videoPromptTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const referenceInputRef = useRef<HTMLInputElement | null>(null);
   const formRef = useRef<HTMLFormElement | null>(null);
 
   // Was previous submission complete? Track to detect completion
   const wasSubmittingRef = useRef(false);
+
+  // When true, the tab-switch useEffect should skip reloading prompt history.
+  // Set by recreateFromOutput so the restored prompt isn't clobbered.
+  const skipHistoryReloadRef = useRef(false);
 
 
   const previewRegistry = useRef(new Set<string>());
@@ -1086,6 +1092,8 @@ export default function ControlsPane() {
         }
 
         if (action.type === "recreateFromOutput") {
+          // Prevent the tab-switch useEffect from overwriting the prompt
+          skipHistoryReloadRef.current = true;
           const conn = connectionRef.current;
           if (!conn) {
             setStatus("Connect a workspace first.");
@@ -1124,29 +1132,33 @@ export default function ControlsPane() {
           }
 
           if (category === "video") {
-            if (!MODEL_SPECS.some((spec) => spec.id === modelId)) {
-              setStatus(`Video model not found: ${modelId}`);
-              setTimeout(() => setStatus(null), 3500);
-              if (promptValue.trim()) setPrompt(promptValue);
-              return;
-            } else {
+            // First check regular video models
+            if (MODEL_SPECS.some((spec) => spec.id === modelId)) {
               setModelKey(`video:${modelId}`);
               setActiveTab("video");
+              if (promptValue.trim()) setVideoPrompt(promptValue);
+            } else if (SPECIAL_MODELS.some((spec) => spec.id === modelId)) {
+              // Special model (Sora 2, Wan V2V, etc.) — route to special tab
+              setModelKey(`special:${modelId}`);
+              setActiveTab("special");
+              if (promptValue.trim()) setSpecialPrompt(promptValue);
+            } else {
+              setStatus(`Video model not found: ${modelId}`);
+              setTimeout(() => setStatus(null), 3500);
+              if (promptValue.trim()) setVideoPrompt(promptValue);
+              return;
             }
           } else {
             if (!IMAGE_MODELS.some((spec) => spec.id === modelId)) {
               setStatus(`Image model not found: ${modelId}`);
               setTimeout(() => setStatus(null), 3500);
-              if (promptValue.trim()) setPrompt(promptValue);
+              if (promptValue.trim()) setImagePrompt(promptValue);
               return;
             } else {
               setModelKey(`image:${modelId}`);
               setActiveTab("image");
+              if (promptValue.trim()) setImagePrompt(promptValue);
             }
-          }
-
-          if (promptValue.trim()) {
-            setPrompt(promptValue);
           }
 
           // === RESTORE REFERENCES FROM SAVED PAYLOAD ===
@@ -1480,67 +1492,95 @@ export default function ControlsPane() {
       ? startFrame.uploading ||
       endFrame.uploading ||
       videoReferenceUploads.some((entry) => entry.uploading)
-      : imageReferenceUploads.some((entry) => entry.uploading);
+      : modelKind === "special"
+        ? specialReferenceUploads.some((entry) => entry.uploading)
+        : imageReferenceUploads.some((entry) => entry.uploading);
+
+  // --- Pre-submission guardrails ---
+  const promptRequired = useMemo(() => {
+    if (modelKind === "video" && selectedVideo) {
+      return selectedVideo.params.prompt?.required !== false;
+    }
+    if (modelKind === "special" && selectedSpecial) {
+      return selectedSpecial.params.prompt?.required !== false;
+    }
+    // Image models always need a prompt
+    return true;
+  }, [modelKind, selectedVideo, selectedSpecial]);
+
+  const isPromptEmpty = !prompt.trim();
+
+  const isMissingSpecialInput = useMemo(() => {
+    if (modelKind !== "special" || !selectedSpecial) return false;
+    if (selectedSpecial.inputType === "video") {
+      // V2V models need at least one video
+      return videoInputUploads.filter((e) => e.file || e.url).length === 0;
+    }
+    if (selectedSpecial.inputType === "both") {
+      // Needs both image AND video
+      const hasImage = !!(startFrame.file || startFrame.url || startFrame.preview);
+      const hasVideo = videoInputUploads.filter((e) => e.file || e.url).length > 0;
+      return !hasImage || !hasVideo;
+    }
+    return false;
+  }, [modelKind, selectedSpecial, videoInputUploads, startFrame]);
+
+  const canGenerate = !isSubmitting && !pendingUploads && !isMissingImageReference
+    && !(promptRequired && isPromptEmpty) && !isMissingSpecialInput;
+
+  const generateBlockReason = useMemo(() => {
+    if (isSubmitting) return "Queueing...";
+    if (pendingUploads) return "Waiting on uploads…";
+    if (isMissingImageReference) return "Add a reference image";
+    if (promptRequired && isPromptEmpty) return "Enter a prompt";
+    if (isMissingSpecialInput) {
+      if (selectedSpecial?.inputType === "video") return "Upload a video";
+      if (selectedSpecial?.inputType === "both") {
+        const hasImage = !!(startFrame.file || startFrame.url || startFrame.preview);
+        const hasVideo = videoInputUploads.filter((e) => e.file || e.url).length > 0;
+        if (!hasImage && !hasVideo) return "Upload image & video";
+        if (!hasImage) return "Upload an image";
+        return "Upload a video";
+      }
+    }
+    return "✨ Generate";
+  }, [isSubmitting, pendingUploads, isMissingImageReference, promptRequired, isPromptEmpty, isMissingSpecialInput, selectedSpecial, startFrame, videoInputUploads]);
 
   useEffect(() => {
-    if (!selectedVideo) {
+    // Determine which model is active and extract its param definitions
+    let paramEntries: Array<[string, ParamDefinition | undefined]> = [];
+
+    if (selectedVideo) {
+      paramEntries = Object.entries(selectedVideo.params) as Array<[string, ParamDefinition | undefined]>;
+    } else if (selectedSpecial) {
+      paramEntries = Object.entries(selectedSpecial.params) as Array<[string, ParamDefinition | undefined]>;
+    }
+    // Image models don't use paramValues (they have their own UI controls)
+
+    if (paramEntries.length === 0) {
       setParamValues({});
       return;
     }
-    const defaults: Record<string, string | number | boolean | undefined> = {};
-    const entries = Object.entries(selectedVideo.params) as Array<
-      [string, ParamDefinition | undefined]
-    >;
-    entries.forEach(([key, definition]) => {
-      if (!definition) return;
-      const uiKey =
-        definition.uiKey ?? (key as keyof UnifiedPayload);
-      if (uiKey === "start_frame_url" || uiKey === "end_frame_url") {
-        return;
-      }
-      if (definition.default !== undefined) {
-        defaults[uiKey] = definition.default as
-          | string
-          | number
-          | boolean
-          | undefined;
-      } else if (definition.type === "enum" && definition.values?.length) {
-        // For enums without explicit default, use first value
-        defaults[uiKey] = definition.values[0];
-      } else {
-        defaults[uiKey] =
-          definition.type === "boolean" ? false : undefined;
-      }
-    });
-    // Merge defaults with persisted values
-    // We only want to apply defaults for keys that are missing in paramValues
-    // AND ensure that if a value exists, it is valid for the current definition (for enums)
-    setParamValues((prev) => {
-      const next = { ...prev };
-      entries.forEach(([key, definition]) => {
-        if (!definition) return;
-        const uiKey = definition.uiKey ?? (key as keyof UnifiedPayload);
 
-        // If undefined, use default
-        if (next[uiKey] === undefined) {
-          if (defaults[uiKey] !== undefined) {
-            next[uiKey] = defaults[uiKey];
-          }
-        }
-        // If defined, check if it's valid for enum
-        else if (definition.type === "enum" && definition.values) {
-          const currentVal = next[uiKey];
-          // Loose comparison to handle number vs string "5" vs 5
-          const isValid = definition.values.some(v => String(v) === String(currentVal));
-          if (!isValid && defaults[uiKey] !== undefined) {
-            next[uiKey] = defaults[uiKey];
-          }
-        }
-      });
-      return next;
+    // Build fresh defaults from the current model's params — no merging from previous model
+    const freshParams: Record<string, string | number | boolean | undefined> = {};
+    paramEntries.forEach(([key, definition]) => {
+      if (!definition) return;
+      const uiKey = definition.uiKey ?? (key as keyof UnifiedPayload);
+      if (uiKey === "start_frame_url" || uiKey === "end_frame_url") return;
+
+      if (definition.default !== undefined) {
+        freshParams[uiKey] = definition.default as string | number | boolean | undefined;
+      } else if (definition.type === "enum" && definition.values?.length) {
+        freshParams[uiKey] = definition.values[0];
+      } else {
+        freshParams[uiKey] = definition.type === "boolean" ? false : undefined;
+      }
     });
+
+    setParamValues(freshParams);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedVideo]);
+  }, [selectedVideo, selectedSpecial]);
 
   const handleParamChange = (
     key: string,
@@ -1765,13 +1805,20 @@ export default function ControlsPane() {
     const prevTab = prevTabRef.current;
     prevTabRef.current = activeTab;
 
-    // Save current history for previous tab (if it was image or video)
-    if ((prevTab === "image" || prevTab === "video") && prevTab !== activeTab) {
+    // When recreateFromOutput triggers a tab change, skip the history reload
+    // so the restored prompt is not overwritten by stale localStorage history.
+    if (skipHistoryReloadRef.current) {
+      skipHistoryReloadRef.current = false;
+      return;
+    }
+
+    // Save current history for previous tab (if it was image, video, or special)
+    if ((prevTab === "image" || prevTab === "video" || prevTab === "special") && prevTab !== activeTab) {
       saveHistoryToStorage(prevTab, historyRef.current, historyIndexRef.current);
     }
 
     // Load history for new tab
-    if (activeTab === "image" || activeTab === "video") {
+    if (activeTab === "image" || activeTab === "video" || activeTab === "special") {
       const loaded = loadHistoryFromStorage(activeTab);
       // If we have stored history, use it; otherwise start fresh with current prompt
       if (loaded.entries.length > 0) {
@@ -1808,6 +1855,8 @@ export default function ControlsPane() {
       setActiveTab("video");
     } else if (modelKey.startsWith("image:") && activeTab !== "image") {
       setActiveTab("image");
+    } else if (modelKey.startsWith("special:") && activeTab !== "special") {
+      setActiveTab("special");
     }
   }, [modelKey, activeTab, setActiveTab]);
 
@@ -1926,7 +1975,7 @@ export default function ControlsPane() {
 
     try {
       setIsAltering(true);
-      const mode = activeTab === "image" ? "image" : "video";
+      const mode = activeTab === "image" ? "image" : "video"; // special models also produce video
 
       // Save current state before alteration
       addToHistory(prompt);
@@ -2166,13 +2215,11 @@ export default function ControlsPane() {
               }
 
               const elementInputUrls = [uploadedFrontalUrl, ...uploadedRefUrls].slice(0, 4);
-              const fallbackName = `Element${idx + 1}`;
-              const safeName =
-                (el.name || fallbackName).replace(/[^a-zA-Z0-9_]/g, "_") || fallbackName;
+              const elementName = `Element${idx + 1}`;
               return {
-                name: safeName,
+                name: elementName,
                 // API marks description optional; we default it to element name for compatibility.
-                description: safeName,
+                description: elementName,
                 element_input_urls: elementInputUrls,
               };
             })
@@ -2406,6 +2453,7 @@ export default function ControlsPane() {
             start_frame_url: uploadedStartFrameUrl,
             duration: paramValues.duration as string | undefined,
             aspect_ratio: paramValues.aspect_ratio as string | undefined,
+            size: paramValues.size as string | undefined,
             character_id_list: paramValues.character_id_list as string[] | undefined,
           });
 
@@ -3393,10 +3441,80 @@ export default function ControlsPane() {
 
               <div className="relative">
                 <textarea
+                  ref={videoPromptTextareaRef}
                   value={prompt}
-                  onChange={(event) => setPrompt(event.target.value)}
-                  onBlur={() => addToHistory(prompt)}
+                  onChange={(event) => {
+                    const newValue = event.target.value;
+                    setPrompt(newValue);
+
+                    const canAutocomplete =
+                      videoModelSupportsMultishot &&
+                      elementsState.selectedElements.length > 0;
+                    if (!canAutocomplete) {
+                      setShowAutocomplete(false);
+                      return;
+                    }
+
+                    // Show autocomplete when user types @...
+                    const cursorPos = event.target.selectionStart;
+                    const textBefore = newValue.slice(0, cursorPos);
+                    const atMatch = textBefore.match(/@([a-zA-Z0-9]*)$/);
+                    if (atMatch) {
+                      setShowAutocomplete(true);
+                      setAutocompleteIndex(0);
+                    } else {
+                      setShowAutocomplete(false);
+                    }
+                  }}
+                  onBlur={() => {
+                    addToHistory(prompt);
+                    setTimeout(() => setShowAutocomplete(false), 150);
+                  }}
                   onKeyDown={(event) => {
+                    if (showAutocomplete && videoModelSupportsMultishot) {
+                      const options = Array.from(
+                        { length: elementsState.selectedElements.length },
+                        (_, idx) => `@Element${idx + 1}`
+                      );
+
+                      if (options.length > 0) {
+                        if (event.key === "ArrowDown") {
+                          event.preventDefault();
+                          setAutocompleteIndex((prev) => (prev + 1) % options.length);
+                          return;
+                        }
+                        if (event.key === "ArrowUp") {
+                          event.preventDefault();
+                          setAutocompleteIndex((prev) => (prev - 1 + options.length) % options.length);
+                          return;
+                        }
+                        if (event.key === "Enter" || event.key === "Tab") {
+                          event.preventDefault();
+                          const selected = options[autocompleteIndex];
+                          const textarea = event.target as HTMLTextAreaElement;
+                          const cursorPos = textarea.selectionStart;
+                          const textBefore = prompt.slice(0, cursorPos);
+                          const atMatch = textBefore.match(/@([a-zA-Z0-9]*)$/);
+                          if (atMatch) {
+                            const before = textBefore.slice(0, -atMatch[0].length);
+                            const after = prompt.slice(cursorPos);
+                            const newPrompt = before + selected + " " + after;
+                            setPrompt(newPrompt);
+                            setShowAutocomplete(false);
+                            setTimeout(() => {
+                              const newPos = before.length + selected.length + 1;
+                              textarea.setSelectionRange(newPos, newPos);
+                            }, 0);
+                          }
+                          return;
+                        }
+                        if (event.key === "Escape") {
+                          event.preventDefault();
+                          setShowAutocomplete(false);
+                          return;
+                        }
+                      }
+                    }
                     // ⌘+Enter (Mac) / Ctrl+Enter to generate
                     if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && !isSubmitting) {
                       event.preventDefault();
@@ -3407,6 +3525,43 @@ export default function ControlsPane() {
                   disabled={isSubmitting || isExpanding}
                   className={`w-full rounded-2xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 pb-10 ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
                 />
+                {showAutocomplete && videoModelSupportsMultishot && (() => {
+                  const options = elementsState.selectedElements.map((selectedEl, idx) => ({
+                    label: `@Element${idx + 1}`,
+                    name: selectedEl.element.name,
+                  }));
+                  if (options.length === 0) return null;
+
+                  return (
+                    <div className="absolute left-3 top-full z-50 mt-1 max-w-[280px] overflow-hidden rounded-lg border border-white/20 bg-slate-900 shadow-xl">
+                      {options.map((opt, idx) => (
+                        <button
+                          key={opt.label}
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            const textarea = videoPromptTextareaRef.current;
+                            if (!textarea) return;
+                            const cursorPos = textarea.selectionStart;
+                            const textBefore = prompt.slice(0, cursorPos);
+                            const atMatch = textBefore.match(/@([a-zA-Z0-9]*)$/);
+                            if (atMatch) {
+                              const before = textBefore.slice(0, -atMatch[0].length);
+                              const after = prompt.slice(cursorPos);
+                              const newPrompt = before + opt.label + " " + after;
+                              setPrompt(newPrompt);
+                              setShowAutocomplete(false);
+                            }
+                          }}
+                          className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition ${idx === autocompleteIndex ? "bg-sky-500/30 text-white" : "text-slate-300 hover:bg-white/10"}`}
+                        >
+                          <span className="font-medium text-amber-300">{opt.label}</span>
+                          <span className="truncate text-xs text-slate-500">{opt.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()}
                 <div className="absolute bottom-2 right-2 flex gap-1">
                   <button
                     type="button"
@@ -3944,13 +4099,12 @@ export default function ControlsPane() {
                   </div>
                   {elementsState.selectedElements.length === 0 ? (
                     <p className="text-xs text-slate-500">
-                      Optional. Use element tags in prompt, e.g. `@ElementName`.
+                      Optional. Use element tags in prompt, e.g. `@Element1`.
                     </p>
                   ) : (
                     <div className="flex flex-wrap gap-2">
-                      {elementsState.selectedElements.map((selectedEl) => {
-                        const safeName =
-                          (selectedEl.element.name || "Element").replace(/[^a-zA-Z0-9_]/g, "_");
+                      {elementsState.selectedElements.map((selectedEl, idx) => {
+                        const elementTag = `@Element${idx + 1}`;
                         return (
                           <div
                             key={selectedEl.element.id}
@@ -3961,9 +4115,19 @@ export default function ControlsPane() {
                               alt={selectedEl.element.name}
                               className="h-full w-full object-cover"
                             />
-                            <div className="absolute top-0 left-0 bg-amber-500/80 px-1 text-[8px] text-white font-bold">
-                              @{safeName}
-                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const nextPrompt = prompt.includes(elementTag)
+                                  ? prompt
+                                  : `${prompt.trim()}${prompt.trim() ? " " : ""}${elementTag}`;
+                                setPrompt(nextPrompt);
+                              }}
+                              className="absolute left-0 top-0 bg-amber-500/80 px-1 text-[8px] font-bold text-white hover:bg-amber-500"
+                              title={`Insert ${elementTag} in prompt`}
+                            >
+                              {elementTag}
+                            </button>
                             <button
                               type="button"
                               onClick={() => elementsState.deselectElement(selectedEl.element.id)}
@@ -3977,7 +4141,7 @@ export default function ControlsPane() {
                     </div>
                   )}
                   <p className="text-[10px] text-slate-500">
-                    `description` is optional and defaults to the element name.
+                    Click a tag to insert it, or type `@` in prompt to select tags.
                   </p>
                 </div>
               </div>
@@ -4228,6 +4392,55 @@ export default function ControlsPane() {
                   </div>
                 )}
 
+                {/* Duration (for Sora 2 and similar models) */}
+                {selectedSpecial.params.duration && (
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      Duration
+                    </label>
+                    {selectedSpecial.params.duration.type === "enum" &&
+                      selectedSpecial.params.duration.values ? (
+                      <select
+                        value={paramValues.duration === undefined ? "" : String(paramValues.duration)}
+                        onChange={(event) =>
+                          handleParamChange(
+                            "duration",
+                            event.target.value === ""
+                              ? undefined
+                              : typeof selectedSpecial.params.duration?.values?.[0] === "number"
+                                ? Number(event.target.value)
+                                : event.target.value
+                          )
+                        }
+                        disabled={isSubmitting || isExpanding}
+                        className={`w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
+                      >
+                        {!selectedSpecial.params.duration.required && (
+                          <option value="">Default</option>
+                        )}
+                        {selectedSpecial.params.duration.values.map((option: string | number) => (
+                          <option key={String(option)} value={String(option)}>
+                            {String(option)}s
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="number"
+                        value={paramValues.duration === undefined ? "" : Number(paramValues.duration)}
+                        onChange={(event) =>
+                          handleParamChange(
+                            "duration",
+                            event.target.value === "" ? undefined : Number(event.target.value)
+                          )
+                        }
+                        disabled={isSubmitting || isExpanding}
+                        className={`w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
+                      />
+                    )}
+                  </div>
+                )}
+
                 {/* Aspect Ratio (for Sora 2) */}
                 {selectedSpecial.params.aspect_ratio && selectedSpecial.params.aspect_ratio.values && (
                   <div className="space-y-1">
@@ -4243,6 +4456,27 @@ export default function ControlsPane() {
                       {selectedSpecial.params.aspect_ratio.values.map((val) => (
                         <option key={String(val)} value={String(val)}>
                           {String(val)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Size / Quality (Sora 2 Pro) */}
+                {selectedSpecial.params.size && selectedSpecial.params.size.values && (
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      Quality
+                    </label>
+                    <select
+                      value={paramValues.size === undefined ? String(selectedSpecial.params.size.default ?? selectedSpecial.params.size.values[0]) : String(paramValues.size)}
+                      onChange={(event) => handleParamChange("size", event.target.value)}
+                      disabled={isSubmitting || isExpanding}
+                      className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
+                    >
+                      {selectedSpecial.params.size.values.map((val) => (
+                        <option key={String(val)} value={String(val)}>
+                          {String(val).charAt(0).toUpperCase() + String(val).slice(1)}
                         </option>
                       ))}
                     </select>
@@ -4877,16 +5111,10 @@ export default function ControlsPane() {
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <button
             type="submit"
-            disabled={pendingUploads || isMissingImageReference || isSubmitting}
+            disabled={!canGenerate}
             className="rounded-xl bg-gradient-to-r from-sky-500 via-blue-500 to-indigo-500 px-5 py-2 text-sm font-bold text-white shadow-lg shadow-sky-500/30 transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-sky-500/40 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
           >
-            {isSubmitting
-              ? "Queueing..."
-              : pendingUploads
-                ? "Waiting on uploads…"
-                : isMissingImageReference
-                  ? "Add a reference image"
-                  : "✨ Generate"}
+            {generateBlockReason}
           </button>
           {/* T2V/I2V Mode Indicator for video models */}
           {modelKind === "video" && supportsStartFrame && (

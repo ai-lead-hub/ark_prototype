@@ -59,9 +59,52 @@ export const SPECIAL_MODELS: SpecialModelSpec[] = [
             },
             duration: {
                 type: "enum",
-                required: false,
+                required: true,
                 values: ["10", "15"],
                 default: "10",
+            },
+            remove_watermark: {
+                type: "boolean",
+                default: true,
+                hidden: true,
+            },
+            character_id_list: {
+                type: "array",
+                required: false,
+            },
+        },
+    },
+    {
+        id: "sora-2-pro",
+        label: "Sora 2 Pro",
+        endpoint: "/api/v1/jobs/createTask",
+        provider: "kie",
+        pricing: "$0.60",
+        inputType: "image",
+        imageInputConfig: { startFrame: true, endFrame: false },
+        taskConfig: kieTaskConfig,
+        params: {
+            prompt: {
+                type: "string",
+                required: true,
+            },
+            aspect_ratio: {
+                type: "enum",
+                required: false,
+                values: ["portrait", "landscape"],
+                default: "landscape",
+            },
+            duration: {
+                type: "enum",
+                required: true,
+                values: ["10", "15"],
+                default: "10",
+            },
+            size: {
+                type: "enum",
+                required: false,
+                values: ["standard", "high"],
+                default: "standard",
             },
             remove_watermark: {
                 type: "boolean",
@@ -173,6 +216,7 @@ export type SpecialUnifiedPayload = {
         reference_image_urls?: string[];
     }>;
     // Model-specific extras
+    size?: string;
     generate_audio?: boolean;
     cfg_scale?: number;
     negative_prompt?: string;
@@ -207,10 +251,11 @@ export function buildSpecialModelInput(
     // Determine KIE model endpoint and handle model-specific logic
     let kieModelName: string;
 
-    if (model.id === "sora-2") {
-        // Sora 2: T2V or I2V based on whether start frame is provided
+    if (model.id === "sora-2" || model.id === "sora-2-pro") {
+        // Sora 2 / Sora 2 Pro: T2V or I2V based on whether start frame is provided
         const hasImage = !!payload.start_frame_url;
-        kieModelName = hasImage ? "sora-2-image-to-video" : "sora-2-text-to-video";
+        const prefix = model.id === "sora-2-pro" ? "sora-2-pro" : "sora-2";
+        kieModelName = hasImage ? `${prefix}-image-to-video` : `${prefix}-text-to-video`;
 
         // Map duration to n_frames for Sora 2 API
         if (input.duration !== undefined) {

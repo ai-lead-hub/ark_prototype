@@ -304,7 +304,13 @@ const jsonSpecs =
                 const stringValues = definition.values.map(String);
                 const valStr = String(value);
                 if (stringValues.includes(valStr)) {
-                  input[paramKey] = value;
+                  // Use the model's canonical enum type (string/number) from config.
+                  const matchedOption = definition.values.find(
+                    (option) => String(option) === valStr
+                  );
+                  if (matchedOption !== undefined) {
+                    input[paramKey] = matchedOption;
+                  }
                 } else {
                   // Fallback to default if available
                   if (definition.default !== undefined) {

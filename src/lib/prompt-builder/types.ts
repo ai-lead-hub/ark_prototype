@@ -234,6 +234,36 @@ export function defaultState(): PromptBuilderState {
     };
 }
 
+/**
+ * Wrap the keyword/name portion of a camera prompt in $...$ delimiters.
+ * Handles formats: "shot on NAME — desc", "with NAME — desc", "NAME — desc"
+ */
+function wrapKeywordName(prompt: string): string {
+    // Split on em-dash (—) to separate name from description
+    const dashIdx = prompt.indexOf('—');
+    if (dashIdx === -1) {
+        // No description, wrap the whole thing
+        return `$${prompt.trim()}$`;
+    }
+
+    const before = prompt.slice(0, dashIdx).trim();
+    const after = prompt.slice(dashIdx); // includes "— description"
+
+    // Extract the keyword name from prefixes like "shot on" or "with"
+    const shotOnMatch = before.match(/^(shot on\s+)(.+)$/i);
+    if (shotOnMatch) {
+        return `${shotOnMatch[1]}$${shotOnMatch[2].trim()}$ ${after}`;
+    }
+
+    const withMatch = before.match(/^(with\s+)(.+)$/i);
+    if (withMatch) {
+        return `${withMatch[1]}$${withMatch[2].trim()}$ ${after}`;
+    }
+
+    // No prefix, wrap the name directly
+    return `$${before}$ ${after}`;
+}
+
 export function buildPromptData(state: PromptBuilderState): PromptBuilderData {
     const camera: PromptBuilderData['camera'] = {};
 
@@ -259,10 +289,11 @@ export function buildPromptData(state: PromptBuilderState): PromptBuilderData {
     };
 
     // Build film_stock from camera body + lens + film look
+    // Wrap keyword names in $...$ for emphasis (e.g., "shot on $ARRI ALEXA 35$ — organic color science")
     const stockParts: string[] = [];
-    if (state.cameraBody) stockParts.push(state.cameraBody);
-    if (state.lensType) stockParts.push(state.lensType);
-    if (state.filmLook) stockParts.push(state.filmLook);
+    if (state.cameraBody) stockParts.push(wrapKeywordName(state.cameraBody));
+    if (state.lensType) stockParts.push(wrapKeywordName(state.lensType));
+    if (state.filmLook) stockParts.push(wrapKeywordName(state.filmLook));
     if (stockParts.length) data.film_stock = stockParts.join(', ');
 
     return data;
@@ -290,9 +321,9 @@ export function buildPromptText(data: PromptBuilderData): string {
             if (formattedAngle) desc.push(formattedAngle);
         }
         if (camera.distance) desc.push(camera.distance);
-        if (camera['lens-mm'] !== undefined) desc.push(`${camera['lens-mm']}mm lens`);
-        if (camera.lens) desc.push(`${camera.lens} lens`);
-        if (camera['f-number']) desc.push(camera['f-number']);
+        if (camera['lens-mm'] !== undefined) desc.push(`$${camera['lens-mm']}mm$ lens`);
+        if (camera.lens) desc.push(`$${camera.lens}$ lens`);
+        if (camera['f-number']) desc.push(`$${camera['f-number']}$`);
         if (desc.length) parts.push(`Camera: ${desc.join(", ")}`);
     }
 

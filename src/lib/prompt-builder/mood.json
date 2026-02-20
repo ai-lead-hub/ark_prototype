@@ -2,241 +2,241 @@
   "Classic Cinema (Pre-1980)": [
     {
       "name": "Citizen Kane",
-      "prompt": "inspired by the deep-focus shadowy expressionist look of Citizen Kane"
+      "prompt": "inspired by the high-contrast deep-shadow black-and-white look of $Citizen Kane$ — sharp blacks, blown-out highlights, heavy vignetting"
     },
     {
       "name": "Lawrence of Arabia",
-      "prompt": "inspired by the epic golden desert sweeping look of Lawrence of Arabia"
+      "prompt": "inspired by the warm golden-hour saturated amber look of $Lawrence of Arabia$ — rich yellows, deep blue skies, sunlit grain"
     },
     {
       "name": "2001: A Space Odyssey",
-      "prompt": "inspired by the cold precise symmetrical futuristic look of 2001: A Space Odyssey"
+      "prompt": "inspired by the cool sterile clean white-balanced look of $2001: A Space Odyssey$ — neutral whites, flat even lighting, minimal color cast"
     },
     {
       "name": "The Godfather",
-      "prompt": "inspired by the warm chiaroscuro shadowy intimate look of The Godfather"
+      "prompt": "inspired by the warm amber underexposed chiaroscuro look of $The Godfather$ — deep brown-orange shadows, golden skin tones, crushed blacks"
     },
     {
       "name": "Apocalypse Now",
-      "prompt": "inspired by the surreal smoky jungle golden-hour look of Apocalypse Now"
+      "prompt": "inspired by the smoky warm orange-green jungle look of $Apocalypse Now$ — golden highlights, hazy atmosphere, green-shifted midtones"
     },
     {
       "name": "Taxi Driver",
-      "prompt": "inspired by the gritty neon-lit nocturnal urban look of Taxi Driver"
+      "prompt": "inspired by the gritty neon-reflected desaturated look of $Taxi Driver$ — sickly greens, harsh fluorescent spill, grainy shadows"
     },
     {
       "name": "Chinatown",
-      "prompt": "inspired by the sun-bleached amber noir look of Chinatown"
+      "prompt": "inspired by the sun-bleached warm amber look of $Chinatown$ — overexposed highlights, golden-brown color cast, soft haze"
     },
     {
       "name": "Barry Lyndon",
-      "prompt": "inspired by the candlelit painterly natural-light look of Barry Lyndon"
+      "prompt": "inspired by the candlelit warm-orange natural-light look of $Barry Lyndon$ — soft golden glow, low-contrast shadows, painterly color"
     }
   ],
   "New Hollywood & 80s": [
     {
       "name": "Blade Runner",
-      "prompt": "inspired by the rain-soaked neon noir smoky look of Blade Runner"
+      "prompt": "inspired by the rain-soaked blue-orange neon look of $Blade Runner$ — deep teal shadows, amber highlights, wet surface reflections, smoky haze"
     },
     {
       "name": "Raging Bull",
-      "prompt": "inspired by the high-contrast black-and-white brutal look of Raging Bull"
+      "prompt": "inspired by the high-contrast silver-tone black-and-white look of $Raging Bull$ — harsh directional light, deep blacks, blown whites"
     },
     {
       "name": "Paris, Texas",
-      "prompt": "inspired by the dusty saturated lonely Americana look of Paris, Texas"
+      "prompt": "inspired by the dusty oversaturated warm look of $Paris, Texas$ — burnt orange tones, faded reds, bleached-out skies, dry color palette"
     },
     {
       "name": "Blue Velvet",
-      "prompt": "inspired by the oversaturated suburban nightmare look of Blue Velvet"
+      "prompt": "inspired by the oversaturated lush jewel-tone look of $Blue Velvet$ — deep blues, vivid reds, punchy greens, unnaturally rich colors"
     },
     {
       "name": "The Shining",
-      "prompt": "inspired by the cold sterile symmetrical unsettling look of The Shining"
+      "prompt": "inspired by the cold flat fluorescent-lit look of $The Shining$ — even overexposure, cool color cast, sterile whites, low contrast"
     },
     {
       "name": "E.T.",
-      "prompt": "inspired by the warm backlit magical suburban look of E.T."
+      "prompt": "inspired by the warm backlit soft-glow look of $E.T.$ — golden lens flares, warm amber fill, silhouette backlighting, hazy atmosphere"
     },
     {
       "name": "Scarface",
-      "prompt": "inspired by the neon-soaked excess Miami look of Scarface"
+      "prompt": "inspired by the neon-soaked hot pink-and-teal Miami look of $Scarface$ — saturated neon pinks, white-hot highlights, warm skin tones"
     }
   ],
   "90s-2000s": [
     {
       "name": "Amélie",
-      "prompt": "inspired by the warm green-yellow whimsical Parisian look of Amélie"
+      "prompt": "inspired by the warm green-gold color-graded look of $Amélie$ — boosted greens and yellows, warm midtones, reduced blues, slight desaturation in shadows"
     },
     {
       "name": "In the Mood for Love",
-      "prompt": "inspired by the slow-motion saturated-red romantic melancholic look of In the Mood for Love"
+      "prompt": "inspired by the saturated deep-red warm look of $In the Mood for Love$ — rich crimson and burgundy tones, golden highlights, crushed moody shadows"
     },
     {
       "name": "The Matrix",
-      "prompt": "inspired by the green-tinted digital cold sterile look of The Matrix"
+      "prompt": "inspired by the green-tinted desaturated digital look of $The Matrix$ — heavy green color cast, crushed blacks, cold blue-green highlights"
     },
     {
       "name": "Fight Club",
-      "prompt": "inspired by the grimy desaturated nihilistic look of Fight Club"
+      "prompt": "inspired by the desaturated teal-and-brown gritty look of $Fight Club$ — pulled saturation, yellow-brown skin tones, sickly green shadows"
     },
     {
       "name": "Children of Men",
-      "prompt": "inspired by the handheld grey apocalyptic documentary look of Children of Men"
+      "prompt": "inspired by the grey-brown desaturated overcast look of $Children of Men$ — muted palette, cool grey tones, low saturation, flat contrast"
     },
     {
       "name": "Eternal Sunshine",
-      "prompt": "inspired by the soft dreamy color-shifting nostalgic look of Eternal Sunshine of the Spotless Mind"
+      "prompt": "inspired by the soft pastel color-shifting look of $Eternal Sunshine of the Spotless Mind$ — washed-out pastels, warm highlights fading to cool shadows, gentle grain"
     },
     {
       "name": "Lost in Translation",
-      "prompt": "inspired by the neon-haze soft ambient Tokyo look of Lost in Translation"
+      "prompt": "inspired by the soft neon-haze amber look of $Lost in Translation$ — diffused city glow, warm yellow-pinks, soft contrast, dreamy halation"
     },
     {
       "name": "The Dark Knight",
-      "prompt": "inspired by the IMAX-scale gritty blue-teal urban look of The Dark Knight"
+      "prompt": "inspired by the cold blue-teal high-contrast look of $The Dark Knight$ — steel-blue shadows, warm orange practicals, deep blacks, IMAX sharpness"
     },
     {
       "name": "No Country for Old Men",
-      "prompt": "inspired by the harsh daylight dusty desolate look of No Country for Old Men"
+      "prompt": "inspired by the harsh daylight dusty bleached look of $No Country for Old Men$ — flat neutral grade, strong midday shadows, desaturated earth tones"
     },
     {
       "name": "There Will Be Blood",
-      "prompt": "inspired by the oil-dark amber period epic look of There Will Be Blood"
+      "prompt": "inspired by the dark amber oil-lamp warm-shadow look of $There Will Be Blood$ — deep brown-orange grade, crushed blacks, golden highlights, underexposed fill"
     }
   ],
   "Modern Cinema (2010s)": [
     {
       "name": "Blade Runner 2049",
-      "prompt": "inspired by the vast desolate orange-teal foggy look of Blade Runner 2049"
+      "prompt": "inspired by the vast orange-teal desaturated foggy look of $Blade Runner 2049$ — strong orange-brown color cast, milky haze, crushed cool shadows, low contrast"
     },
     {
       "name": "The Revenant",
-      "prompt": "inspired by the natural-light brutal cold immersive look of The Revenant"
+      "prompt": "inspired by the cold blue-grey natural-light overcast look of $The Revenant$ — desaturated cool tones, blue-shifted shadows, pale skin, muted greens"
     },
     {
       "name": "Mad Max: Fury Road",
-      "prompt": "inspired by the saturated chrome kinetic desert look of Mad Max: Fury Road"
+      "prompt": "inspired by the crushed-teal-and-orange hyperchromatic look of $Mad Max: Fury Road$ — pushed orange highlights, deep teal shadows, high saturation, chrome reflections"
     },
     {
       "name": "Her",
-      "prompt": "inspired by the warm soft-focus pastel intimate look of Her"
+      "prompt": "inspired by the warm soft-focus pastel look of $Her$ — pink-peach skin tones, warm highlights, diffused soft light, low contrast, gentle color palette"
     },
     {
       "name": "Drive",
-      "prompt": "inspired by the neon-noir pink-purple 80s look of Drive"
+      "prompt": "inspired by the neon-noir pink-and-amber look of $Drive$ — magenta-pink neon spill, cool blue shadows, amber tungsten interiors, high-contrast night"
     },
     {
       "name": "La La Land",
-      "prompt": "inspired by the saturated Technicolor magic-hour musical look of La La Land"
+      "prompt": "inspired by the saturated Technicolor golden-hour look of $La La Land$ — boosted primaries, warm golden light, deep blue twilight skies, rich skin tones"
     },
     {
       "name": "Moonlight",
-      "prompt": "inspired by the intimate teal-magenta poetic close-up look of Moonlight"
+      "prompt": "inspired by the teal-magenta complementary look of $Moonlight$ — deep teal shadows, warm magenta highlights on dark skin, rich saturated nighttime color"
     },
     {
       "name": "The Grand Budapest Hotel",
-      "prompt": "inspired by the symmetrical pastel storybook whimsical look of The Grand Budapest Hotel"
+      "prompt": "inspired by the symmetrical pastel candy-colored look of $The Grand Budapest Hotel$ — muted pinks, lavenders, powder blues, flat even lighting, storybook palette"
     },
     {
       "name": "Arrival",
-      "prompt": "inspired by the foggy muted contemplative mysterious look of Arrival"
+      "prompt": "inspired by the foggy cool desaturated grey look of $Arrival$ — overcast flat lighting, grey-blue palette, muted contrast, cold color temperature"
     },
     {
       "name": "1917",
-      "prompt": "inspired by the continuous-take immersive WWI mud-and-fire look of 1917"
+      "prompt": "inspired by the desaturated mud-brown war-torn look of $1917$ — brown-grey earth tones, crushed shadows, warm fire highlights, muted greens"
     },
     {
       "name": "Joker",
-      "prompt": "inspired by the gritty 70s amber-teal Gotham look of Joker"
+      "prompt": "inspired by the 70s amber-teal gritty film-grain look of $Joker$ — warm amber highlights, teal-green shadows, visible grain, slight desaturation"
     },
     {
       "name": "Parasite",
-      "prompt": "inspired by the class-contrast architectural green-tinted look of Parasite"
+      "prompt": "inspired by the cool green-tinted clean look of $Parasite$ — slight green color cast, neutral balanced lighting, high contrast between light and shadow"
     },
     {
       "name": "Jojo Rabbit",
-      "prompt": "inspired by the whimsical pastel wartime satire storybook look of Jojo Rabbit"
+      "prompt": "inspired by the warm pastel soft-contrast look of $Jojo Rabbit$ — saturated pastels, warm golden fill, soft shadows, heightened primary colors"
     },
     {
       "name": "Midsommar",
-      "prompt": "inspired by the sun-drenched oversaturated folk-horror pastoral look of Midsommar"
+      "prompt": "inspired by the sun-drenched overexposed bright look of $Midsommar$ — blown-out highlights, oversaturated greens and yellows, flat shadowless fill"
     },
     {
       "name": "Knives Out",
-      "prompt": "inspired by the warm amber autumnal cozy mystery mansion look of Knives Out"
+      "prompt": "inspired by the warm amber autumn-toned look of $Knives Out$ — rich warm browns and oranges, golden warm fill, cozy color temperature, soft contrast"
     }
   ],
   "Contemporary (2020s)": [
     {
       "name": "Dune",
-      "prompt": "inspired by the vast muted desert ancient-future scale look of Dune"
+      "prompt": "inspired by the muted desaturated sand-tone look of $Dune$ — pulled saturation, warm amber desert tones, blue-grey shadows, diffused haze"
     },
     {
       "name": "Oppenheimer",
-      "prompt": "inspired by the IMAX black-and-white intimate epic look of Oppenheimer"
+      "prompt": "inspired by the high-contrast IMAX film-grain look of $Oppenheimer$ — deep rich blacks, sharp highlights, B&W sequences with silver tones, warm color segments"
     },
     {
       "name": "Everything Everywhere All at Once",
-      "prompt": "inspired by the multiverse playful chaotic color-shifting look of Everything Everywhere All at Once"
+      "prompt": "inspired by the color-shifting saturated chaotic look of $Everything Everywhere All at Once$ — rapidly shifting color palettes, boosted neons, warm-to-cool grade jumps"
     },
     {
       "name": "The Batman",
-      "prompt": "inspired by the rain-drenched red-noir Gotham look of The Batman"
+      "prompt": "inspired by the rain-drenched red-noir dark look of $The Batman$ — deep crushed blacks, red-amber practicals, desaturated cold base grade, wet surface reflections"
     },
     {
       "name": "Poor Things",
-      "prompt": "inspired by the fisheye surreal saturated theatrical look of Poor Things"
+      "prompt": "inspired by the fisheye oversaturated theatrical look of $Poor Things$ — blown-out primary colors, wide-angle distortion, warm oversaturated skin, punchy contrast"
     },
     {
       "name": "Killers of the Flower Moon",
-      "prompt": "inspired by the amber period naturalistic epic look of Killers of the Flower Moon"
+      "prompt": "inspired by the warm amber period naturalistic look of $Killers of the Flower Moon$ — golden-hour warmth, amber skin tones, low-contrast natural light, earthy palette"
     },
     {
       "name": "Past Lives",
-      "prompt": "inspired by the soft naturalistic intimate Korean-American look of Past Lives"
+      "prompt": "inspired by the soft cool naturalistic look of $Past Lives$ — neutral balanced color, soft diffused fill, slightly cool shadows, gentle contrast"
     },
     {
       "name": "The French Dispatch",
-      "prompt": "inspired by the obsessively composed pastel magazine-illustration look of The French Dispatch"
+      "prompt": "inspired by the flat pastel meticulously composed look of $The French Dispatch$ — muted pastels, even flat lighting, desaturated pinks and yellows, storybook framing"
     },
     {
       "name": "Nope",
-      "prompt": "inspired by the wide-open sky ominous Western vast spectacle look of Nope"
+      "prompt": "inspired by the harsh daylight wide-sky look of $Nope$ — strong midday sunlight, deep blue skies, crisp shadows, neutral color grade with slight warmth"
     },
     {
       "name": "Aftersun",
-      "prompt": "inspired by the hazy sun-bleached nostalgic home-video intimate look of Aftersun"
+      "prompt": "inspired by the hazy sun-bleached warm-grain look of $Aftersun$ — overexposed warm highlights, visible film grain, faded color, soft washed-out contrast"
     }
   ],
   "Genre-Specific Looks": [
     {
       "name": "Neon Noir",
-      "prompt": "inspired by a neon-soaked rain-slicked night noir look"
+      "prompt": "inspired by a $neon noir$ look — rain-wet surfaces reflecting neon, deep teal-blue shadows, hot pink and cyan highlights, crushed blacks"
     },
     {
       "name": "Vintage Americana",
-      "prompt": "inspired by a sun-bleached faded nostalgic Americana look"
+      "prompt": "inspired by a $vintage Americana$ look — faded warm tones, slight overexposure, desaturated reds and blues, golden warm cast, film grain"
     },
     {
       "name": "Dark Fantasy",
-      "prompt": "inspired by a shadowy mystical atmospheric fantasy look"
+      "prompt": "inspired by a $dark fantasy$ look — deep blue-green shadows, warm fire-lit highlights, desaturated midtones, rich deep blacks, atmospheric haze"
     },
     {
       "name": "Cyberpunk",
-      "prompt": "inspired by a neon-drenched high-tech low-life cyberpunk look"
+      "prompt": "inspired by a $cyberpunk$ look — neon pink, cyan, and purple color spill, deep crushed blacks, high contrast, electric color fringing"
     },
     {
       "name": "Giallo Horror",
-      "prompt": "inspired by a saturated red-blue Italian giallo horror look"
+      "prompt": "inspired by a $giallo horror$ look — saturated deep reds and electric blues, heavy gel lighting, strong primary color contrast, underexposed shadows"
     },
     {
       "name": "French New Wave",
-      "prompt": "inspired by a grainy black-and-white spontaneous French New Wave look"
+      "prompt": "inspired by a $French New Wave$ look — grainy high-contrast black-and-white, blown-out whites, natural available light, handheld texture"
     },
     {
       "name": "Wong Kar-wai Romance",
-      "prompt": "inspired by a slow-motion saturated romantic Hong Kong look"
+      "prompt": "inspired by a $Wong Kar-wai$ look — saturated warm reds and greens, smeared motion blur, golden tungsten warmth, crushed deep shadows"
     }
   ]
 }

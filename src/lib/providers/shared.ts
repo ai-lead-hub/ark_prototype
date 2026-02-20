@@ -262,19 +262,24 @@ export async function readErrorDetails(response: Response): Promise<string> {
     const text = await response.text();
     try {
       const json = JSON.parse(text);
-      return (
+      const message = (
         json.message ||
         json.msg ||
         json.error ||
         json.detail ||
         (json.data && json.data.message) ||
-        text.slice(0, 200)
+        text.slice(0, 200) ||
+        response.statusText ||
+        "Unknown error"
       );
+      return typeof message === "string" && message.trim()
+        ? message
+        : response.statusText || "Unknown error";
     } catch {
-      return text.slice(0, 200) || response.statusText;
+      return text.slice(0, 200) || response.statusText || "Unknown error";
     }
   } catch {
-    return response.statusText;
+    return response.statusText || "Unknown error";
   }
 }
 

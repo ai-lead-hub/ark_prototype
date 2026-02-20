@@ -83,7 +83,7 @@ Generates video from a reference image. Supports `480p` and `720p` output via th
 | `input.prompt` | string | No | Text prompt describing desired video motion. Max 5000 chars. | `"POV hand comes into frame..."` |
 | `input.mode` | string | No | Generation mode. Options: `"normal"`, `"fun"`, `"spicy"`. Default: `"normal"`. **Note:** Spicy mode not supported with external image_urls. | `"normal"` |
 | `input.duration` | string | No | Duration in seconds. Options: `"6"`, `"10"`. Default: `"6"`. | `"6"` |
-| `input.resolution` | string | No | Output resolution. Options: `"480p"`, `"720p"`. Default: `"480p"`. | `"720p"` |
+| `input.resolution` | string | No | Output resolution. Options: `"480p"`, `"720p"`. Default: `"720p"`. | `"720p"` |
 | `callBackUrl` | string | No | Callback URL for notifications. | `"https://..."` |
 
 #### Request Example (External Image)
@@ -112,7 +112,7 @@ Generates video from a reference image. Supports `480p` and `720p` output via th
     "prompt": "The subject walks towards the camera with a confident smile",
     "mode": "spicy",
     "duration": "10",
-    "resolution": "480p"
+    "resolution": "720p"
   }
 }
 ```

@@ -221,7 +221,8 @@ export function QueueProvider({ children }: { children: ReactNode }) {
                         }, 10000);
                     } catch (error) {
                         releaseSlot();
-                        const msg = error instanceof Error ? error.message : "Unknown error";
+                        const rawMsg = error instanceof Error ? error.message : String(error ?? "");
+                        const msg = rawMsg.trim() || "Unknown error";
                         localLogs.push(`Failed: ${msg}`);
 
                         setJobs((prev) =>

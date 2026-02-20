@@ -131,7 +131,7 @@ export async function callKie(
       (data.msg as string | undefined) ??
       (data.message as string | undefined) ??
       "KIE request failed.";
-    throw new Error(`${message} (code ${data.code})`);
+    throw new Error(`${enhanceKieErrorMessage(message)} (code ${data.code})`);
   }
 
   const directUrl =
@@ -234,9 +234,25 @@ function resolveTaskId(data: Record<string, unknown>): string | undefined {
   if (typeof direct === "string" && direct) {
     return direct;
   }
+  const snake = data.task_id;
+  if (typeof snake === "string" && snake) {
+    return snake;
+  }
+  const recordId = data.recordId;
+  if (typeof recordId === "string" && recordId) {
+    return recordId;
+  }
   const nested = data.data;
-  if (isRecord(nested) && typeof nested.taskId === "string" && nested.taskId) {
-    return nested.taskId;
+  if (isRecord(nested)) {
+    if (typeof nested.taskId === "string" && nested.taskId) {
+      return nested.taskId;
+    }
+    if (typeof nested.task_id === "string" && nested.task_id) {
+      return nested.task_id;
+    }
+    if (typeof nested.recordId === "string" && nested.recordId) {
+      return nested.recordId;
+    }
   }
   return undefined;
 }
@@ -250,6 +266,7 @@ async function pollKieTask(
   logger?: LogFn
 ): Promise<unknown> {
   const defaults = resolveTaskConfig(config);
+  let transientFailureCount = 0;
 
   for (let attempt = 0; attempt < defaults.maxAttempts; attempt += 1) {
     const statusPayload = await fetchTaskStatus(key, taskId, config, defaults);
@@ -282,14 +299,23 @@ async function pollKieTask(
         (s: string | number) => s === stateValue || String(s) === stateStr
       );
       if (isFailure) {
-        const errorMessage =
-          (getValueAtPath(statusPayload, "data.failMsg") as string | undefined) ??
-          (getValueAtPath(statusPayload, "data.errorMsg") as string | undefined) ??
-          (statusPayload.msg as string | undefined) ??
-          (statusPayload.message as string | undefined) ??
-          "Task failed.";
+        const errorMessage = extractTaskFailureMessage(statusPayload);
+        if (
+          isTransientKieTaskFailure(errorMessage) &&
+          transientFailureCount < MAX_TRANSIENT_TASK_FAILURES
+        ) {
+          transientFailureCount += 1;
+          if (logger) {
+            logger(
+              `Transient KIE failure (${transientFailureCount}/${MAX_TRANSIENT_TASK_FAILURES}): ${errorMessage}. Retrying status poll...`
+            );
+          }
+          await delay(defaults.pollIntervalMs);
+          continue;
+        }
         throw new Error(`KIE task failed: ${errorMessage}`);
       }
+      transientFailureCount = 0;
     }
 
     const maybePayload =
@@ -387,4 +413,58 @@ function extractUrlFromResultJson(input: unknown): string | undefined {
     }
   }
   return undefined;
+}
+
+const MAX_TRANSIENT_TASK_FAILURES = 3;
+
+function isTransientKieTaskFailure(message: string): boolean {
+  const normalized = message.trim().toLowerCase();
+  if (!normalized) return true;
+  if (normalized === "success") return true;
+  if (normalized === "task failed.") return true;
+  if (normalized === "unknown error") return true;
+  if (normalized.includes("task id is blank")) return true;
+  if (normalized.includes("createtaskrep is blank")) return true;
+  if (normalized.includes("generate playground failed")) return true;
+  return false;
+}
+
+function extractTaskFailureMessage(statusPayload: Record<string, unknown>): string {
+  const candidates = [
+    getValueAtPath(statusPayload, "data.failMsg"),
+    getValueAtPath(statusPayload, "data.errorMsg"),
+    getValueAtPath(statusPayload, "data.failReason"),
+    getValueAtPath(statusPayload, "data.reason"),
+    getValueAtPath(statusPayload, "data.message"),
+    statusPayload.msg,
+    statusPayload.message,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate !== "string") continue;
+    const trimmed = candidate.trim();
+    if (!trimmed) continue;
+    if (trimmed.toLowerCase() === "success") continue;
+    return enhanceKieErrorMessage(trimmed);
+  }
+
+  return "Task failed.";
+}
+
+function enhanceKieErrorMessage(message: string): string {
+  const normalized = message.trim();
+  const lowered = normalized.toLowerCase();
+  if (!normalized) {
+    return "KIE request failed.";
+  }
+  if (lowered.includes("image dimensions must be at least 300")) {
+    return `${normalized}. Ensure start frame and all element/reference images are at least 300x300.`;
+  }
+  if (lowered.includes("kling_elements must contain an element with name")) {
+    return `${normalized} Use @Element1/@Element2 in prompt and matching names in kling_elements.`;
+  }
+  if (lowered.includes("video duration must be between 3 and 30 seconds")) {
+    return `${normalized}. For motion-control, the reference video must be 3-30 seconds long.`;
+  }
+  return normalized;
 }
