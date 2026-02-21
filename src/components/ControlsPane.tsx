@@ -7,6 +7,14 @@ import {
 } from "react";
 import { PromptBuilderV2 } from "./PromptBuilder";
 import { BatchPromptModal } from "./BatchPromptModal";
+import {
+  ImageShotLookCards,
+  buildCardsSuffix,
+  DEFAULT_SHOT,
+  DEFAULT_LOOK,
+  type ShotSettings,
+  type LookSettings,
+} from "./ImageShotLookCards";
 import { CameraMovementSelector } from "./ui/CameraMovementSelector";
 import type { ChangeEvent, FormEvent } from "react";
 import {
@@ -220,11 +228,11 @@ export default function ControlsPane() {
   const [videoPrompt, setVideoPrompt] = usePersistentState("videoPrompt", "");
   const [specialPrompt, setSpecialPrompt] = usePersistentState("specialPrompt", "");
   type PromptMode = "photoreal" | "audiogen" | "editing" | "general" | "timestep";
-  type ImagePromptMode = "photoreal" | "editing" | "general";
+  type ImagePromptMode = "photoreal" | "editing";
   type VideoPromptMode = "photoreal" | "audiogen" | "timestep";
   const legacyPromptMode = getStored<PromptMode | null>("promptMode", null);
   const initialImagePromptMode: ImagePromptMode =
-    legacyPromptMode === "editing" || legacyPromptMode === "general" || legacyPromptMode === "photoreal"
+    legacyPromptMode === "editing" || legacyPromptMode === "photoreal"
       ? legacyPromptMode
       : "photoreal";
   const initialVideoPromptMode: VideoPromptMode =
@@ -354,6 +362,10 @@ export default function ControlsPane() {
   const [isReferenceDragActive, setIsReferenceDragActive] = useState(false);
   const [showPromptStudio, setShowPromptStudio] = useState(false);
   const [showCameraSelector, setShowCameraSelector] = useState(false);
+
+  // Persistent camera/style card settings (image tab only)
+  const [imageShotSettings, setImageShotSettings] = usePersistentState<ShotSettings>("imageShotSettings", DEFAULT_SHOT);
+  const [imageLookSettings, setImageLookSettings] = usePersistentState<LookSettings>("imageLookSettings", DEFAULT_LOOK);
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [batchQueue, setBatchQueue] = useState<string[]>([]);
   const [batchIndex, setBatchIndex] = useState(0);
@@ -2028,10 +2040,10 @@ export default function ControlsPane() {
       const endFrameUrlExpired = Boolean(endFrame.url) && isUploadUrlExpired(endFrame.createdAt);
 
       if (startFrameUrlExpired && !startFrame.file) {
-        throw new Error("Start frame upload expired. Re-upload the image and try again.");
+        throw new Error("Start frame upload has expired. Please re-upload the start frame image and try again.");
       }
       if (endFrameUrlExpired && !endFrame.file) {
-        throw new Error("End frame upload expired. Re-upload the image and try again.");
+        throw new Error("End frame upload has expired. Please re-upload the end frame image and try again.");
       }
 
       if (startFrame.file && (!startFrame.url || startFrameUrlExpired)) {
@@ -2068,9 +2080,11 @@ export default function ControlsPane() {
       const uploadedReferenceUrls: string[] = new Array(referenceUploads.length);
       const refUploadPromises: Promise<void>[] = [];
 
+      const expiredRefNames: string[] = [];
       referenceUploads.forEach((ref, idx) => {
         const refUrlExpired = Boolean(ref.url) && isUploadUrlExpired(ref.createdAt);
         if (refUrlExpired && !ref.file) {
+          expiredRefNames.push(ref.name || `image_${idx + 1}`);
           return;
         }
         if (ref.file && (!ref.url || refUrlExpired)) {
@@ -2097,7 +2111,15 @@ export default function ControlsPane() {
         await Promise.all(refUploadPromises);
       } catch (error) {
         console.error("Failed to upload reference image(s):", error);
-        throw new Error("Failed to upload reference image(s). Please try again.");
+        throw new Error(
+          `Failed to upload reference image(s): ${error instanceof Error ? error.message : "Unknown error"}. Please try again.`
+        );
+      }
+
+      if (expiredRefNames.length > 0) {
+        throw new Error(
+          `Reference${expiredRefNames.length > 1 ? "s" : ""} expired: ${expiredRefNames.join(", ")}. Please re-upload and try again.`
+        );
       }
 
       const missingReferences = referenceUploads
@@ -2313,6 +2335,12 @@ export default function ControlsPane() {
           processedPrompt = processedPrompt.replace(new RegExp(`@img${i}\\b`, 'gi'), `image_${i}`);
         }
 
+        // Append persistent camera/style card settings to prompt
+        const cardsSuffix = buildCardsSuffix(imageShotSettings, imageLookSettings);
+        if (cardsSuffix) {
+          processedPrompt = processedPrompt + ". " + cardsSuffix;
+        }
+
         const imageElements: Array<{
           frontal_image_url: string;
           reference_image_urls: string[];
@@ -2518,6 +2546,7 @@ export default function ControlsPane() {
           // Upload reference style images that have files but no URLs
           const uploadedImageUrls: string[] = new Array(referenceStyleImages.length);
           const styleUploadPromises: Promise<void>[] = [];
+          const failedStyleUploads: string[] = [];
           referenceStyleImages.forEach((img, idx) => {
             if (img.file && !img.url) {
               styleUploadPromises.push(
@@ -2526,6 +2555,7 @@ export default function ControlsPane() {
                   setReferenceStyleImages((prev) => prev.map((i) => i.id === img.id ? { ...i, url: uploadedUrl, uploading: false } : i));
                 }).catch((error) => {
                   console.error(`Failed to upload reference image:`, error);
+                  failedStyleUploads.push(img.file?.name ?? `image_${idx + 1}`);
                 })
               );
             } else if (img.url) {
@@ -2533,6 +2563,13 @@ export default function ControlsPane() {
             }
           });
           await Promise.all(styleUploadPromises);
+
+          if (failedStyleUploads.length > 0) {
+            throw new Error(
+              `Failed to upload reference image${failedStyleUploads.length > 1 ? "s" : ""}: ${failedStyleUploads.join(", ")}. Please try again.`
+            );
+          }
+
           const filteredImageUrls = uploadedImageUrls.filter(Boolean);
 
           setStatus("Uploading elements...");
@@ -3195,15 +3232,6 @@ export default function ControlsPane() {
                 <div className="absolute bottom-2 left-2 flex gap-1">
                   <button
                     type="button"
-                    onClick={() => setShowPromptStudio(true)}
-                    disabled={isExpanding || isSubmitting}
-                    className="flex h-7 w-9 items-center justify-center rounded-md border border-purple-500/30 bg-purple-500/20 text-purple-200 transition hover:bg-purple-500/40 hover:text-white disabled:opacity-50"
-                    title="Open Photography Prompt Studio"
-                  >
-                    <span className="text-lg">🔭</span>
-                  </button>
-                  <button
-                    type="button"
                     onClick={() => setShowBatchModal(true)}
                     disabled={isExpanding || isSubmitting || isBatchProcessing}
                     className="flex h-7 w-9 items-center justify-center rounded-md border border-amber-500/30 bg-amber-500/20 text-amber-200 transition hover:bg-amber-500/40 hover:text-white disabled:opacity-50"
@@ -3238,26 +3266,21 @@ export default function ControlsPane() {
                   <button
                     type="button"
                     onClick={() => setImagePromptMode((prev) =>
-                      prev === "photoreal" ? "editing" : prev === "editing" ? "general" : "photoreal"
+                      prev === "photoreal" ? "editing" : "photoreal"
                     )}
                     disabled={isExpanding}
                     className={`flex h-7 w-7 items-center justify-center rounded-md border transition disabled:opacity-50 ${imagePromptMode === "photoreal"
                       ? "border-emerald-500/30 bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/40 hover:text-white"
-                      : imagePromptMode === "editing"
-                        ? "border-cyan-500/30 bg-cyan-500/20 text-cyan-200 hover:bg-cyan-500/40 hover:text-white"
-                        : "border-amber-500/30 bg-amber-500/20 text-amber-200 hover:bg-amber-500/40 hover:text-white"
+                      : "border-cyan-500/30 bg-cyan-500/20 text-cyan-200 hover:bg-cyan-500/40 hover:text-white"
                       }`}
                     title={`Current Mode: ${imagePromptMode === "photoreal" ? "Photorealistic (Camera Aware)"
-                      : imagePromptMode === "editing" ? "Editing (Angle/Modify)"
-                        : "General (Creative)"
+                      : "Editing (Angle/Modify)"
                       }`}
                   >
                     {imagePromptMode === "photoreal" ? (
                       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" /><circle cx="12" cy="13" r="3" /></svg>
-                    ) : imagePromptMode === "editing" ? (
-                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 3v18" /><path d="M3 9h6" /></svg>
                     ) : (
-                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 3v18" /><path d="M3 9h6" /></svg>
                     )}
                   </button>
                   <div className="w-px bg-white/10 mx-1" />
@@ -3320,6 +3343,15 @@ export default function ControlsPane() {
                   )}
                 </button>
               </div>
+              {/* 2.5. Camera & Style Cards (image tab only) */}
+              {modelKind === "image" && (
+                <ImageShotLookCards
+                  shotSettings={imageShotSettings}
+                  lookSettings={imageLookSettings}
+                  onShotChange={setImageShotSettings}
+                  onLookChange={setImageLookSettings}
+                />
+              )}
             </div>
 
             {/* 3. Aspect ratio & model-specific inputs */}

@@ -11,6 +11,7 @@ import {
 import type { ProviderCallOptions, ProviderCallResult } from "./providers/types";
 
 const FAL_BASE_URL = "https://fal.run";
+const MAX_UPLOAD_SIZE_MB = 50;
 
 export function getFalKey() {
   return (import.meta.env.VITE_FAL_KEY ?? "").trim();
@@ -172,13 +173,27 @@ function extractUploadUrl(result: unknown): string | undefined {
 export async function uploadToFal(file: File, customName?: string): Promise<string> {
   const client = ensureFalClient();
 
+  // Validate file size before attempting upload
+  const sizeMB = file.size / (1024 * 1024);
+  if (sizeMB > MAX_UPLOAD_SIZE_MB) {
+    throw new Error(
+      `File "${file.name}" is too large (${sizeMB.toFixed(1)}MB). Maximum upload size is ${MAX_UPLOAD_SIZE_MB}MB.`
+    );
+  }
+
   // If a custom name is provided, create a new File with that name
   // This helps models understand which reference is which (e.g., image_1.jpg, image_2.jpg)
   const fileToUpload = customName
     ? new File([file], customName, { type: file.type })
     : file;
 
-  const result = await client.storage.upload(fileToUpload);
+  // Retry transient failures (network blips, FAL API hiccups)
+  const result = await withRetry(
+    () => client.storage.upload(fileToUpload),
+    3,    // retries
+    1000, // initial delay ms
+    2     // backoff factor
+  );
   const url = extractUploadUrl(result);
   if (!url) {
     throw new Error("Upload response did not include a file URL.");

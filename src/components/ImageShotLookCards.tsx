@@ -1,0 +1,333 @@
+import { useState, useMemo } from "react";
+import { createPortal } from "react-dom";
+import { cameraOptions, buildPromptText, type PromptBuilderData } from "../lib/prompt-builder/types";
+import {
+    lighting,
+    mood,
+    flattenToOptions,
+} from "../lib/prompt-builder";
+import cameraSystems from "../lib/prompt-builder/camera-systems.json";
+
+// ── Types ──────────────────────────────────────────────────────────────
+
+export type ShotSettings = {
+    angle: string;
+    focalLength: string;
+    aperture: string;
+    shot: string;
+};
+
+export type LookSettings = {
+    cameraSystem: string;
+    cameraBody: string;
+    lens: string;
+    filmStock: string;
+    lighting: string;
+    inspiration: string;
+};
+
+export const DEFAULT_SHOT: ShotSettings = {
+    angle: "",
+    focalLength: "",
+    aperture: "",
+    shot: "",
+};
+
+export const DEFAULT_LOOK: LookSettings = {
+    cameraSystem: "",
+    cameraBody: "",
+    lens: "",
+    filmStock: "",
+    lighting: "",
+    inspiration: "",
+};
+
+// ── Helper: build prompt suffix from card settings ─────────────────────
+
+export function buildCardsSuffix(shot: ShotSettings, look: LookSettings): string {
+    const camera: PromptBuilderData["camera"] = {};
+    if (shot.angle) camera.angle = shot.angle;
+    if (shot.shot) camera.distance = shot.shot;
+    if (shot.focalLength) {
+        const digits = shot.focalLength.replace(/[^0-9]/g, "");
+        if (digits) camera["lens-mm"] = parseInt(digits, 10);
+        else camera.lens = shot.focalLength;
+    }
+    if (shot.aperture) camera["f-number"] = shot.aperture;
+
+    const filmParts: string[] = [];
+    if (look.cameraBody) filmParts.push(look.cameraBody);
+    if (look.lens) filmParts.push(look.lens);
+    if (look.filmStock) filmParts.push(look.filmStock);
+
+    const data: PromptBuilderData = {
+        prompt: "",
+        style: "",
+        camera,
+        film_stock: filmParts.length ? filmParts.join(", ") : undefined,
+        lighting: look.lighting,
+        colors: { palette: [], mood: look.inspiration },
+        composition: "",
+    };
+
+    const raw = buildPromptText(data);
+    return raw.replace(/^\.\s*/, "").trim();
+}
+
+// ── Camera system types ────────────────────────────────────────────────
+
+type CameraSystemData = {
+    name: string;
+    bodies: { id: string; name: string; prompt: string }[];
+    lenses: { id: string; name: string; prompt: string }[];
+    filmStocks: string[];
+};
+
+type FilmStockEntry = { name: string; prompt: string };
+
+// Pre-build lighting & inspiration options
+const LIGHTING_OPTIONS = flattenToOptions(lighting);
+const INSPIRATION_OPTIONS = flattenToOptions(mood);
+
+// ── Compact dropdown ───────────────────────────────────────────────────
+
+function Sel({
+    label,
+    value,
+    options,
+    placeholder,
+    onChange,
+    disabled,
+}: {
+    label: string;
+    value: string;
+    options: { value: string; label: string }[];
+    placeholder?: string;
+    onChange: (v: string) => void;
+    disabled?: boolean;
+}) {
+    return (
+        <div>
+            <span className="text-[9px] font-medium uppercase tracking-wider text-slate-500">{label}</span>
+            <select
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                disabled={disabled}
+                className={`mt-0.5 w-full rounded border border-white/10 bg-[#1e1e1e] px-2 py-1 text-[11px] text-white outline-none focus:border-sky-400 appearance-none cursor-pointer ${disabled ? "opacity-40 cursor-not-allowed" : ""}`}
+                style={{
+                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+                    backgroundRepeat: "no-repeat",
+                    backgroundPosition: "right 6px center",
+                    paddingRight: "22px",
+                }}
+            >
+                <option value="">{placeholder || "—"}</option>
+                {options.map((o, i) => (
+                    <option key={`${o.value}-${i}`} value={o.value}>{o.label}</option>
+                ))}
+            </select>
+        </div>
+    );
+}
+
+// Grouped variant (for camera angle/shot/lens/aperture which use Record<string, ...>)
+function SelGrouped({
+    label,
+    value,
+    groups,
+    onChange,
+}: {
+    label: string;
+    value: string;
+    groups: Record<string, { value: string; label: string }[]>;
+    onChange: (v: string) => void;
+}) {
+    return (
+        <div>
+            <span className="text-[9px] font-medium uppercase tracking-wider text-slate-500">{label}</span>
+            <select
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                className="mt-0.5 w-full rounded border border-white/10 bg-[#1e1e1e] px-2 py-1 text-[11px] text-white outline-none focus:border-sky-400 appearance-none cursor-pointer"
+                style={{
+                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+                    backgroundRepeat: "no-repeat",
+                    backgroundPosition: "right 6px center",
+                    paddingRight: "22px",
+                }}
+            >
+                <option value="">—</option>
+                {Object.entries(groups).map(([g, items]) => (
+                    <optgroup key={g} label={g}>
+                        {items.map((o, i) => (
+                            <option key={`${o.value}-${i}`} value={o.value}>{o.label}</option>
+                        ))}
+                    </optgroup>
+                ))}
+            </select>
+        </div>
+    );
+}
+
+// ── Summary helpers ────────────────────────────────────────────────────
+
+function shotSummary(s: ShotSettings): string {
+    const vals = [s.angle, s.shot, s.focalLength, s.aperture].filter(Boolean);
+    if (vals.length === 0) return "Not set";
+    const first = vals[0].split(" ")[0];
+    return vals.length > 1 ? `${first} +${vals.length - 1}` : first;
+}
+
+function lookSummary(l: LookSettings): string {
+    const vals = [l.cameraBody, l.lens, l.filmStock, l.lighting, l.inspiration].filter(Boolean);
+    if (vals.length === 0) return "Not set";
+    const first = vals[0].split(" ")[0];
+    return vals.length > 1 ? `${first} +${vals.length - 1}` : first;
+}
+
+// ── Modal shell ────────────────────────────────────────────────────────
+
+function Modal({
+    title,
+    accent,
+    children,
+    onClose,
+    onClear,
+    hasValues,
+}: {
+    title: string;
+    accent: string;
+    children: React.ReactNode;
+    onClose: () => void;
+    onClear: () => void;
+    hasValues: boolean;
+}) {
+    return createPortal(
+        <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+            onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+        >
+            <div className="w-full max-w-sm rounded-xl border border-white/10 bg-[#2a2a2a] shadow-2xl overflow-hidden">
+                <div className={`flex items-center justify-between px-3 py-2 bg-gradient-to-r ${accent}`}>
+                    <span className="text-xs font-semibold text-white">{title}</span>
+                    <button type="button" onClick={onClose} className="flex h-5 w-5 items-center justify-center rounded bg-white/20 text-white text-xs hover:bg-white/30">×</button>
+                </div>
+                <div className="p-3 space-y-2">{children}</div>
+                <div className="flex justify-between px-3 py-2 border-t border-white/10 bg-[#222]">
+                    {hasValues ? (
+                        <button type="button" onClick={onClear} className="px-2 py-1 text-[10px] text-slate-400 bg-[#333] border border-white/10 rounded hover:text-white transition">Clear</button>
+                    ) : <div />}
+                    <button type="button" onClick={onClose} className="px-3 py-1 text-[10px] font-semibold text-white rounded bg-gradient-to-r from-sky-600 to-indigo-600 hover:opacity-90 transition">Done</button>
+                </div>
+            </div>
+        </div>,
+        document.body
+    );
+}
+
+// ── Main Component ─────────────────────────────────────────────────────
+
+type Props = {
+    shotSettings: ShotSettings;
+    lookSettings: LookSettings;
+    onShotChange: (s: ShotSettings) => void;
+    onLookChange: (l: LookSettings) => void;
+};
+
+export function ImageShotLookCards({ shotSettings, lookSettings, onShotChange, onLookChange }: Props) {
+    const [openModal, setOpenModal] = useState<"shot" | "look" | null>(null);
+
+    const shotHas = shotSettings.angle || shotSettings.focalLength || shotSettings.aperture || shotSettings.shot;
+    const lookHas = lookSettings.cameraBody || lookSettings.lens || lookSettings.filmStock || lookSettings.lighting || lookSettings.inspiration;
+
+    // ── Cascading camera system options (same logic as PromptBuilderV2) ──
+
+    const systemOptions = useMemo(() => {
+        const systems = cameraSystems.systems as Record<string, CameraSystemData>;
+        const order = ["imax", "panavision", "arri", "red", "sony_venice", "blackmagic", "sony", "canon_dslr", "nikon", "fujifilm", "leica"];
+        return order.filter((k) => systems[k]).map((k) => ({ value: k, label: systems[k].name }));
+    }, []);
+
+    const bodyOptions = useMemo(() => {
+        if (!lookSettings.cameraSystem) return [];
+        const sys = (cameraSystems.systems as Record<string, CameraSystemData>)[lookSettings.cameraSystem];
+        return sys ? sys.bodies.map((b) => ({ value: b.prompt, label: b.name })) : [];
+    }, [lookSettings.cameraSystem]);
+
+    const lensOptions = useMemo(() => {
+        if (!lookSettings.cameraSystem) return [];
+        const sys = (cameraSystems.systems as Record<string, CameraSystemData>)[lookSettings.cameraSystem];
+        return sys ? sys.lenses.map((l) => ({ value: l.prompt, label: l.name })) : [];
+    }, [lookSettings.cameraSystem]);
+
+    const filmStockOptions = useMemo(() => {
+        const stocks = cameraSystems.filmStocks as Record<string, FilmStockEntry>;
+        if (!lookSettings.cameraSystem) {
+            return Object.values(stocks).map((s) => ({ value: s.prompt, label: s.name }));
+        }
+        const sys = (cameraSystems.systems as Record<string, CameraSystemData>)[lookSettings.cameraSystem];
+        if (!sys) return [];
+        return sys.filmStocks.filter((k) => stocks[k]).map((k) => ({ value: stocks[k].prompt, label: stocks[k].name }));
+    }, [lookSettings.cameraSystem]);
+
+    const handleSystemChange = (system: string) => {
+        onLookChange({ ...lookSettings, cameraSystem: system, cameraBody: "", lens: "", filmStock: "" });
+    };
+
+    return (
+        <>
+            <div className="flex gap-1.5 pt-1">
+                <button
+                    type="button"
+                    onClick={() => setOpenModal("shot")}
+                    title={shotHas ? shotSummary(shotSettings) : undefined}
+                    className={`flex flex-1 items-center gap-1.5 rounded-lg border px-2 py-1.5 text-left transition ${shotHas ? "border-emerald-500/20 bg-emerald-500/5 hover:border-emerald-500/40" : "border-white/10 bg-white/[0.03] hover:border-white/20"}`}
+                >
+                    <span className="text-sky-400 text-xs">📷</span>
+                    <div className="min-w-0 flex-1">
+                        <div className="text-[8px] font-bold uppercase tracking-wider text-slate-500">Shot</div>
+                        <div className={`truncate text-[10px] leading-tight ${shotHas ? "text-slate-200" : "text-slate-500 italic"}`}>{shotSummary(shotSettings)}</div>
+                    </div>
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setOpenModal("look")}
+                    title={lookHas ? lookSummary(lookSettings) : undefined}
+                    className={`flex flex-1 items-center gap-1.5 rounded-lg border px-2 py-1.5 text-left transition ${lookHas ? "border-emerald-500/20 bg-emerald-500/5 hover:border-emerald-500/40" : "border-white/10 bg-white/[0.03] hover:border-white/20"}`}
+                >
+                    <span className="text-purple-400 text-xs">🎨</span>
+                    <div className="min-w-0 flex-1">
+                        <div className="text-[8px] font-bold uppercase tracking-wider text-slate-500">Look</div>
+                        <div className={`truncate text-[10px] leading-tight ${lookHas ? "text-slate-200" : "text-slate-500 italic"}`}>{lookSummary(lookSettings)}</div>
+                    </div>
+                </button>
+            </div>
+
+            {/* Shot Modal */}
+            {openModal === "shot" && (
+                <Modal title="Shot" accent="from-sky-600 to-cyan-600" onClose={() => setOpenModal(null)} onClear={() => onShotChange(DEFAULT_SHOT)} hasValues={!!shotHas}>
+                    <div className="grid grid-cols-2 gap-2">
+                        <SelGrouped label="Angle" value={shotSettings.angle} groups={cameraOptions.angle} onChange={(v) => onShotChange({ ...shotSettings, angle: v })} />
+                        <SelGrouped label="Shot" value={shotSettings.shot} groups={cameraOptions.shot} onChange={(v) => onShotChange({ ...shotSettings, shot: v })} />
+                        <SelGrouped label="Focal" value={shotSettings.focalLength} groups={cameraOptions.lens} onChange={(v) => onShotChange({ ...shotSettings, focalLength: v })} />
+                        <SelGrouped label="Aperture" value={shotSettings.aperture} groups={cameraOptions.aperture} onChange={(v) => onShotChange({ ...shotSettings, aperture: v })} />
+                    </div>
+                </Modal>
+            )}
+
+            {/* Look Modal */}
+            {openModal === "look" && (
+                <Modal title="Look" accent="from-purple-600 to-indigo-600" onClose={() => setOpenModal(null)} onClear={() => onLookChange(DEFAULT_LOOK)} hasValues={!!lookHas}>
+                    <div className="grid grid-cols-2 gap-2">
+                        <Sel label="System" value={lookSettings.cameraSystem} options={systemOptions} placeholder="All" onChange={handleSystemChange} />
+                        <Sel label="Body" value={lookSettings.cameraBody} options={bodyOptions} placeholder={lookSettings.cameraSystem ? "Select" : "Pick system"} onChange={(v) => onLookChange({ ...lookSettings, cameraBody: v })} disabled={!lookSettings.cameraSystem} />
+                        <Sel label="Lens" value={lookSettings.lens} options={lensOptions} placeholder={lookSettings.cameraSystem ? "Select" : "Pick system"} onChange={(v) => onLookChange({ ...lookSettings, lens: v })} disabled={!lookSettings.cameraSystem} />
+                        <Sel label="Film Stock" value={lookSettings.filmStock} options={filmStockOptions} onChange={(v) => onLookChange({ ...lookSettings, filmStock: v })} />
+                    </div>
+                    <Sel label="Lighting" value={lookSettings.lighting} options={LIGHTING_OPTIONS} onChange={(v) => onLookChange({ ...lookSettings, lighting: v })} />
+                    <Sel label="Inspiration" value={lookSettings.inspiration} options={INSPIRATION_OPTIONS} onChange={(v) => onLookChange({ ...lookSettings, inspiration: v })} />
+                </Modal>
+            )}
+        </>
+    );
+}
