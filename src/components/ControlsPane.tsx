@@ -6,7 +6,6 @@ import {
   useState,
 } from "react";
 import { PromptBuilderV2 } from "./PromptBuilder";
-import { BatchPromptModal } from "./BatchPromptModal";
 import {
   ImageShotLookCards,
   buildCardsSuffix,
@@ -244,6 +243,12 @@ export default function ControlsPane() {
     "imagePromptMode",
     initialImagePromptMode
   );
+
+  const [appendImageCameraSettings, setAppendImageCameraSettings] = usePersistentState<boolean>(
+    "appendImageCameraSettings",
+    true
+  );
+
   const [videoPromptMode, setVideoPromptMode] = usePersistentState<VideoPromptMode>(
     "videoPromptMode",
     initialVideoPromptMode
@@ -361,16 +366,13 @@ export default function ControlsPane() {
   const [isExpanding, setIsExpanding] = useState(false);
   // const [busy, setBusy] = useState(false);
   const [isReferenceDragActive, setIsReferenceDragActive] = useState(false);
+  const [viewState, setViewState] = useState<"builder" | "settings">("builder");
   const [showPromptStudio, setShowPromptStudio] = useState(false);
   const [showCameraSelector, setShowCameraSelector] = useState(false);
 
   // Persistent camera/style card settings (image tab only)
   const [imageShotSettings, setImageShotSettings] = usePersistentState<ShotSettings>("imageShotSettings", DEFAULT_SHOT);
   const [imageLookSettings, setImageLookSettings] = usePersistentState<LookSettings>("imageLookSettings", DEFAULT_LOOK);
-  const [showBatchModal, setShowBatchModal] = useState(false);
-  const [batchQueue, setBatchQueue] = useState<string[]>([]);
-  const [batchIndex, setBatchIndex] = useState(0);
-  const isBatchProcessing = batchQueue.length > 0;
   // Reference model state (Kling O1 Reference)
   // Images are stored locally (blob URLs) until Generate is pressed for speed
   type ElementUpload = {
@@ -541,39 +543,6 @@ export default function ControlsPane() {
     }, 30_000);
     return () => clearInterval(intervalId);
   }, []);
-
-  // Batch processing: auto-submit when batch starts or after each job completes
-  useEffect(() => {
-    // Detect when submission completes (was submitting, now not)
-    if (wasSubmittingRef.current && !isSubmitting && isBatchProcessing) {
-      // Previous job completed, move to next prompt
-      const nextIndex = batchIndex + 1;
-      if (nextIndex < batchQueue.length) {
-        setBatchIndex(nextIndex);
-        setPrompt(batchQueue[nextIndex]);
-        // Trigger form submission after a short delay to allow state to update
-        setTimeout(() => {
-          formRef.current?.requestSubmit();
-        }, 500);
-      } else {
-        // All done
-        setBatchQueue([]);
-        setBatchIndex(0);
-        setStatus(`Batch complete: ${batchQueue.length} images generated`);
-        setTimeout(() => setStatus(null), 5000);
-      }
-    }
-    wasSubmittingRef.current = isSubmitting;
-  }, [isSubmitting, isBatchProcessing, batchIndex, batchQueue, setPrompt]);
-
-  // When batch queue is first set, trigger initial submission
-  useEffect(() => {
-    if (batchQueue.length > 0 && batchIndex === 0 && !isSubmitting) {
-      setTimeout(() => {
-        formRef.current?.requestSubmit();
-      }, 300);
-    }
-  }, [batchQueue, batchIndex, isSubmitting]);
 
   useEffect(() => {
     if (typeof localStorage === "undefined") return;
@@ -1157,6 +1126,7 @@ export default function ControlsPane() {
             if (MODEL_SPECS.some((spec) => spec.id === modelId)) {
               setModelKey(`video:${modelId}`);
               setActiveTab("video");
+              const input = (meta.payload?.input ?? meta.payload) as Record<string, unknown>;
               if (input.multi_shots && Array.isArray(input.multi_prompt)) {
                 setUseMultishot(true);
                 setMultishotPrompts(input.multi_prompt as any);
@@ -1767,14 +1737,6 @@ export default function ControlsPane() {
   const addToHistory = useCallback(
     (_newPrompt: string) => {
       let newPrompt = _newPrompt;
-      if (activeTab === "video" && useMultishot && multishotPrompts.length > 0) {
-        try {
-          if (!_newPrompt.startsWith('{"__ms":true')) {
-            newPrompt = JSON.stringify({ __ms: true, draft: _newPrompt, shots: multishotPrompts });
-          }
-        } catch (e) { }
-      }
-
       const currentHistory = historyRef.current;
       const currentIndex = historyIndexRef.current;
 
@@ -1792,7 +1754,7 @@ export default function ControlsPane() {
       setHistoryIndex(nextIndex);
 
       // Persist history to localStorage
-      const tab = activeTab === "image" ? "image" : "video";
+      const tab = activeTab === "image" ? "image" : activeTab === "video" ? "video" : "special";
       saveHistoryToStorage(tab, nextHistory, nextIndex);
 
       if (connection && newPrompt.trim()) {
@@ -1807,28 +1769,13 @@ export default function ControlsPane() {
         });
       }
     },
-    [activeTab, connection, modelKey, modelKind]
+    [activeTab, connection, modelKey, modelKind, multishotPrompts, useMultishot]
   );
 
   const applyHistoryPrompt = useCallback((text: string) => {
-    try {
-      if (text.startsWith('{"__ms":true')) {
-        const data = JSON.parse(text);
-        if (activeTab === "video") {
-          setUseMultishot(true);
-          setMultishotPrompts(data.shots || []);
-          setPrompt(data.draft || "");
-        } else {
-          setPrompt(text);
-        }
-        return;
-      }
-    } catch {
-      // Ignored
-    }
-    if (activeTab === "video") setUseMultishot(false);
     setPrompt(text);
-  }, [setPrompt, activeTab, setUseMultishot, setMultishotPrompts]);
+    if (useMultishot) setUseMultishot(false);
+  }, [setPrompt, useMultishot, setUseMultishot]);
 
   useEffect(() => {
     const syncPrompt = () => {
@@ -1840,19 +1787,7 @@ export default function ControlsPane() {
 
       if (typeof next !== "string") return;
 
-      let isSame = false;
-      try {
-        if (next.startsWith('{"__ms":true')) {
-          const data = JSON.parse(next);
-          isSame = (data.draft || "") === prompt && useMultishot;
-        } else {
-          isSame = next === prompt;
-        }
-      } catch {
-        isSame = next === prompt;
-      }
-
-      if (isSame) return;
+      if (next === prompt) return;
 
       applyHistoryPrompt(next);
       addToHistory(next);
@@ -2194,16 +2129,6 @@ export default function ControlsPane() {
         );
       }
 
-      const missingReferences = referenceUploads
-        .map((ref, idx) => ({ ref, idx }))
-        .filter(({ ref, idx }) => (ref.file || ref.url) && !uploadedReferenceUrls[idx])
-        .map(({ ref, idx }) => ref.name || `image_${idx + 1}`);
-      if (missingReferences.length > 0) {
-        throw new Error(
-          `Some references could not be sent: ${missingReferences.join(", ")}. Re-upload and try again.`
-        );
-      }
-
       const filteredReferenceUrls = uploadedReferenceUrls.filter(
         (url): url is string => Boolean(url)
       );
@@ -2416,7 +2341,7 @@ export default function ControlsPane() {
         }
 
         // Append persistent camera/style card settings to prompt
-        const cardsSuffix = buildCardsSuffix(imageShotSettings, imageLookSettings);
+        const cardsSuffix = appendImageCameraSettings ? buildCardsSuffix(imageShotSettings, imageLookSettings) : "";
         if (cardsSuffix) {
           processedPrompt = processedPrompt + ". " + cardsSuffix;
         }
@@ -3308,18 +3233,29 @@ export default function ControlsPane() {
                   );
                 })()}
                 <div className="absolute bottom-2 left-2 flex gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setShowBatchModal(true)}
-                    disabled={isExpanding || isSubmitting || isBatchProcessing}
-                    className="flex h-7 w-9 items-center justify-center rounded-md border border-amber-500/30 bg-amber-500/20 text-amber-200 transition hover:bg-amber-500/40 hover:text-white disabled:opacity-50"
-                    title="Batch Prompt Input"
+                  <label
+                    title={appendImageCameraSettings ? "Appending Camera Settings (Click to disable)" : "Camera Settings Disabled (Click to append)"}
+                    className={`flex h-7 items-center justify-center gap-1.5 rounded-md border px-2 cursor-pointer transition ${appendImageCameraSettings
+                      ? "border-sky-500/30 bg-sky-500/10 text-sky-200 hover:bg-sky-500/20"
+                      : "border-slate-500/30 bg-black/40 text-slate-400 hover:bg-black/60"
+                      } ${isExpanding || isSubmitting ? "opacity-50 pointer-events-none" : ""}`}
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" />
-                      <line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                      <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+                      <circle cx="12" cy="13" r="3" />
                     </svg>
-                  </button>
+                    <div className="relative flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={appendImageCameraSettings}
+                        onChange={(event) => setAppendImageCameraSettings(event.target.checked)}
+                        disabled={isExpanding || isSubmitting}
+                        className="sr-only"
+                      />
+                      <div className={`h-3.5 w-7 rounded-full transition ${appendImageCameraSettings ? "bg-sky-500" : "bg-slate-600"}`} />
+                      <div className={`absolute left-0.5 h-2.5 w-2.5 rounded-full bg-white transition-transform ${appendImageCameraSettings ? "translate-x-3.5" : ""}`} />
+                    </div>
+                  </label>
                 </div>
                 <div className="absolute bottom-2 right-2 flex gap-1">
                   <button
@@ -5193,20 +5129,6 @@ export default function ControlsPane() {
           }}
         />
       )}
-
-      <BatchPromptModal
-        isOpen={showBatchModal}
-        onClose={() => setShowBatchModal(false)}
-        onStart={(prompts) => {
-          setShowBatchModal(false);
-          setBatchQueue(prompts);
-          setBatchIndex(0);
-          // Set the first prompt immediately
-          if (prompts.length > 0) {
-            setPrompt(prompts[0]);
-          }
-        }}
-      />
     </form >
   );
 }
