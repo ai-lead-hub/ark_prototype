@@ -270,6 +270,7 @@ export default function ControlsPane() {
 
   // Multishot prompts state for Kling 3.0
   const [multishotPrompts, setMultishotPrompts] = useState<Array<{ prompt: string; duration: number }>>([]);
+  const [editingMultishotIndex, setEditingMultishotIndex] = useState<number | null>(null);
   const [currentMultishotPrompt, setCurrentMultishotPrompt] = useState("");
   const [currentMultishotDuration, setCurrentMultishotDuration] = useState(5);
   const [useMultishot, setUseMultishot] = useState(false);
@@ -691,6 +692,14 @@ export default function ControlsPane() {
     modelKind === "image" && selectedImage?.supportsElements === true;
   const videoModelSupportsMultishot =
     modelKind === "video" && selectedVideo?.id === "kling-3.0";
+
+  // Reset multishot and elements conditionally when switching to unsupported models
+  useEffect(() => {
+    if (!videoModelSupportsMultishot) {
+      setUseMultishot(false);
+      elementsState.clearSelection();
+    }
+  }, [videoModelSupportsMultishot, setUseMultishot, elementsState]);
 
   const registerPreview = useCallback((url: string) => {
     if (url.startsWith("blob:")) {
@@ -1148,7 +1157,14 @@ export default function ControlsPane() {
             if (MODEL_SPECS.some((spec) => spec.id === modelId)) {
               setModelKey(`video:${modelId}`);
               setActiveTab("video");
-              if (promptValue.trim()) setVideoPrompt(promptValue);
+              if (input.multi_shots && Array.isArray(input.multi_prompt)) {
+                setUseMultishot(true);
+                setMultishotPrompts(input.multi_prompt as any);
+                setVideoPrompt("");
+              } else {
+                setUseMultishot(false);
+                if (promptValue.trim()) setVideoPrompt(promptValue);
+              }
             } else if (SPECIAL_MODELS.some((spec) => spec.id === modelId)) {
               // Special model (Sora 2, Wan V2V, etc.) — route to special tab
               setModelKey(`special:${modelId}`);
@@ -1749,7 +1765,16 @@ export default function ControlsPane() {
   };
 
   const addToHistory = useCallback(
-    (newPrompt: string) => {
+    (_newPrompt: string) => {
+      let newPrompt = _newPrompt;
+      if (activeTab === "video" && useMultishot && multishotPrompts.length > 0) {
+        try {
+          if (!_newPrompt.startsWith('{"__ms":true')) {
+            newPrompt = JSON.stringify({ __ms: true, draft: _newPrompt, shots: multishotPrompts });
+          }
+        } catch (e) { }
+      }
+
       const currentHistory = historyRef.current;
       const currentIndex = historyIndexRef.current;
 
@@ -1785,6 +1810,26 @@ export default function ControlsPane() {
     [activeTab, connection, modelKey, modelKind]
   );
 
+  const applyHistoryPrompt = useCallback((text: string) => {
+    try {
+      if (text.startsWith('{"__ms":true')) {
+        const data = JSON.parse(text);
+        if (activeTab === "video") {
+          setUseMultishot(true);
+          setMultishotPrompts(data.shots || []);
+          setPrompt(data.draft || "");
+        } else {
+          setPrompt(text);
+        }
+        return;
+      }
+    } catch {
+      // Ignored
+    }
+    if (activeTab === "video") setUseMultishot(false);
+    setPrompt(text);
+  }, [setPrompt, activeTab, setUseMultishot, setMultishotPrompts]);
+
   useEffect(() => {
     const syncPrompt = () => {
       const next = getControlsPrompt();
@@ -1794,32 +1839,47 @@ export default function ControlsPane() {
       }
 
       if (typeof next !== "string") return;
-      if (next === prompt) return;
-      setPrompt(next);
+
+      let isSame = false;
+      try {
+        if (next.startsWith('{"__ms":true')) {
+          const data = JSON.parse(next);
+          isSame = (data.draft || "") === prompt && useMultishot;
+        } else {
+          isSame = next === prompt;
+        }
+      } catch {
+        isSame = next === prompt;
+      }
+
+      if (isSame) return;
+
+      applyHistoryPrompt(next);
       addToHistory(next);
     };
 
     const off = onControlsStoreChange(syncPrompt);
     return off;
-  }, [addToHistory, prompt, queueControlsActions, setPrompt]);
+  }, [addToHistory, prompt, queueControlsActions, applyHistoryPrompt, useMultishot]);
+
 
   const undo = useCallback(() => {
     if (historyIndex > 0) {
       const newIndex = historyIndex - 1;
       historyIndexRef.current = newIndex;
       setHistoryIndex(newIndex);
-      setPrompt(history[newIndex]);
+      applyHistoryPrompt(history[newIndex]);
     }
-  }, [historyIndex, history, setPrompt]);
+  }, [historyIndex, history, applyHistoryPrompt]);
 
   const redo = useCallback(() => {
     if (historyIndex < history.length - 1) {
       const newIndex = historyIndex + 1;
       historyIndexRef.current = newIndex;
       setHistoryIndex(newIndex);
-      setPrompt(history[newIndex]);
+      applyHistoryPrompt(history[newIndex]);
     }
-  }, [historyIndex, history, setPrompt]);
+  }, [historyIndex, history, applyHistoryPrompt]);
 
   // Store tab before it changes so we can save history for it
   const prevTabRef = useRef<"image" | "video" | "special" | "upscale">(activeTab);
@@ -3500,9 +3560,38 @@ export default function ControlsPane() {
                       </span>
                     </div>
                     {multishotPrompts.map((shot, index) => (
-                      <div key={index} className="flex items-center gap-1.5 rounded-lg border border-white/5 bg-white/5 px-2 py-1 text-xs">
+                      <div
+                        key={index}
+                        onDoubleClick={() => {
+                          setEditingMultishotIndex(index);
+                        }}
+                        className="flex items-center gap-1.5 rounded-lg border border-white/5 bg-white/5 px-2 py-1 text-xs hover:border-sky-500/50 transition group"
+                        title="Double-click to edit shot inline"
+                      >
                         <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-sky-500/20 text-[9px] font-bold text-sky-300">{index + 1}</span>
-                        <span className="flex-1 truncate text-slate-300">{shot.prompt}</span>
+
+                        {editingMultishotIndex === index ? (
+                          <input
+                            autoFocus
+                            type="text"
+                            value={shot.prompt}
+                            onChange={(e) => {
+                              const newPrompts = [...multishotPrompts];
+                              newPrompts[index] = { ...shot, prompt: e.target.value };
+                              setMultishotPrompts(newPrompts);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                setEditingMultishotIndex(null);
+                              }
+                            }}
+                            onBlur={() => setEditingMultishotIndex(null)}
+                            className="flex-1 bg-black/50 border border-sky-500/50 rounded px-1.5 py-0.5 text-slate-200 outline-none focus:ring-1 focus:ring-sky-500"
+                          />
+                        ) : (
+                          <span className="flex-1 truncate text-slate-300 pointer-events-none">{shot.prompt}</span>
+                        )}
                         <select
                           value={shot.duration}
                           onChange={(event) => {
@@ -3510,8 +3599,9 @@ export default function ControlsPane() {
                             newPrompts[index] = { ...shot, duration: Number(event.target.value) };
                             setMultishotPrompts(newPrompts);
                           }}
+                          onClick={(e) => e.stopPropagation()}
                           disabled={isSubmitting || isExpanding}
-                          className="w-12 rounded border border-white/10 bg-black/40 px-1 py-0.5 text-[10px] text-white outline-none"
+                          className="w-12 rounded border border-white/10 bg-black/40 px-1 py-0.5 text-[10px] text-white outline-none cursor-pointer hover:bg-white/10"
                         >
                           {[3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((d) => (
                             <option key={d} value={d}>{d}s</option>
@@ -3519,7 +3609,10 @@ export default function ControlsPane() {
                         </select>
                         <button
                           type="button"
-                          onClick={() => setMultishotPrompts((prev) => prev.filter((_, i) => i !== index))}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMultishotPrompts((prev) => prev.filter((_, i) => i !== index));
+                          }}
                           disabled={isSubmitting || isExpanding}
                           className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-rose-400 hover:bg-rose-500/20 transition"
                         >

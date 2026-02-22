@@ -989,7 +989,17 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-semibold text-slate-100">
-                      {p.prompt}
+                      {(() => {
+                        try {
+                          if (p.prompt.startsWith('{"__ms":true')) {
+                            const data = JSON.parse(p.prompt);
+                            const count = data.shots?.length || 0;
+                            const first = data.shots?.[0]?.prompt || "Empty shot";
+                            return `Multishot (${count} shots): ${first}`;
+                          }
+                        } catch { }
+                        return p.prompt;
+                      })()}
                     </div>
                     <div className="truncate text-[10px] text-slate-400">
                       {p.model_id || "prompt"}
