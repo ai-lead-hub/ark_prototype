@@ -238,7 +238,7 @@ export function defaultState(): PromptBuilderState {
  * Wrap the keyword/name portion of a camera prompt in $...$ delimiters.
  * Handles formats: "shot on NAME — desc", "with NAME — desc", "NAME — desc"
  */
-function wrapKeywordName(prompt: string): string {
+export function wrapKeywordName(prompt: string): string {
     // Split on em-dash (—) to separate name from description
     const dashIdx = prompt.indexOf('—');
     if (dashIdx === -1) {

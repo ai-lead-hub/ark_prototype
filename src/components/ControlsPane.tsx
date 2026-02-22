@@ -1520,7 +1520,8 @@ export default function ControlsPane() {
     return true;
   }, [modelKind, selectedVideo, selectedSpecial]);
 
-  const isPromptEmpty = !prompt.trim();
+  const hasMultishotPrompts = useMultishot && multishotPrompts.length > 0;
+  const isPromptEmpty = !prompt.trim() && !hasMultishotPrompts;
 
   const isMissingSpecialInput = useMemo(() => {
     if (modelKind !== "special" || !selectedSpecial) return false;
@@ -1623,9 +1624,11 @@ export default function ControlsPane() {
           key={key}
           className="space-y-1"
         >
-          <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-            {key.replace(/_/g, " ")}
-          </label>
+          {key !== "mode" && (
+            <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+              {key.replace(/_/g, " ")}
+            </label>
+          )}
           <select
             value={value === undefined ? "" : String(value)}
             onChange={(event) =>
@@ -1642,11 +1645,7 @@ export default function ControlsPane() {
             disabled={isSubmitting || isExpanding}
             className={`w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
           >
-            {!definition.required && (
-              <option value="">
-                Default
-              </option>
-            )}
+
             {definition.values.map((option: string | number) => (
               <option key={String(option)} value={String(option)}>
                 {String(option)}
@@ -1657,20 +1656,33 @@ export default function ControlsPane() {
       );
     }
     if (definition.type === "boolean") {
+      // Normalize audio-related keys to a single label
+      const soundKeys = ["sound", "audio", "generate_audio", "with_audio", "enable_audio", "has_audio"];
+      const isAudio = soundKeys.some(sk => key.toLowerCase().includes(sk));
+      const displayLabel = isAudio ? "Audio" : key.replace(/_/g, " ");
+      const checked = Boolean(value);
       return (
         <label
           key={key}
-          className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-300"
+          className={`flex items-center justify-between rounded border px-2 py-0.5 text-[10px] h-7 font-semibold uppercase tracking-wide cursor-pointer transition ${checked
+            ? "border-sky-500/30 bg-sky-500/10 text-sky-300"
+            : "border-white/10 bg-white/5 text-slate-400"
+            } ${isSubmitting || isExpanding ? "opacity-50 pointer-events-none" : ""}`}
         >
-          <span>{key.replace(/_/g, " ")}</span>
-          <input
-            type="checkbox"
-            checked={Boolean(value)}
-            onChange={(event) =>
-              handleParamChange(uiKey as string, event.target.checked)
-            }
-            disabled={isSubmitting || isExpanding}
-          />
+          <span>{displayLabel}</span>
+          <div className="relative">
+            <input
+              type="checkbox"
+              checked={checked}
+              onChange={(event) =>
+                handleParamChange(uiKey as string, event.target.checked)
+              }
+              disabled={isSubmitting || isExpanding}
+              className="sr-only"
+            />
+            <div className={`h-3.5 w-7 rounded-full transition ${checked ? "bg-sky-500" : "bg-slate-600"}`} />
+            <div className={`absolute left-0.5 top-0.5 h-2.5 w-2.5 rounded-full bg-white transition-transform ${checked ? "translate-x-3.5" : ""}`} />
+          </div>
         </label>
       );
     }
@@ -1701,7 +1713,7 @@ export default function ControlsPane() {
             disabled={isSubmitting || isExpanding}
             className={`w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
           />
-          <p className="text-[10px] text-slate-500">Comma-separated list (max 5)</p>
+          <p className="text-[10px] text-slate-500" title="Comma-separated list (max 5)">Comma-separated</p>
         </div>
       );
     }
@@ -2267,13 +2279,21 @@ export default function ControlsPane() {
               }))
               .filter((shot) => shot.prompt.length > 0);
 
+            // If user typed something in the textarea but didn't hit Enter, include it as a shot
+            if (prompt.trim()) {
+              normalizedShots.push({
+                prompt: prompt.trim(),
+                duration: 5, // default duration for un-added shot
+              });
+            }
+
             if (normalizedShots.length === 0) {
               throw new Error("Add at least one valid multishot prompt.");
             }
 
             const totalDuration = normalizedShots.reduce((sum, shot) => sum + shot.duration, 0);
             if (totalDuration < 3 || totalDuration > 15) {
-              throw new Error("Total multishot duration must be between 3s and 15s.");
+              throw new Error(`Total multishot duration must be between 3s and 15s (currently ${totalDuration}s).`);
             }
 
             inputRecord.multi_shots = true;
@@ -3058,9 +3078,7 @@ export default function ControlsPane() {
                   </button>
                 </div>
                 {elementsState.selectedElements.length === 0 ? (
-                  <p className="text-xs text-slate-500">
-                    Optional. Select elements to guide character/face consistency.
-                  </p>
+                  <p className="text-[10px] text-slate-500">Use @Element1 in prompt</p>
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     {elementsState.selectedElements.map((selectedEl, idx) => (
@@ -3472,6 +3490,45 @@ export default function ControlsPane() {
             <div className="space-y-1">
 
               <div className="relative">
+                {/* Shot list above textarea when multishot is on */}
+                {useMultishot && multishotPrompts.length > 0 && (
+                  <div className="mb-0 space-y-1 rounded-t-2xl border border-b-0 border-white/10 bg-black/30 px-3 pt-2 pb-1">
+                    <div className="flex items-center justify-between text-[10px] text-slate-400 pb-1">
+                      <span className="font-semibold uppercase tracking-wide">Shots</span>
+                      <span className={`font-medium ${multishotPrompts.reduce((sum, s) => sum + s.duration, 0) > 15 ? "text-amber-400" : "text-emerald-400"}`}>
+                        {multishotPrompts.reduce((sum, s) => sum + s.duration, 0)}s / 15s
+                      </span>
+                    </div>
+                    {multishotPrompts.map((shot, index) => (
+                      <div key={index} className="flex items-center gap-1.5 rounded-lg border border-white/5 bg-white/5 px-2 py-1 text-xs">
+                        <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-sky-500/20 text-[9px] font-bold text-sky-300">{index + 1}</span>
+                        <span className="flex-1 truncate text-slate-300">{shot.prompt}</span>
+                        <select
+                          value={shot.duration}
+                          onChange={(event) => {
+                            const newPrompts = [...multishotPrompts];
+                            newPrompts[index] = { ...shot, duration: Number(event.target.value) };
+                            setMultishotPrompts(newPrompts);
+                          }}
+                          disabled={isSubmitting || isExpanding}
+                          className="w-12 rounded border border-white/10 bg-black/40 px-1 py-0.5 text-[10px] text-white outline-none"
+                        >
+                          {[3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((d) => (
+                            <option key={d} value={d}>{d}s</option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => setMultishotPrompts((prev) => prev.filter((_, i) => i !== index))}
+                          disabled={isSubmitting || isExpanding}
+                          className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-rose-400 hover:bg-rose-500/20 transition"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <textarea
                   ref={videoPromptTextareaRef}
                   value={prompt}
@@ -3547,16 +3604,30 @@ export default function ControlsPane() {
                         }
                       }
                     }
+                    // In multishot mode, Enter (without modifier) adds the shot
+                    if (useMultishot && event.key === "Enter" && !event.metaKey && !event.ctrlKey && !event.shiftKey && !showAutocomplete) {
+                      event.preventDefault();
+                      if (prompt.trim()) {
+                        setMultishotPrompts((prev) => [
+                          ...prev,
+                          { prompt: prompt.trim(), duration: currentMultishotDuration },
+                        ]);
+                        setPrompt("");
+                      }
+                      return;
+                    }
                     // ⌘+Enter (Mac) / Ctrl+Enter to generate
                     if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && !isSubmitting) {
                       event.preventDefault();
                       formRef.current?.requestSubmit();
                     }
                   }}
-                  rows={4}
+                  rows={useMultishot ? 2 : 4}
+                  placeholder={useMultishot ? "Type shot prompt + Enter to add..." : undefined}
                   disabled={isSubmitting || isExpanding}
-                  className={`w-full rounded-2xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 pb-10 ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
+                  className={`w-full ${useMultishot && multishotPrompts.length > 0 ? "rounded-b-2xl rounded-t-none" : "rounded-2xl"} border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 pb-10 ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
                 />
+
                 {showAutocomplete && videoModelSupportsMultishot && (() => {
                   const options = elementsState.selectedElements.map((selectedEl, idx) => ({
                     label: `@Element${idx + 1}`,
@@ -3614,6 +3685,22 @@ export default function ControlsPane() {
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 7v6h-6" /><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13" /></svg>
                   </button>
                   <div className="w-px bg-white/10 mx-1" />
+                  {/* Multishot toggle - only for models that support it */}
+                  {videoModelSupportsMultishot && (
+                    <button
+                      type="button"
+                      onClick={() => setUseMultishot(!useMultishot)}
+                      disabled={isSubmitting || isExpanding}
+                      className={`flex h-7 items-center gap-1 rounded-md border px-2 text-[10px] font-semibold uppercase tracking-wide transition ${useMultishot
+                        ? "border-sky-500/30 bg-sky-500/20 text-sky-300"
+                        : "border-white/10 bg-white/5 text-slate-400 hover:text-slate-300"
+                        }`}
+                      title={useMultishot ? "Disable Multishot" : "Enable Multishot"}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="8" height="8" rx="1" /><rect x="14" y="2" width="8" height="8" rx="1" /><rect x="2" y="14" width="8" height="8" rx="1" /><rect x="14" y="14" width="8" height="8" rx="1" /></svg>
+                      Multi
+                    </button>
+                  )}
 
                   {/* Prompt Mode Toggle - 3 modes for video: photoreal, audiogen, timestep */}
                   <button
@@ -3627,12 +3714,6 @@ export default function ControlsPane() {
                       : videoPromptMode === "audiogen"
                         ? "border-purple-500/30 bg-purple-500/20 text-purple-200 hover:bg-purple-500/40 hover:text-white"
                         : "border-amber-500/30 bg-amber-500/20 text-amber-200 hover:bg-amber-500/40 hover:text-white"
-                      }`}
-                    title={`Current Mode: ${videoPromptMode === "photoreal"
-                      ? "Photorealistic (Camera Aware)"
-                      : videoPromptMode === "audiogen"
-                        ? "Audio-Gen (Sound Aware)"
-                        : "Timestep (Beat-by-Beat)"
                       }`}
                   >
                     {videoPromptMode === "photoreal" ? (
@@ -3690,48 +3771,69 @@ export default function ControlsPane() {
                 </div>
               </div>
 
-              {/* Alter Box */}
-              <div className="flex gap-2 pt-2">
-                <input
-                  type="text"
-                  value={alterInstruction}
-                  onChange={(e) => setAlterInstruction(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      void handleAlter();
-                    }
-                  }}
-                  placeholder="Refine prompt (e.g. 'make it darker', 'add rain')..."
-                  disabled={isSubmitting || isExpanding || isAltering}
-                  className={`flex-1 rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 placeholder:text-slate-600 ${isSubmitting || isExpanding || isAltering ? "opacity-50 cursor-not-allowed" : ""}`}
-                />
-                <button
-                  type="button"
-                  onClick={() => void handleAlter()}
-                  disabled={!prompt.trim() || !alterInstruction.trim() || isSubmitting || isExpanding || isAltering}
-                  className="flex items-center justify-center rounded-lg border border-white/10 bg-white/5 px-3 text-slate-300 transition hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
-                  title="Apply Alteration"
-                >
-                  {isAltering ? (
-                    <Spinner size="sm" />
-                  ) : (
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
+              {/* Elements Block for Kling 3.0 */}
+              {videoModelSupportsMultishot && (
+                <div className="space-y-2 border-t border-white/10 pt-2 pb-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      Elements
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        elementsState.setSelectionMode(true);
+                        if (!elementsState.isManagerOpen) {
+                          elementsState.toggleManager();
+                        }
+                      }}
+                      className="text-xs text-sky-400 hover:text-sky-300"
                     >
-                      <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
-                    </svg>
+                      + Add from Elements
+                    </button>
+                  </div>
+                  {elementsState.selectedElements.length === 0 ? (
+                    <p className="text-[10px] text-slate-500">Use @Element1 in prompt</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {elementsState.selectedElements.map((selectedEl, idx) => {
+                        const elementTag = `@Element${idx + 1}`;
+                        return (
+                          <div
+                            key={selectedEl.element.id}
+                            className="relative h-16 w-16 overflow-hidden rounded border border-white/10 group"
+                          >
+                            <img
+                              src={buildElementAssetUrl(selectedEl.element.frontalImageUrl)}
+                              alt={selectedEl.element.name}
+                              className="h-full w-full object-cover"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const nextPrompt = prompt.includes(elementTag)
+                                  ? prompt
+                                  : `${prompt.trim()}${prompt.trim() ? " " : ""}${elementTag}`;
+                                setPrompt(nextPrompt);
+                              }}
+                              className="absolute left-0 top-0 bg-amber-500/80 px-1 text-[8px] font-bold text-white hover:bg-amber-500"
+                              title={`Insert ${elementTag} in prompt`}
+                            >
+                              {elementTag}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => elementsState.deselectElement(selectedEl.element.id)}
+                              className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white opacity-0 hover:bg-rose-500 group-hover:opacity-100"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
-                </button>
-              </div>
+                </div>
+              )}
             </div>
 
             {/* Dynamic Params: Duration and other settings side by side */}
@@ -3759,9 +3861,7 @@ export default function ControlsPane() {
                         disabled={isSubmitting || isExpanding}
                         className={`w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
                       >
-                        {!selectedVideo.params.duration.required && (
-                          <option value="">Default</option>
-                        )}
+
                         {selectedVideo.params.duration.values.map((option: string | number) => (
                           <option key={String(option)} value={String(option)}>
                             {String(option)}s
@@ -3898,10 +3998,7 @@ export default function ControlsPane() {
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" /></svg>
                       </div>
                       <div className="text-xs text-slate-400">
-                        <span className="font-medium text-slate-300">Click to upload</span> or drag and drop
-                      </div>
-                      <div className="mt-1 text-[10px] text-slate-500">
-                        Max 5 images
+                        <span className="font-medium text-slate-300">Click to upload</span> or drag
                       </div>
                     </div>
                   ) : (
@@ -3983,201 +4080,6 @@ export default function ControlsPane() {
               </div>
             ) : null}
 
-            {/* Kling 3.0 extras (bottom): multishot + elements */}
-            {videoModelSupportsMultishot && (
-              <div className="space-y-3 rounded-lg border border-white/10 bg-black/20 p-3">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                      Multishot
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setUseMultishot(!useMultishot)}
-                      disabled={isSubmitting || isExpanding}
-                      className={`text-xs transition ${useMultishot
-                        ? "text-sky-400 hover:text-sky-300"
-                        : "text-slate-500 hover:text-slate-400"
-                        }`}
-                    >
-                      {useMultishot ? "Disable" : "Enable"}
-                    </button>
-                  </div>
-
-                  {useMultishot ? (
-                    <div className="space-y-2 rounded-lg border border-white/10 bg-black/30 p-2">
-                      <div className="flex items-center justify-between border-b border-white/10 pb-1 text-[10px]">
-                        <span className="text-slate-400">Total Duration</span>
-                        <span
-                          className={`font-medium ${multishotPrompts.reduce((sum, s) => sum + s.duration, 0) > 15
-                            ? "text-amber-400"
-                            : "text-emerald-400"
-                            }`}
-                        >
-                          {multishotPrompts.reduce((sum, s) => sum + s.duration, 0)}s / 15s
-                        </span>
-                      </div>
-                      {multishotPrompts.length === 0 ? (
-                        <p className="text-xs text-slate-500">
-                          Add shots below. Each shot is 1-12s, total must stay between 3-15s.
-                        </p>
-                      ) : (
-                        multishotPrompts.map((shot, index) => (
-                          <div key={index} className="flex items-start gap-2">
-                            <input
-                              type="text"
-                              value={shot.prompt}
-                              onChange={(event) => {
-                                const newPrompts = [...multishotPrompts];
-                                newPrompts[index] = { ...shot, prompt: event.target.value };
-                                setMultishotPrompts(newPrompts);
-                              }}
-                              placeholder={`Shot ${index + 1} prompt...`}
-                              disabled={isSubmitting || isExpanding}
-                              className="flex-1 rounded-lg border border-white/10 bg-black/40 px-3 py-1.5 text-xs text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
-                            />
-                            <select
-                              value={shot.duration}
-                              onChange={(event) => {
-                                const newPrompts = [...multishotPrompts];
-                                newPrompts[index] = {
-                                  ...shot,
-                                  duration: Number(event.target.value),
-                                };
-                                setMultishotPrompts(newPrompts);
-                              }}
-                              disabled={isSubmitting || isExpanding}
-                              className="w-20 rounded-lg border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-white outline-none focus:border-sky-400"
-                            >
-                              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((d) => (
-                                <option key={d} value={d}>{d}s</option>
-                              ))}
-                            </select>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setMultishotPrompts((prev) => prev.filter((_, i) => i !== index));
-                              }}
-                              disabled={isSubmitting || isExpanding}
-                              className="flex h-7 w-7 items-center justify-center rounded-lg border border-rose-500/30 bg-rose-500/20 text-rose-200 transition hover:bg-rose-500/30 disabled:opacity-50"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
-                            </button>
-                          </div>
-                        ))
-                      )}
-                      <div className="flex items-start gap-2 border-t border-white/10 pt-2">
-                        <input
-                          type="text"
-                          value={currentMultishotPrompt}
-                          onChange={(event) => setCurrentMultishotPrompt(event.target.value)}
-                          placeholder="New shot prompt..."
-                          disabled={isSubmitting || isExpanding}
-                          className="flex-1 rounded-lg border border-white/10 bg-black/40 px-3 py-1.5 text-xs text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
-                        />
-                        <select
-                          value={currentMultishotDuration}
-                          onChange={(event) => setCurrentMultishotDuration(Number(event.target.value))}
-                          disabled={isSubmitting || isExpanding}
-                          className="w-20 rounded-lg border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-white outline-none focus:border-sky-400"
-                        >
-                          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((d) => (
-                            <option key={d} value={d}>{d}s</option>
-                          ))}
-                        </select>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (!currentMultishotPrompt.trim()) return;
-                            setMultishotPrompts((prev) => [
-                              ...prev,
-                              {
-                                prompt: currentMultishotPrompt.trim(),
-                                duration: Math.max(1, Math.min(12, currentMultishotDuration)),
-                              },
-                            ]);
-                            setCurrentMultishotPrompt("");
-                          }}
-                          disabled={isSubmitting || isExpanding || !currentMultishotPrompt.trim()}
-                          className="flex h-7 w-7 items-center justify-center rounded-lg border border-sky-500/30 bg-sky-500/20 text-sky-200 transition hover:bg-sky-500/30 disabled:opacity-50"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14" /><path d="M5 12h14" /></svg>
-                        </button>
-                      </div>
-                      <p className="text-[10px] text-slate-500">
-                        When multishot is enabled, the single prompt above is ignored.
-                      </p>
-                    </div>
-                  ) : null}
-                </div>
-
-                <div className="space-y-2 border-t border-white/10 pt-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                      Elements
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        elementsState.setSelectionMode(true);
-                        if (!elementsState.isManagerOpen) {
-                          elementsState.toggleManager();
-                        }
-                      }}
-                      className="text-xs text-sky-400 hover:text-sky-300"
-                    >
-                      + Add from Elements
-                    </button>
-                  </div>
-                  {elementsState.selectedElements.length === 0 ? (
-                    <p className="text-xs text-slate-500">
-                      Optional. Use element tags in prompt, e.g. `@Element1`.
-                    </p>
-                  ) : (
-                    <div className="flex flex-wrap gap-2">
-                      {elementsState.selectedElements.map((selectedEl, idx) => {
-                        const elementTag = `@Element${idx + 1}`;
-                        return (
-                          <div
-                            key={selectedEl.element.id}
-                            className="relative h-16 w-16 overflow-hidden rounded border border-white/10 group"
-                          >
-                            <img
-                              src={buildElementAssetUrl(selectedEl.element.frontalImageUrl)}
-                              alt={selectedEl.element.name}
-                              className="h-full w-full object-cover"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const nextPrompt = prompt.includes(elementTag)
-                                  ? prompt
-                                  : `${prompt.trim()}${prompt.trim() ? " " : ""}${elementTag}`;
-                                setPrompt(nextPrompt);
-                              }}
-                              className="absolute left-0 top-0 bg-amber-500/80 px-1 text-[8px] font-bold text-white hover:bg-amber-500"
-                              title={`Insert ${elementTag} in prompt`}
-                            >
-                              {elementTag}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => elementsState.deselectElement(selectedEl.element.id)}
-                              className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white opacity-0 hover:bg-rose-500 group-hover:opacity-100"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                  <p className="text-[10px] text-slate-500">
-                    Click a tag to insert it, or type `@` in prompt to select tags.
-                  </p>
-                </div>
-              </div>
-            )}
           </div>
         ) : null
         }
@@ -4344,9 +4246,7 @@ export default function ControlsPane() {
                       <div className="text-xs text-slate-400">
                         <span className="font-medium text-slate-300">Click to upload</span> or drag videos
                       </div>
-                      <div className="mt-1 text-[10px] text-slate-500">
-                        MP4, MOV, MKV (max 10MB each)
-                      </div>
+
                     </label>
                   ) : (
                     <div className="flex flex-wrap items-center gap-2">
@@ -4537,7 +4437,7 @@ export default function ControlsPane() {
                       disabled={isSubmitting || isExpanding}
                       className={`w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
                     />
-                    <p className="text-[10px] text-slate-500">Create characters at kie.ai/sora-2?model=sora-2-characters</p>
+
                   </div>
                 )}
               </div>
@@ -4661,7 +4561,7 @@ export default function ControlsPane() {
                   <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
                     Reference Images (style/appearance)
                   </label>
-                  <p className="text-[10px] text-slate-500">Use @Image1, @Image2, etc. in prompt</p>
+
                   <div
                     className={`flex flex-wrap gap-2 min-h-[56px] rounded-lg p-1 transition ${isReferenceDragActive ? "bg-sky-500/10 ring-1 ring-sky-400" : ""}`}
                     onDragEnter={(e) => { e.preventDefault(); setIsReferenceDragActive(true); }}
@@ -4717,7 +4617,7 @@ export default function ControlsPane() {
                   <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
                     Elements (characters/objects)
                   </label>
-                  <p className="text-[10px] text-slate-500">Use @Element1, @Element2, etc. in prompt. Each needs a frontal image.</p>
+
                   {elements.map((el, elIdx) => (
                     <div key={el.id} className="rounded-lg border border-white/10 bg-white/5 p-2 space-y-2">
                       <div className="flex items-center justify-between">

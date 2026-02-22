@@ -219,6 +219,21 @@
                     "id": "angenieux_optimo",
                     "name": "Angénieux Optimo",
                     "prompt": "with Angénieux Optimo — smooth focus, organic zoom rendering"
+                },
+                {
+                    "id": "sigma_art_35",
+                    "name": "Sigma 35mm f/1.4 Art",
+                    "prompt": "with Sigma 35mm f/1.4 Art — legendary sharpness, creamy bokeh"
+                },
+                {
+                    "id": "sigma_art_50",
+                    "name": "Sigma 50mm f/1.4 Art",
+                    "prompt": "with Sigma 50mm f/1.4 Art — extreme sharpness, smooth bokeh"
+                },
+                {
+                    "id": "sigma_art_85",
+                    "name": "Sigma 85mm f/1.4 Art",
+                    "prompt": "with Sigma 85mm f/1.4 Art — portrait king, buttery bokeh"
                 }
             ],
             "filmStocks": [
@@ -402,9 +417,34 @@
                     "prompt": "with Zeiss Batis — compact, sharp, classic Zeiss rendering"
                 },
                 {
-                    "id": "sigma_art",
-                    "name": "Sigma Art",
-                    "prompt": "with Sigma Art — extreme sharpness, fast aperture, bold contrast"
+                    "id": "sigma_art_14",
+                    "name": "Sigma 14mm f/1.8 Art",
+                    "prompt": "with Sigma 14mm f/1.8 Art — ultra-wide, fast, dramatic perspective"
+                },
+                {
+                    "id": "sigma_art_24",
+                    "name": "Sigma 24mm f/1.4 Art",
+                    "prompt": "with Sigma 24mm f/1.4 Art — wide-angle, bokeh master, sharp corner-to-corner"
+                },
+                {
+                    "id": "sigma_art_35",
+                    "name": "Sigma 35mm f/1.4 Art",
+                    "prompt": "with Sigma 35mm f/1.4 Art — legendary sharpness, creamy bokeh, bold contrast"
+                },
+                {
+                    "id": "sigma_art_50",
+                    "name": "Sigma 50mm f/1.4 Art",
+                    "prompt": "with Sigma 50mm f/1.4 Art — extreme sharpness wide open, smooth bokeh"
+                },
+                {
+                    "id": "sigma_art_85",
+                    "name": "Sigma 85mm f/1.4 Art",
+                    "prompt": "with Sigma 85mm f/1.4 Art — portrait king, buttery bokeh, razor sharp focus"
+                },
+                {
+                    "id": "sigma_art_105",
+                    "name": "Sigma 105mm f/1.4 Art",
+                    "prompt": "with Sigma 105mm f/1.4 Art — 'Bokeh Master', extreme subject isolation"
                 }
             ],
             "filmStocks": [
@@ -449,9 +489,19 @@
                     "prompt": "with Canon EF L-series — proven optics, reliable color"
                 },
                 {
-                    "id": "sigma_art",
-                    "name": "Sigma Art",
-                    "prompt": "with Sigma Art — extreme sharpness, bold contrast"
+                    "id": "sigma_art_35",
+                    "name": "Sigma 35mm f/1.4 Art",
+                    "prompt": "with Sigma 35mm f/1.4 Art — legendary sharpness, creamy bokeh"
+                },
+                {
+                    "id": "sigma_art_50",
+                    "name": "Sigma 50mm f/1.4 Art",
+                    "prompt": "with Sigma 50mm f/1.4 Art — extreme sharpness, bold contrast"
+                },
+                {
+                    "id": "sigma_art_85",
+                    "name": "Sigma 85mm f/1.4 Art",
+                    "prompt": "with Sigma 85mm f/1.4 Art — portrait king, buttery bokeh"
                 }
             ],
             "filmStocks": [
@@ -496,9 +546,19 @@
                     "prompt": "with Nikkor Z — modern optics, consistent rendering"
                 },
                 {
-                    "id": "sigma_art",
-                    "name": "Sigma Art",
-                    "prompt": "with Sigma Art — razor sharp, fast aperture"
+                    "id": "sigma_art_35",
+                    "name": "Sigma 35mm f/1.4 Art",
+                    "prompt": "with Sigma 35mm f/1.4 Art — razor sharp, fast aperture"
+                },
+                {
+                    "id": "sigma_art_50",
+                    "name": "Sigma 50mm f/1.4 Art",
+                    "prompt": "with Sigma 50mm f/1.4 Art — extreme sharpness wide open"
+                },
+                {
+                    "id": "sigma_art_85",
+                    "name": "Sigma 85mm f/1.4 Art",
+                    "prompt": "with Sigma 85mm f/1.4 Art — portrait bokeh, razor sharp"
                 }
             ],
             "filmStocks": [

@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { cameraOptions, buildPromptText, type PromptBuilderData } from "../lib/prompt-builder/types";
+import { cameraOptions, buildPromptText, wrapKeywordName, type PromptBuilderData } from "../lib/prompt-builder/types";
 import {
     lighting,
     mood,
@@ -56,9 +56,9 @@ export function buildCardsSuffix(shot: ShotSettings, look: LookSettings): string
     if (shot.aperture) camera["f-number"] = shot.aperture;
 
     const filmParts: string[] = [];
-    if (look.cameraBody) filmParts.push(look.cameraBody);
-    if (look.lens) filmParts.push(look.lens);
-    if (look.filmStock) filmParts.push(look.filmStock);
+    if (look.cameraBody) filmParts.push(wrapKeywordName(look.cameraBody));
+    if (look.lens) filmParts.push(wrapKeywordName(look.lens));
+    if (look.filmStock) filmParts.push(wrapKeywordName(look.filmStock));
 
     const data: PromptBuilderData = {
         prompt: "",
