@@ -6,14 +6,14 @@ import {
   useState,
 } from "react";
 import { PromptBuilderV2 } from "./PromptBuilder";
+import { ImageShotLookCards } from "./ImageShotLookCards";
 import {
-  ImageShotLookCards,
   buildCardsSuffix,
   DEFAULT_SHOT,
   DEFAULT_LOOK,
   type ShotSettings,
   type LookSettings,
-} from "./ImageShotLookCards";
+} from "../lib/prompt-builder/types";
 import { CameraMovementSelector } from "./ui/CameraMovementSelector";
 import type { ChangeEvent, FormEvent } from "react";
 import {
@@ -49,14 +49,11 @@ import {
   type ProviderCallOptions,
 } from "../lib/providers";
 import { downloadBlob } from "../lib/providers/shared";
-import {
-  fetchFileBlob,
-  uploadFile,
-  type WorkspaceConnection,
-} from "../lib/api/files";
+import { fetchFileBlob, uploadFile, type WorkspaceConnection } from "../lib/api/files";
 import { getGenerationByOutput, recordGeneration, recordPrompt } from "../lib/api/meta";
 import { useQueue } from "../state/queue";
 import { expandPrompt, alterPrompt, expandKlingO1ReferencePrompt } from "../lib/llm";
+import { compressImage } from "../lib/image-utils";
 import { buildDatedMediaPath } from "../lib/storage-paths";
 import {
   consumeControlsActions,
@@ -276,8 +273,6 @@ export default function ControlsPane() {
   // Multishot prompts state for Kling 3.0
   const [multishotPrompts, setMultishotPrompts] = useState<Array<{ prompt: string; duration: number }>>([]);
   const [editingMultishotIndex, setEditingMultishotIndex] = useState<number | null>(null);
-  const [currentMultishotPrompt, setCurrentMultishotPrompt] = useState("");
-  const [currentMultishotDuration, setCurrentMultishotDuration] = useState(5);
   const [useMultishot, setUseMultishot] = useState(false);
 
   const loadPersistedImageReferenceUploads = (): ReferenceUpload[] => {
@@ -366,7 +361,6 @@ export default function ControlsPane() {
   const [isExpanding, setIsExpanding] = useState(false);
   // const [busy, setBusy] = useState(false);
   const [isReferenceDragActive, setIsReferenceDragActive] = useState(false);
-  const [viewState, setViewState] = useState<"builder" | "settings">("builder");
   const [showPromptStudio, setShowPromptStudio] = useState(false);
   const [showCameraSelector, setShowCameraSelector] = useState(false);
 
@@ -407,9 +401,6 @@ export default function ControlsPane() {
 
   const referenceInputRef = useRef<HTMLInputElement | null>(null);
   const formRef = useRef<HTMLFormElement | null>(null);
-
-  // Was previous submission complete? Track to detect completion
-  const wasSubmittingRef = useRef(false);
 
   // When true, the tab-switch useEffect should skip reloading prompt history.
   // Set by recreateFromOutput so the restored prompt isn't clobbered.
@@ -809,14 +800,16 @@ export default function ControlsPane() {
       });
       if (!file) return;
 
-      // Keep original file for full-quality upload and create a local preview.
-      const preview = registerPreview(URL.createObjectURL(file));
+      const optimizedFile = await compressImage(file);
+
+      // Keep optimized file for full-quality upload and create a local preview.
+      const preview = registerPreview(URL.createObjectURL(optimizedFile));
 
       setStartFrame({
         uploading: false,
         preview,
-        name: file.name,
-        file,
+        name: optimizedFile.name,
+        file: optimizedFile,
         // No url yet - will be uploaded when Generate is pressed
       });
     },
@@ -833,14 +826,16 @@ export default function ControlsPane() {
       });
       if (!file) return;
 
-      // Keep original file for full-quality upload and create a local preview.
-      const preview = registerPreview(URL.createObjectURL(file));
+      const optimizedFile = await compressImage(file);
+
+      // Keep optimized file for full-quality upload and create a local preview.
+      const preview = registerPreview(URL.createObjectURL(optimizedFile));
 
       setEndFrame({
         uploading: false,
         preview,
-        name: file.name,
-        file,
+        name: optimizedFile.name,
+        file: optimizedFile,
         // No url yet - will be uploaded when Generate is pressed
       });
     },
@@ -873,16 +868,17 @@ export default function ControlsPane() {
         setTimeout(() => setStatus(null), 3000);
       }
 
-      // Keep original files for full-quality upload.
+      // Keep optimized files for full-quality upload.
       const entries: ReferenceUpload[] = [];
       for (const file of filesToAdd) {
-        const preview = registerPreview(URL.createObjectURL(file));
+        const optimizedFile = await compressImage(file);
+        const preview = registerPreview(URL.createObjectURL(optimizedFile));
         entries.push({
           id: Math.random().toString(36).slice(2),
           preview,
-          name: file.name,
+          name: optimizedFile.name,
           uploading: false,
-          file,
+          file: optimizedFile,
           // No url yet - will be uploaded when Generate is pressed
         });
       }
@@ -1126,10 +1122,11 @@ export default function ControlsPane() {
             if (MODEL_SPECS.some((spec) => spec.id === modelId)) {
               setModelKey(`video:${modelId}`);
               setActiveTab("video");
-              const input = (meta.payload?.input ?? meta.payload) as Record<string, unknown>;
+              const payloadData = meta.payload as Record<string, unknown> | undefined;
+              const input = (payloadData?.input ?? payloadData) as Record<string, unknown>;
               if (input.multi_shots && Array.isArray(input.multi_prompt)) {
                 setUseMultishot(true);
-                setMultishotPrompts(input.multi_prompt as any);
+                setMultishotPrompts(input.multi_prompt as Array<{ prompt: string; duration: number }>);
                 setVideoPrompt("");
               } else {
                 setUseMultishot(false);
@@ -1350,7 +1347,7 @@ export default function ControlsPane() {
         setTimeout(() => setStatus(null), 4000);
       }
     },
-    [fetchWorkspaceFile, setActiveTab, setModelKey, setPrompt, setStatus, waitFor]
+    [fetchWorkspaceFile, setActiveTab, setModelKey, setPrompt, setStatus, waitFor, setImagePrompt, setSpecialPrompt, setVideoPrompt]
   );
 
   const processControlsActions = useCallback(async () => {
@@ -1736,7 +1733,7 @@ export default function ControlsPane() {
 
   const addToHistory = useCallback(
     (_newPrompt: string) => {
-      let newPrompt = _newPrompt;
+      const newPrompt = _newPrompt;
       const currentHistory = historyRef.current;
       const currentIndex = historyIndexRef.current;
 
@@ -1769,7 +1766,7 @@ export default function ControlsPane() {
         });
       }
     },
-    [activeTab, connection, modelKey, modelKind, multishotPrompts, useMultishot]
+    [activeTab, connection, modelKey, modelKind]
   );
 
   const applyHistoryPrompt = useCallback((text: string) => {
@@ -1902,29 +1899,24 @@ export default function ControlsPane() {
       }
 
       // Helper to process any image reference (upload or slot)
-      const processRef = async (ref: { preview?: string; url?: string }) => {
+      const processRef = async (ref: { preview?: string; url?: string; file?: File }, setFileUrl?: (url: string) => void) => {
         try {
-          if (ref.preview) {
-            const response = await fetch(ref.preview);
-            const blob = await response.blob();
-            if (blob.size < 4 * 1024 * 1024) {
-              return await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result as string);
-                reader.onerror = reject;
-                reader.readAsDataURL(blob);
-              });
-            } else {
-              // Image too large for base64, check if we have a valid public URL
-              if (!ref.url || ref.url.includes("localhost") || ref.url.includes("127.0.0.1")) {
-                throw new Error("Image too large for VLM (max 4MB) and no public URL available.");
-              }
-            }
+          if (ref.url && !ref.url.includes("localhost") && !ref.url.includes("127.0.0.1")) {
+            return ref.url;
           }
-          return ref.url;
+          if (ref.file) {
+            setStatus("Uploading image for prompt expansion...");
+            const ext = ref.file.name.split('.').pop()?.toLowerCase() || 'jpg';
+            const url = await uploadToFal(ref.file, `prompt_ref.${ext}`);
+            if (setFileUrl) {
+              setFileUrl(url);
+            }
+            return url;
+          }
+          return undefined;
         } catch (e) {
-          console.error("Failed to process reference image:", e);
-          return ref.url;
+          console.error("Failed to process reference image for expansion:", e);
+          return undefined;
         }
       };
 
@@ -1939,35 +1931,49 @@ export default function ControlsPane() {
         ) {
           continue;
         }
-        const result = await processRef(ref);
+        const result = await processRef(ref, (url) => {
+          setReferenceUploads((prev) =>
+            prev.map((item) =>
+              item.id === ref.id
+                ? { ...item, url, createdAt: Date.now() }
+                : item
+            )
+          );
+        });
         if (result) validReferenceUrls.push(result);
       }
 
       // If in video mode, also check start/end frames
       if (mode === "video") {
         if (
-          (startFrame.preview || startFrame.url) &&
+          (startFrame.preview || startFrame.url || startFrame.file) &&
           !(
             startFrame.url &&
             typeof startFrame.createdAt === "number" &&
             Date.now() - startFrame.createdAt > UPLOAD_URL_TTL_MS
           )
         ) {
-          const result = await processRef(startFrame);
+          const result = await processRef(startFrame, (url) => {
+            setStartFrame((prev) => ({ ...prev, url, createdAt: Date.now() }));
+          });
           if (result) validReferenceUrls.push(result);
         }
         if (
-          (endFrame.preview || endFrame.url) &&
+          (endFrame.preview || endFrame.url || endFrame.file) &&
           !(
             endFrame.url &&
             typeof endFrame.createdAt === "number" &&
             Date.now() - endFrame.createdAt > UPLOAD_URL_TTL_MS
           )
         ) {
-          const result = await processRef(endFrame);
+          const result = await processRef(endFrame, (url) => {
+            setEndFrame((prev) => ({ ...prev, url, createdAt: Date.now() }));
+          });
           if (result) validReferenceUrls.push(result);
         }
       }
+
+      setStatus(null);
 
       // Save current state before expansion
       addToHistory(prompt);
@@ -3639,7 +3645,7 @@ export default function ControlsPane() {
                       if (prompt.trim()) {
                         setMultishotPrompts((prev) => [
                           ...prev,
-                          { prompt: prompt.trim(), duration: currentMultishotDuration },
+                          { prompt: prompt.trim(), duration: 5 },
                         ]);
                         setPrompt("");
                       }

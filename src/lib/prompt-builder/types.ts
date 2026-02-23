@@ -100,6 +100,68 @@ export interface PromptBuilderData {
     composition: string;
 }
 
+export type ShotSettings = {
+    angle: string;
+    focalLength: string;
+    aperture: string;
+    shot: string;
+};
+
+export type LookSettings = {
+    cameraSystem: string;
+    cameraBody: string;
+    lens: string;
+    filmStock: string;
+    lighting: string;
+    inspiration: string;
+};
+
+export const DEFAULT_SHOT: ShotSettings = {
+    angle: "",
+    focalLength: "",
+    aperture: "",
+    shot: "",
+};
+
+export const DEFAULT_LOOK: LookSettings = {
+    cameraSystem: "",
+    cameraBody: "",
+    lens: "",
+    filmStock: "",
+    lighting: "",
+    inspiration: "",
+};
+
+export function buildCardsSuffix(shot: ShotSettings, look: LookSettings): string {
+    const camera: PromptBuilderData["camera"] = {};
+    if (shot.angle) camera.angle = shot.angle;
+    if (shot.shot) camera.distance = shot.shot;
+    if (shot.focalLength) {
+        const digits = shot.focalLength.replace(/[^0-9]/g, "");
+        if (digits) camera["lens-mm"] = parseInt(digits, 10);
+        else camera.lens = shot.focalLength;
+    }
+    if (shot.aperture) camera["f-number"] = shot.aperture;
+
+    const filmParts: string[] = [];
+    if (look.cameraBody) filmParts.push(wrapKeywordName(look.cameraBody));
+    if (look.lens) filmParts.push(wrapKeywordName(look.lens));
+    if (look.filmStock) filmParts.push(wrapKeywordName(look.filmStock));
+
+    const data: PromptBuilderData = {
+        prompt: "",
+        style: "",
+        camera,
+        film_stock: filmParts.length ? filmParts.join(", ") : undefined,
+        lighting: look.lighting,
+        colors: { palette: [], mood: look.inspiration },
+        composition: "",
+    };
+
+    const raw = buildPromptText(data);
+    return raw.replace(/^\.\s*/, "").trim();
+}
+
 // Camera dropdown options
 export const cameraOptions = {
     angle: {

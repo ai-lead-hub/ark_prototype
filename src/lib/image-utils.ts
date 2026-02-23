@@ -1,6 +1,6 @@
 export async function compressImage(
     file: File,
-    maxDimension = 1920,
+    maxDimension = 2572,
     quality = 1.0
 ): Promise<File> {
     // If not an image, return original
