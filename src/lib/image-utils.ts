@@ -40,10 +40,6 @@ export async function compressImage(
                 return;
             }
 
-            // Fill white background for transparent images (since we convert to JPG)
-            ctx.fillStyle = "#FFFFFF";
-            ctx.fillRect(0, 0, width, height);
-
             if (needsResize) {
                 // Use Lanczos-3 for high quality downscaling
                 try {
@@ -65,13 +61,13 @@ export async function compressImage(
                         reject(new Error("Canvas toBlob failed"));
                         return;
                     }
-                    const newFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", {
-                        type: "image/jpeg",
+                    const newFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".webp", {
+                        type: "image/webp",
                         lastModified: Date.now(),
                     });
                     resolve(newFile);
                 },
-                "image/jpeg",
+                "image/webp",
                 quality
             );
         };
