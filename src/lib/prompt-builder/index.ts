@@ -2,7 +2,6 @@
 
 import presetsData from './presets.json';
 import stylesData from './styles.json';
-import camerasData from './cameras.json';
 import lightingData from './lighting.json';
 import moodData from './mood.json';
 import compositionData from './composition.json';
@@ -11,7 +10,6 @@ export * from './types';
 
 export const presets = presetsData as Record<string, import('./types').ScenePreset>;
 export const styles = stylesData as Record<string, import('./types').StylePreset[]>;
-export const cameras = camerasData as Record<string, import('./types').CameraPreset[]>;
 export const lighting = lightingData as Record<string, import('./types').LightingPreset[]>;
 export const mood = moodData as Record<string, import('./types').MoodPreset[]>;
 export const composition = compositionData as Record<string, import('./types').CompositionPreset[]>;

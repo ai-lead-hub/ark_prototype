@@ -104,7 +104,7 @@ export async function expandPrompt(
     _type: "natural", // kept for API compatibility, always natural
     mode: "image" | "video",
     referenceImages: string[] = [],
-    promptMode: "general" | "photoreal" | "audiogen" | "editing" | "timestep" = "photoreal"
+    promptMode: "general" | "photoreal" | "audiogen" | "editing" | "timestep" | "gridgen" = "photoreal"
 ): Promise<string> {
     let systemPrompt: string;
 
@@ -114,7 +114,7 @@ export async function expandPrompt(
         const videoMode = promptMode === "audiogen" ? "audiogen" : promptMode === "timestep" ? "timestep" : "photoreal";
         systemPrompt = SYSTEM_PROMPTS.video[videoMode][subMode];
     } else {
-        // audiogen/timestep fall back to general for images; editing is image-specific
+        // audiogen/timestep fall back to general for images; editing and gridgen are image-specific
         const imageMode = (promptMode === "audiogen" || promptMode === "timestep") ? "general" : promptMode;
         // Image prompts only have 'natural'
         const imagePrompts = SYSTEM_PROMPTS.image[imageMode];
@@ -179,10 +179,10 @@ export async function alterPrompt(
     currentPrompt: string,
     instruction: string,
     mode: "image" | "video",
-    promptMode: "general" | "photoreal" | "audiogen" | "editing" | "timestep" = "photoreal"
+    promptMode: "general" | "photoreal" | "audiogen" | "editing" | "timestep" | "gridgen" = "photoreal"
 ): Promise<string> {
-    // audiogen, editing, and timestep don't have dedicated alteration prompts, fall back to general
-    const actualMode = (promptMode === "audiogen" || promptMode === "editing" || promptMode === "timestep") ? "general" : promptMode;
+    // audiogen, editing, timestep, and gridgen don't have dedicated alteration prompts, fall back to general
+    const actualMode = (promptMode === "audiogen" || promptMode === "editing" || promptMode === "timestep" || promptMode === "gridgen") ? "general" : promptMode;
     const systemPrompt = SYSTEM_PROMPTS.alteration[actualMode][mode];
     const userMessage = `CURRENT PROMPT: \n${currentPrompt}\n\nINSTRUCTION: \n${instruction}`;
     return callOpenRouter(userMessage, systemPrompt, []);

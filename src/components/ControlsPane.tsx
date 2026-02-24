@@ -5,7 +5,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { PromptBuilderV2 } from "./PromptBuilder";
 import { ImageShotLookCards } from "./ImageShotLookCards";
 import {
   buildCardsSuffix,
@@ -223,12 +222,12 @@ export default function ControlsPane() {
   const [imagePrompt, setImagePrompt] = usePersistentState("imagePrompt", "");
   const [videoPrompt, setVideoPrompt] = usePersistentState("videoPrompt", "");
   const [specialPrompt, setSpecialPrompt] = usePersistentState("specialPrompt", "");
-  type PromptMode = "photoreal" | "audiogen" | "editing" | "general" | "timestep";
-  type ImagePromptMode = "photoreal" | "editing";
+  type PromptMode = "photoreal" | "audiogen" | "editing" | "general" | "timestep" | "gridgen";
+  type ImagePromptMode = "photoreal" | "editing" | "gridgen";
   type VideoPromptMode = "photoreal" | "audiogen" | "timestep";
   const legacyPromptMode = getStored<PromptMode | null>("promptMode", null);
   const initialImagePromptMode: ImagePromptMode =
-    legacyPromptMode === "editing" || legacyPromptMode === "photoreal"
+    legacyPromptMode === "editing" || legacyPromptMode === "photoreal" || legacyPromptMode === "gridgen"
       ? legacyPromptMode
       : "photoreal";
   const initialVideoPromptMode: VideoPromptMode =
@@ -245,6 +244,7 @@ export default function ControlsPane() {
     "appendImageCameraSettings",
     true
   );
+
 
   const [videoPromptMode, setVideoPromptMode] = usePersistentState<VideoPromptMode>(
     "videoPromptMode",
@@ -359,9 +359,7 @@ export default function ControlsPane() {
   const [status, setStatus] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isExpanding, setIsExpanding] = useState(false);
-  // const [busy, setBusy] = useState(false);
   const [isReferenceDragActive, setIsReferenceDragActive] = useState(false);
-  const [showPromptStudio, setShowPromptStudio] = useState(false);
   const [showCameraSelector, setShowCameraSelector] = useState(false);
 
   // Persistent camera/style card settings (image tab only)
@@ -3285,22 +3283,29 @@ export default function ControlsPane() {
                   <div className="w-px bg-white/10 mx-1" />
                   <button
                     type="button"
-                    onClick={() => setImagePromptMode((prev) =>
-                      prev === "photoreal" ? "editing" : "photoreal"
-                    )}
+                    onClick={() => setImagePromptMode((prev) => {
+                      if (prev === "photoreal") return "editing";
+                      if (prev === "editing") return "gridgen";
+                      return "photoreal";
+                    })}
                     disabled={isExpanding}
-                    className={`flex h-7 w-7 items-center justify-center rounded-md border transition disabled:opacity-50 ${imagePromptMode === "photoreal"
-                      ? "border-emerald-500/30 bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/40 hover:text-white"
-                      : "border-cyan-500/30 bg-cyan-500/20 text-cyan-200 hover:bg-cyan-500/40 hover:text-white"
+                    className={`flex h-7 items-center justify-center rounded-md border transition disabled:opacity-50 ${imagePromptMode === "photoreal"
+                      ? "border-emerald-500/30 bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/40 hover:text-white w-7"
+                      : imagePromptMode === "editing"
+                        ? "border-cyan-500/30 bg-cyan-500/20 text-cyan-200 hover:bg-cyan-500/40 hover:text-white w-7"
+                        : "border-amber-500/30 bg-amber-500/20 text-amber-200 hover:bg-amber-500/40 hover:text-white px-1.5 gap-1"
                       }`}
                     title={`Current Mode: ${imagePromptMode === "photoreal" ? "Photorealistic (Camera Aware)"
-                      : "Editing (Angle/Modify)"
+                      : imagePromptMode === "editing" ? "Editing (Angle/Modify)"
+                        : "Grid Gen (Cinematic Storyboard)"
                       }`}
                   >
                     {imagePromptMode === "photoreal" ? (
                       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" /><circle cx="12" cy="13" r="3" /></svg>
-                    ) : (
+                    ) : imagePromptMode === "editing" ? (
                       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 3v18" /><path d="M3 9h6" /></svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></svg>
                     )}
                   </button>
                   <div className="w-px bg-white/10 mx-1" />
@@ -5122,19 +5127,6 @@ export default function ControlsPane() {
           </div>
         )}
       </div>
-
-      {showPromptStudio && (
-        <PromptBuilderV2
-          currentPrompt={prompt}
-          initialImages={referenceUploads.map((r) => r.url || r.preview).filter(Boolean)}
-          onClose={() => setShowPromptStudio(false)}
-          onApply={(newPrompt) => {
-            setPrompt(newPrompt);
-            setShowPromptStudio(false);
-            addToHistory(newPrompt);
-          }}
-        />
-      )}
     </form >
   );
 }

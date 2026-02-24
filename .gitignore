@@ -5,3 +5,4 @@ node_modules
 dist/
 data/
 debug.log
+.DS_Store

@@ -84,6 +84,7 @@ export default function ImageEditor({
     const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
     const [saving, setSaving] = useState(false);
     const [status, setStatus] = useState<string | null>(null);
+    const [splitBusy, setSplitBusy] = useState(false);
 
     // Transform state for live preview (applied on save)
     const [flipH, setFlipH] = useState(false);
@@ -694,6 +695,66 @@ export default function ImageEditor({
         }
     }, [cropArea, annotations, imageName, onSave]);
 
+    // Split image into grid tiles
+    const handleSplitGrid = useCallback(async (gridType: "2x2" | "3x3") => {
+        const img = imageRef.current;
+        if (!img) {
+            setStatus("No image loaded");
+            return;
+        }
+
+        setSplitBusy(true);
+        setStatus(`Splitting into ${gridType} grid...`);
+
+        try {
+            const cols = gridType === "3x3" ? 3 : 2;
+            const rows = cols;
+            const tileW = Math.floor(img.naturalWidth / cols);
+            const tileH = Math.floor(img.naturalHeight / rows);
+            const baseName = imageName.replace(/\.[^.]+$/, "");
+
+            for (let row = 0; row < rows; row++) {
+                for (let col = 0; col < cols; col++) {
+                    const canvas = document.createElement("canvas");
+                    canvas.width = tileW;
+                    canvas.height = tileH;
+                    const ctx = canvas.getContext("2d");
+                    if (!ctx) continue;
+
+                    ctx.drawImage(
+                        img,
+                        col * tileW,
+                        row * tileH,
+                        tileW,
+                        tileH,
+                        0,
+                        0,
+                        tileW,
+                        tileH
+                    );
+
+                    const blob = await new Promise<Blob>((resolve, reject) => {
+                        canvas.toBlob(
+                            (b) => (b ? resolve(b) : reject(new Error("Failed to create blob"))),
+                            "image/png"
+                        );
+                    });
+
+                    const filename = `${baseName}_grid_r${row + 1}c${col + 1}.png`;
+                    await onSave(blob, filename);
+                    setStatus(`Saved tile ${row * cols + col + 1}/${rows * cols}...`);
+                }
+            }
+
+            setStatus(`Split into ${rows * cols} tiles!`);
+            setTimeout(() => setStatus(null), 3000);
+        } catch (err) {
+            setStatus(`Split failed: ${err instanceof Error ? err.message : "Unknown error"}`);
+        } finally {
+            setSplitBusy(false);
+        }
+    }, [imageName, onSave]);
+
     // Save with annotations and transforms
     const handleSave = useCallback(async () => {
         const img = imageRef.current;
@@ -1014,6 +1075,8 @@ export default function ImageEditor({
                 onRotate90={handleRotate90}
                 onSave={handleSave}
                 onOpenPhotopea={handleOpenPhotopea}
+                onSplitGrid={handleSplitGrid}
+                splitBusy={splitBusy}
                 onClose={onClose}
                 saving={saving}
                 hasAnnotations={annotations.length > 0}
