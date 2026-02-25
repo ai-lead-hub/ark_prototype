@@ -104,85 +104,32 @@ export async function expandPrompt(
     _type: "natural", // kept for API compatibility, always natural
     mode: "image" | "video",
     referenceImages: string[] = [],
-    promptMode: "general" | "photoreal" | "audiogen" | "editing" | "timestep" | "gridgen" = "photoreal"
+    promptMode: "photoreal" | "audiogen" | "editing" | "timestep" | "gridgen" = "photoreal"
 ): Promise<string> {
     let systemPrompt: string;
 
     if (mode === "video") {
         const subMode = referenceImages.length > 0 ? "image_to_video" : "text_to_video";
-        // audiogen is for video with audio; timestep is for beat-by-beat; editing/general fall back to photoreal for video
+        // audiogen is for video with audio; timestep is for beat-by-beat; all others use photoreal
         const videoMode = promptMode === "audiogen" ? "audiogen" : promptMode === "timestep" ? "timestep" : "photoreal";
         systemPrompt = SYSTEM_PROMPTS.video[videoMode][subMode];
     } else {
-        // audiogen/timestep fall back to general for images; editing and gridgen are image-specific
-        const imageMode = (promptMode === "audiogen" || promptMode === "timestep") ? "general" : promptMode;
-        // Image prompts only have 'natural'
-        const imagePrompts = SYSTEM_PROMPTS.image[imageMode];
-        systemPrompt = typeof imagePrompts === "object" && "natural" in imagePrompts
-            ? imagePrompts.natural
-            : (imagePrompts as unknown as string);
+        // audiogen and timestep are video-only modes; fall back to photoreal for image context
+        const imageMode = (promptMode === "audiogen" || promptMode === "timestep") ? "photoreal" : promptMode;
+        systemPrompt = SYSTEM_PROMPTS.image[imageMode].natural;
     }
 
     return callOpenRouter(prompt, systemPrompt, referenceImages);
-}
-
-export async function expandPromptWithPresets(
-    userContext: string,
-    technicalSpecs: string,
-    referenceImages: string[] = []
-): Promise<string> {
-    // Import the dedicated studio prompt and FAL upload
-    const { STUDIO_PROMPT } = await import('./prompts');
-    const { uploadToFal } = await import('./fal');
-
-    // Build simple, natural input format for the LLM
-    const structuredInput = `
-[SCENE]: ${userContext}
-
-[SETTINGS]: ${technicalSpecs}
-`.trim();
-
-    // Convert blob URLs to FAL-hosted URLs (OpenRouter can't access blob: URLs)
-    const processedImages: string[] = [];
-    for (const imageUrl of referenceImages) {
-        if (imageUrl.startsWith('blob:')) {
-            try {
-                const response = await fetch(imageUrl);
-                const blob = await response.blob();
-                const file = new File([blob], 'reference.jpg', { type: blob.type || 'image/jpeg' });
-                const falUrl = await uploadToFal(file);
-                processedImages.push(falUrl);
-            } catch (err) {
-                if (import.meta.env.DEV) {
-                    console.warn('[PromptStudio] Failed to upload blob to FAL:', err);
-                }
-                // Skip this image if upload fails
-            }
-        } else if (imageUrl.startsWith('data:') || imageUrl.startsWith('http')) {
-            // Already a data URL or remote URL - use as-is
-            processedImages.push(imageUrl);
-        }
-    }
-
-    // Use the simplified STUDIO_PROMPT with the structured input
-    try {
-        return await callOpenRouter(structuredInput, STUDIO_PROMPT, processedImages);
-    } catch (error) {
-        if (error instanceof Error && error.message.includes('VITE_OPENROUTER_KEY')) {
-            throw new Error('Prompt Studio requires VITE_OPENROUTER_KEY to be configured in .env.local');
-        }
-        throw error;
-    }
 }
 
 export async function alterPrompt(
     currentPrompt: string,
     instruction: string,
     mode: "image" | "video",
-    promptMode: "general" | "photoreal" | "audiogen" | "editing" | "timestep" | "gridgen" = "photoreal"
+    promptMode: "photoreal" | "audiogen" | "editing" | "timestep" | "gridgen" = "photoreal"
 ): Promise<string> {
-    // audiogen, editing, timestep, and gridgen don't have dedicated alteration prompts, fall back to general
-    const actualMode = (promptMode === "audiogen" || promptMode === "editing" || promptMode === "timestep" || promptMode === "gridgen") ? "general" : promptMode;
+    // only photoreal has a dedicated alteration prompt; all others fall back to photoreal
+    const actualMode = promptMode === "photoreal" ? "photoreal" : "general";
     const systemPrompt = SYSTEM_PROMPTS.alteration[actualMode][mode];
     const userMessage = `CURRENT PROMPT: \n${currentPrompt}\n\nINSTRUCTION: \n${instruction}`;
     return callOpenRouter(userMessage, systemPrompt, []);

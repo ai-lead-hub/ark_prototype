@@ -18,7 +18,7 @@ export async function compressImage(
             let { width, height } = img;
             let needsResize = false;
 
-            // Calculate new dimensions
+            // Only resize if over maxDimension
             if (width > maxDimension || height > maxDimension) {
                 needsResize = true;
                 if (width > height) {
@@ -49,13 +49,24 @@ export async function compressImage(
                 try {
                     const destData = ctx.createImageData(width, height);
                     lanczosResize(img, destData);
-                    ctx.putImageData(destData, 0, 0);
+                    // Composite Lanczos result onto white background via a temp canvas
+                    // (putImageData would overwrite the white background, breaking transparency)
+                    const tmpCanvas = document.createElement("canvas");
+                    tmpCanvas.width = width;
+                    tmpCanvas.height = height;
+                    const tmpCtx = tmpCanvas.getContext("2d");
+                    if (tmpCtx) {
+                        tmpCtx.putImageData(destData, 0, 0);
+                        ctx.drawImage(tmpCanvas, 0, 0);
+                    } else {
+                        ctx.putImageData(destData, 0, 0);
+                    }
                 } catch (e) {
                     console.warn("Lanczos resize failed, falling back to standard canvas resize", e);
                     ctx.drawImage(img, 0, 0, width, height);
                 }
             } else {
-                // No resize needed, just draw
+                // No resize needed, just draw onto white background
                 ctx.drawImage(img, 0, 0, width, height);
             }
 
@@ -65,7 +76,8 @@ export async function compressImage(
                         reject(new Error("Canvas toBlob failed"));
                         return;
                     }
-                    const newFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", {
+                    const newName = file.name.replace(/\.[^/.]+$/, "") + ".jpg";
+                    const newFile = new File([blob], newName, {
                         type: "image/jpeg",
                         lastModified: Date.now(),
                     });
