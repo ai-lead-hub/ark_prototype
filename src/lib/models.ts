@@ -209,10 +209,15 @@ const jsonSpecs =
           mapInput: (unified) => {
             const input: Record<string, FalInputValue> = {};
 
-            // Determine if this is I2V (has image) or T2V (no image)
+            const isRefModel = model.id === "veo-3.1-ref";
             const hasImage = !!unified.start_frame_url;
+            const hasReferenceImages = (unified.reference_image_urls?.length ?? 0) > 0;
 
-            if (hasImage) {
+            if (isRefModel && hasReferenceImages) {
+              // REFERENCE_2_VIDEO mode (veo3_fast only, 16:9 & 9:16)
+              input.imageUrls = unified.reference_image_urls!.slice(0, 3);
+              input.generationType = "REFERENCE_2_VIDEO";
+            } else if (hasImage) {
               // I2V mode
               const urls = [unified.start_frame_url!];
               if (unified.end_frame_url) {

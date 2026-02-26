@@ -1627,11 +1627,18 @@ export default function ControlsPane() {
             className={`w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
           >
 
-            {definition.values.map((option: string | number) => (
-              <option key={String(option)} value={String(option)}>
-                {String(option)}
-              </option>
-            ))}
+            {definition.values.map((option: string | number) => {
+              const ENUM_LABELS: Record<string, string> = {
+                veo3_fast: "Fast",
+                veo3: "Quality",
+              };
+              const label = ENUM_LABELS[String(option)] ?? String(option);
+              return (
+                <option key={String(option)} value={String(option)}>
+                  {label}
+                </option>
+              );
+            })}
           </select>
         </div>
       );

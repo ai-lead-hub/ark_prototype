@@ -929,25 +929,40 @@ Supports both T2V (text-to-video) and I2V (image-to-video). When `input_urls` is
 
 ---
 
-### Veo 3.1 Fast
+### Veo 3.1
 **Provider**: KIE
 **Endpoint**: `/api/v1/veo/generate`
 **Pricing**: $0.30 per video
+
+Supports Text-to-Video (T2V) and Image-to-Video (I2V) with first/last frame control. Two quality tiers: **Quality** (`veo3`) for highest fidelity, **Fast** (`veo3_fast`) for cost-efficient generation.
 
 #### Parameters
 *Note: Veo uses a flat JSON body, not nested in `input`.*
 
 | Parameter | Type | Required | Description | Example |
 | :--- | :--- | :--- | :--- | :--- |
-| `model` | string | Yes | Model ID. Options: `"veo3"`, `"veo3_fast"`. | `"veo3_fast"` |
-| `prompt` | string | Yes | Text prompt. | `"A dog playing..."` |
-| `imageUrls` | array | No | List of 1 or 2 image URLs for I2V. | `["http://..."]` |
-| `generationType` | string | No | Mode: `"TEXT_2_VIDEO"`, `"FIRST_AND_LAST_FRAMES_2_VIDEO"`, `"REFERENCE_2_VIDEO"`. | `"TEXT_2_VIDEO"` |
+| `model` | string | Yes | Model quality tier. Options: `"veo3"` (Quality), `"veo3_fast"` (Fast). Default: `"veo3_fast"`. | `"veo3_fast"` |
+| `prompt` | string | Yes | Text prompt describing the desired video content. | `"A dog playing..."` |
+| `imageUrls` | array | No | List of 1 or 2 image URLs for I2V. 1 image = video unfolds around it. 2 images = first/last frame transition. | `["http://..."]` |
+| `generationType` | string | No | Mode: `"TEXT_2_VIDEO"`, `"FIRST_AND_LAST_FRAMES_2_VIDEO"`. Auto-detected if omitted. | `"TEXT_2_VIDEO"` |
 | `aspectRatio` | string | No | Aspect ratio: `"16:9"`, `"9:16"`, `"Auto"`. Default: `"16:9"`. | `"16:9"` |
 | `seeds` | number | No | Random seed (10000-99999). | `12345` |
+| `enableTranslation` | boolean | No | Auto-translate prompts to English. Default: `true`. | `true` |
 | `callBackUrl` | string | No | Callback URL for notifications. | `"https://..."` |
 
-#### Request Example
+#### Request Example (T2V — Quality)
+```json
+{
+  "prompt": "A cinematic shot of a golden retriever running through autumn leaves",
+  "model": "veo3",
+  "callBackUrl": "http://your-callback-url.com/complete",
+  "aspectRatio": "16:9",
+  "seeds": 12345,
+  "generationType": "TEXT_2_VIDEO"
+}
+```
+
+#### Request Example (I2V — Fast)
 ```json
 {
   "prompt": "A dog playing in a park",
@@ -957,6 +972,67 @@ Supports both T2V (text-to-video) and I2V (image-to-video). When `input_urls` is
   "aspectRatio": "16:9",
   "seeds": 12345,
   "generationType": "FIRST_AND_LAST_FRAMES_2_VIDEO"
+}
+```
+
+#### Response Example
+```json
+{
+  "code": 200,
+  "msg": "success",
+  "data": {
+    "taskId": "veo_task_abcdef123456"
+  }
+}
+```
+
+---
+
+### Veo 3.1 Reference-to-Video
+**Provider**: KIE
+**Endpoint**: `/api/v1/veo/generate`
+**Pricing**: $0.30 per video
+
+Generates video based on 1–3 reference/material images. Uses `REFERENCE_2_VIDEO` generation mode. **Only supports `veo3_fast` model and `16:9`/`9:16` aspect ratios.**
+
+#### Parameters
+*Note: Veo uses a flat JSON body, not nested in `input`.*
+
+| Parameter | Type | Required | Description | Example |
+| :--- | :--- | :--- | :--- | :--- |
+| `model` | string | Yes | Model ID. Must be `"veo3_fast"`. | `"veo3_fast"` |
+| `prompt` | string | Yes | Text prompt describing the desired video content. | `"A dynamic product showcase..."` |
+| `imageUrls` | array | Yes | 1–3 reference/material image URLs. | `["http://...", "http://..."]` |
+| `generationType` | string | Yes | Must be `"REFERENCE_2_VIDEO"`. | `"REFERENCE_2_VIDEO"` |
+| `aspectRatio` | string | No | Aspect ratio: `"16:9"`, `"9:16"`. Default: `"16:9"`. | `"16:9"` |
+| `seeds` | number | No | Random seed (10000-99999). | `12345` |
+| `enableTranslation` | boolean | No | Auto-translate prompts to English. Default: `true`. | `true` |
+| `callBackUrl` | string | No | Callback URL for notifications. | `"https://..."` |
+
+#### Request Example
+```json
+{
+  "prompt": "A dynamic product showcase with smooth camera movements around the items",
+  "imageUrls": [
+    "http://example.com/material1.jpg",
+    "http://example.com/material2.jpg"
+  ],
+  "model": "veo3_fast",
+  "callBackUrl": "http://your-callback-url.com/complete",
+  "aspectRatio": "16:9",
+  "seeds": 12345,
+  "generationType": "REFERENCE_2_VIDEO"
+}
+```
+
+#### Response Example
+```json
+{
+  "code": 200,
+  "msg": "success",
+  "data": {
+    "taskId": "veo_task_abcdef123456"
+  }
 }
 ```
 

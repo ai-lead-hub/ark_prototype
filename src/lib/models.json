@@ -218,8 +218,8 @@
       }
     },
     {
-      "id": "veo-3.1-fast",
-      "label": "Veo 3.1 Fast",
+      "id": "veo-3.1",
+      "label": "Veo 3.1",
       "endpoint": "/api/v1/veo/generate",
       "provider": "kie",
       "pricing": "$0.30",
@@ -230,6 +230,79 @@
         "resolution": false,
         "aspectRatio": true,
         "fps": false
+      },
+      "taskConfig": {
+        "statusEndpoint": "/api/v1/veo/record-info",
+        "method": "GET",
+        "taskIdLocation": "query",
+        "taskIdParam": "taskId",
+        "statePath": "data.successFlag",
+        "successStates": [
+          1
+        ],
+        "failureStates": [
+          2,
+          3
+        ],
+        "responseDataPath": "data",
+        "pollIntervalMs": 5000
+      },
+      "params": {
+        "prompt": {
+          "type": "string",
+          "required": true
+        },
+        "model": {
+          "type": "enum",
+          "values": [
+            "veo3_fast",
+            "veo3"
+          ],
+          "default": "veo3_fast"
+        },
+        "seeds": {
+          "type": "number",
+          "default": 15690,
+          "hidden": true
+        },
+        "aspectRatio": {
+          "type": "enum",
+          "values": [
+            "16:9",
+            "9:16",
+            "Auto"
+          ],
+          "default": "16:9",
+          "uiKey": "aspect_ratio"
+        },
+        "enableTranslation": {
+          "type": "boolean",
+          "default": true
+        },
+        "watermark": {
+          "type": "string",
+          "hidden": true
+        }
+      },
+      "output": {}
+    },
+    {
+      "id": "veo-3.1-ref",
+      "label": "Veo 3.1 Reference",
+      "endpoint": "/api/v1/veo/generate",
+      "provider": "kie",
+      "pricing": "$0.30",
+      "supports": {
+        "startFrame": false,
+        "endFrame": false,
+        "audio": false,
+        "resolution": false,
+        "aspectRatio": true,
+        "fps": false
+      },
+      "referenceImages": {
+        "min": 1,
+        "max": 3
       },
       "taskConfig": {
         "statusEndpoint": "/api/v1/veo/record-info",
@@ -269,8 +342,7 @@
           "type": "enum",
           "values": [
             "16:9",
-            "9:16",
-            "Auto"
+            "9:16"
           ],
           "default": "16:9",
           "uiKey": "aspect_ratio"
