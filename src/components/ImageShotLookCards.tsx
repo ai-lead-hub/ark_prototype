@@ -10,6 +10,7 @@ import {
 import {
     lighting,
     mood,
+    styles,
     flattenToOptions,
 } from "../lib/prompt-builder";
 import cameraSystems from "../lib/prompt-builder/camera-systems.json";
@@ -25,9 +26,10 @@ type CameraSystemData = {
 
 type FilmStockEntry = { name: string; prompt: string };
 
-// Pre-build lighting & inspiration options
+// Pre-build lighting & inspiration & style options
 const LIGHTING_OPTIONS = flattenToOptions(lighting);
 const INSPIRATION_OPTIONS = flattenToOptions(mood);
+const STYLE_OPTIONS = flattenToOptions(styles);
 
 // ── Compact dropdown ───────────────────────────────────────────────────
 
@@ -119,7 +121,7 @@ function shotSummary(s: ShotSettings): string {
 }
 
 function lookSummary(l: LookSettings): string {
-    const vals = [l.cameraBody, l.lens, l.filmStock, l.lighting, l.inspiration].filter(Boolean);
+    const vals = [l.style, l.cameraBody, l.lens, l.filmStock, l.lighting, l.inspiration].filter(Boolean);
     if (vals.length === 0) return "Not set";
     const first = vals[0].split(" ")[0];
     return vals.length > 1 ? `${first} +${vals.length - 1}` : first;
@@ -178,7 +180,7 @@ export function ImageShotLookCards({ shotSettings, lookSettings, onShotChange, o
     const [openModal, setOpenModal] = useState<"shot" | "look" | null>(null);
 
     const shotHas = shotSettings.angle || shotSettings.focalLength || shotSettings.aperture || shotSettings.shot;
-    const lookHas = lookSettings.cameraBody || lookSettings.lens || lookSettings.filmStock || lookSettings.lighting || lookSettings.inspiration;
+    const lookHas = lookSettings.style || lookSettings.cameraBody || lookSettings.lens || lookSettings.filmStock || lookSettings.lighting || lookSettings.inspiration;
 
     // ── Cascading camera system options (same logic as PromptBuilderV2) ──
 
@@ -258,6 +260,7 @@ export function ImageShotLookCards({ shotSettings, lookSettings, onShotChange, o
             {/* Look Modal */}
             {openModal === "look" && (
                 <Modal title="Look" accent="from-purple-600 to-indigo-600" onClose={() => setOpenModal(null)} onClear={() => onLookChange(DEFAULT_LOOK)} hasValues={!!lookHas}>
+                    <Sel label="Style" value={lookSettings.style} options={STYLE_OPTIONS} onChange={(v) => onLookChange({ ...lookSettings, style: v })} />
                     <div className="grid grid-cols-2 gap-2">
                         <Sel label="System" value={lookSettings.cameraSystem} options={systemOptions} placeholder="All" onChange={handleSystemChange} />
                         <Sel label="Body" value={lookSettings.cameraBody} options={bodyOptions} placeholder={lookSettings.cameraSystem ? "Select" : "Pick system"} onChange={(v) => onLookChange({ ...lookSettings, cameraBody: v })} disabled={!lookSettings.cameraSystem} />

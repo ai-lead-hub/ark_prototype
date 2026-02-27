@@ -262,7 +262,8 @@
         },
         "seeds": {
           "type": "number",
-          "hidden": true
+          "hidden": true,
+          "uiKey": "seed"
         },
         "aspectRatio": {
           "type": "enum",
@@ -276,7 +277,8 @@
         },
         "enableTranslation": {
           "type": "boolean",
-          "default": true
+          "default": false,
+          "hidden": true
         },
         "watermark": {
           "type": "string",
@@ -334,7 +336,8 @@
         },
         "seeds": {
           "type": "number",
-          "hidden": true
+          "hidden": true,
+          "uiKey": "seed"
         },
         "aspectRatio": {
           "type": "enum",
@@ -347,7 +350,8 @@
         },
         "enableTranslation": {
           "type": "boolean",
-          "default": true
+          "default": false,
+          "hidden": true
         },
         "watermark": {
           "type": "string",

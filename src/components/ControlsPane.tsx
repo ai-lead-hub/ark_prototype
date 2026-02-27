@@ -365,6 +365,22 @@ export default function ControlsPane() {
   // Persistent camera/style card settings (image tab only)
   const [imageShotSettings, setImageShotSettings] = usePersistentState<ShotSettings>("imageShotSettings", DEFAULT_SHOT);
   const [imageLookSettings, setImageLookSettings] = usePersistentState<LookSettings>("imageLookSettings", DEFAULT_LOOK);
+
+  // Preview of the full prompt that will be sent to the API when camera mode is active
+  const cameraPromptPreview = useMemo(() => {
+    if (!appendImageCameraSettings) return "";
+    let preview = imagePrompt.trim();
+    if (imageLookSettings.style && preview) {
+      const styleEndsWithOf = /\bof$/i.test(imageLookSettings.style.trim());
+      preview = styleEndsWithOf
+        ? `${imageLookSettings.style} ${preview}`
+        : `${imageLookSettings.style} of ${preview}`;
+    }
+    const suffix = buildCardsSuffix(imageShotSettings, imageLookSettings);
+    if (suffix) preview = preview + ". " + suffix;
+    return preview;
+  }, [appendImageCameraSettings, imagePrompt, imageShotSettings, imageLookSettings]);
+
   // Reference model state (Kling O1 Reference)
   // Images are stored locally (blob URLs) until Generate is pressed for speed
   type ElementUpload = {
@@ -2352,7 +2368,13 @@ export default function ControlsPane() {
           processedPrompt = processedPrompt.replace(new RegExp(`@img${i}\\b`, 'gi'), `image_${i}`);
         }
 
-        // Append persistent camera/style card settings to prompt
+        // Prepend style and append camera/look card settings when camera mode is active
+        if (appendImageCameraSettings && imageLookSettings.style && processedPrompt) {
+          const styleEndsWithOf = /\bof$/i.test(imageLookSettings.style.trim());
+          processedPrompt = styleEndsWithOf
+            ? `${imageLookSettings.style} ${processedPrompt}`
+            : `${imageLookSettings.style} of ${processedPrompt}`;
+        }
         const cardsSuffix = appendImageCameraSettings ? buildCardsSuffix(imageShotSettings, imageLookSettings) : "";
         if (cardsSuffix) {
           processedPrompt = processedPrompt + ". " + cardsSuffix;
@@ -3199,8 +3221,32 @@ export default function ControlsPane() {
                   placeholder="Type @ to reference uploaded images (e.g., @img1)..."
                   rows={6}
                   disabled={isSubmitting || isExpanding}
-                  className={`w-full rounded-2xl border border-white/10 bg-black/40 px-3 py-3 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 pb-10 ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
+                  className={`w-full rounded-2xl border border-white/10 bg-black/40 px-3 py-3 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 pb-10 ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""} ${appendImageCameraSettings && activeTab === "image" ? "border-orange-500/40" : ""}`}
                 />
+
+                {/* Camera mode prompt preview indicator */}
+                {appendImageCameraSettings && activeTab === "image" && cameraPromptPreview && cameraPromptPreview !== imagePrompt.trim() && (
+                  <>
+                    {/* Orange tint overlay (non-interactive) */}
+                    <div className="absolute inset-0 rounded-2xl bg-orange-500/[0.06] pointer-events-none" />
+                    {/* Hover-reveal preview badge */}
+                    <div className="group/cam absolute top-1.5 right-1.5 z-10">
+                      <div className="flex h-5 items-center gap-1 rounded-full bg-orange-500/20 border border-orange-500/30 px-2 cursor-help">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-orange-400">
+                          <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+                          <circle cx="12" cy="13" r="3" />
+                        </svg>
+                        <span className="text-[9px] font-medium text-orange-300">Preview</span>
+                      </div>
+                      <div className="absolute top-full right-0 mt-1 hidden group-hover/cam:block">
+                        <div className="w-[320px] max-h-[200px] overflow-y-auto rounded-lg border border-orange-500/30 bg-slate-900/95 p-2.5 text-[11px] text-orange-200 shadow-xl backdrop-blur-sm whitespace-pre-wrap leading-relaxed">
+                          <div className="mb-1 text-[9px] font-bold uppercase tracking-wider text-orange-400">Full Prompt Sent to API</div>
+                          {cameraPromptPreview}
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 {/* Autocomplete popup for image references */}
                 {showAutocomplete && (() => {

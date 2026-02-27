@@ -114,6 +114,7 @@ export type LookSettings = {
     filmStock: string;
     lighting: string;
     inspiration: string;
+    style: string;
 };
 
 export const DEFAULT_SHOT: ShotSettings = {
@@ -130,6 +131,7 @@ export const DEFAULT_LOOK: LookSettings = {
     filmStock: "",
     lighting: "",
     inspiration: "",
+    style: "",
 };
 
 export function buildCardsSuffix(shot: ShotSettings, look: LookSettings): string {
