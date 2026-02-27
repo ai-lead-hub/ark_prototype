@@ -429,19 +429,21 @@ export default function EditorToolbar({
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></svg>
                 </button>
                 {!splitBusy && (
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:flex flex-col gap-1 rounded-lg bg-black/90 border border-white/10 p-1.5 shadow-xl backdrop-blur-md">
-                        <button
-                            onClick={() => onSplitGrid("3x3")}
-                            className="rounded-md px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-white/10 hover:text-white whitespace-nowrap transition"
-                        >
-                            3×3 Grid
-                        </button>
-                        <button
-                            onClick={() => onSplitGrid("2x2")}
-                            className="rounded-md px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-white/10 hover:text-white whitespace-nowrap transition"
-                        >
-                            2×2 Grid
-                        </button>
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 pb-2 hidden group-hover:flex">
+                        <div className="flex flex-col gap-1 rounded-lg bg-black/90 border border-white/10 p-1.5 shadow-xl backdrop-blur-md">
+                            <button
+                                onClick={() => onSplitGrid("3x3")}
+                                className="rounded-md px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-white/10 hover:text-white whitespace-nowrap transition"
+                            >
+                                3×3 Grid
+                            </button>
+                            <button
+                                onClick={() => onSplitGrid("2x2")}
+                                className="rounded-md px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-white/10 hover:text-white whitespace-nowrap transition"
+                            >
+                                2×2 Grid
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>

@@ -198,6 +198,7 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
         { value: "2K", label: "2K" },
         { value: "4K", label: "4K" },
       ],
+      defaultResolution: "2K",
       outputFormats: [
         { value: "jpg", label: "JPG" },
         { value: "png", label: "PNG" },
