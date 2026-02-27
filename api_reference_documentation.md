@@ -1097,34 +1097,115 @@ Supports both Text-to-Image (T2I) and Image-to-Image (I2I). When `input_urls` is
 
 ---
 
-### Nano Banana — Edit
+### Nano Banana 2
 **Provider**: KIE
 **Endpoint**: `/api/v1/jobs/createTask`
-**Pricing**: $0.02/image
+**Pricing**: $0.06/image
+
+Supports both text-to-image and image-to-image capabilities. When `image_input` is provided, uses reference images for transformation (up to 14 images); otherwise generates purely from text prompt.
 
 #### Parameters
 | Parameter | Type | Required | Description | Example |
 | :--- | :--- | :--- | :--- | :--- |
-| `model` | string | Yes | Model ID | `"google/nano-banana-edit"` |
-| `input.prompt` | string | Yes | Edit prompt. | `"turn this photo..."` |
-| `input.image_urls` | array | Yes | List of input image URLs (max 10). | `["https://..."]` |
-| `input.output_format` | string | No | Output format: `"png"`, `"jpeg"`. Default: `"png"`. | `"png"` |
-| `input.image_size` | string | No | Aspect ratio (e.g., `"1:1"`, `"16:9"`). | `"1:1"` |
-| `callBackUrl` | string | No | Callback URL for notifications. | `"https://..."` |
+| `model` | string | Yes | Model ID | `"nano-banana-2"` |
+| `input.prompt` | string | Yes | Text description of the image. Max 20000 chars. | `"translation of all the text to Hindi."` |
+| `input.image_input` | array(URL) | No | Input images to transform or use as reference (up to 14). Each URL max 30MB. Accepts: jpeg, png, webp. | `["https://..."]` |
+| `input.aspect_ratio` | string | No | Aspect ratio. Options: `"1:1"`, `"1:4"`, `"1:8"`, `"2:3"`, `"3:2"`, `"3:4"`, `"4:1"`, `"4:3"`, `"4:5"`, `"5:4"`, `"8:1"`, `"9:16"`, `"16:9"`, `"21:9"`, `"auto"`. | `"auto"` |
+| `input.google_search` | boolean | No | Use Google Web Search grounding to generate images based on real-time information. | `false` |
+| `input.resolution` | string | No | Resolution. Options: `"1K"`, `"2K"`, `"4K"`. Default: `"1K"`. | `"1K"` |
+| `input.output_format` | string | No | Output format. Options: `"jpg"`, `"png"`. Default: `"jpg"`. | `"jpg"` |
+| `callBackUrl` | string | No | Callback URL for task completion notifications. | `"https://..."` |
 
-#### Request Example
+#### Request Example (Text-to-Image)
+```bash
+curl -X POST "https://api.kie.ai/api/v1/jobs/createTask" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{
+    "model": "nano-banana-2",
+    "callBackUrl": "https://your-domain.com/api/callback",
+    "input": {
+      "prompt": "translation of all the text to Hindi.",
+      "aspect_ratio": "auto",
+      "google_search": false,
+      "resolution": "1K",
+      "output_format": "jpg"
+    }
+}'
+```
+
+#### Request Example (Image-to-Image)
 ```json
 {
-  "model": "google/nano-banana-edit",
+  "model": "nano-banana-2",
   "callBackUrl": "https://your-domain.com/api/callback",
   "input": {
-    "prompt": "turn this photo...",
-    "image_urls": ["https://file.aiquickdraw.com/..."],
-    "output_format": "png",
-    "image_size": "1:1"
+    "prompt": "translation of all the text to Hindi.",
+    "image_input": [
+      "https://static.aiquickdraw.com/tools/example/1772164675129_TZfXY2Sn.png"
+    ],
+    "aspect_ratio": "auto",
+    "google_search": false,
+    "resolution": "1K",
+    "output_format": "jpg"
   }
 }
 ```
+
+#### Response Example
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "taskId": "task_12345678"
+  }
+}
+```
+
+#### Callback Success Example
+```json
+{
+  "code": 200,
+  "data": {
+    "completeTime": 1755599644000,
+    "costTime": 8,
+    "createTime": 1755599634000,
+    "model": "nano-banana-2",
+    "param": "{\"callBackUrl\":\"https://your-domain.com/api/callback\",\"model\":\"nano-banana-2\",\"input\":{\"prompt\":\"translation of all the text to Hindi.\",\"image_input\":[\"https://static.aiquickdraw.com/tools/example/1772164675129_TZfXY2Sn.png\"],\"aspect_ratio\":\"auto\",\"google_search\":false,\"resolution\":\"1K\",\"output_format\":\"jpg\"}}",
+    "resultJson": "{\"resultUrls\":[\"https://example.com/generated-image.jpg\"]}",
+    "state": "success",
+    "taskId": "e989621f54392584b05867f87b160672",
+    "failCode": null,
+    "failMsg": null
+  },
+  "msg": "Playground task completed successfully."
+}
+```
+
+#### Callback Failure Example
+```json
+{
+  "code": 501,
+  "data": {
+    "completeTime": 1755597081000,
+    "costTime": 0,
+    "createTime": 1755596341000,
+    "failCode": "500",
+    "failMsg": "Internal server error",
+    "model": "nano-banana-2",
+    "param": "{\"callBackUrl\":\"https://your-domain.com/api/callback\",\"model\":\"nano-banana-2\",\"input\":{\"prompt\":\"translation of all the text to Hindi.\",\"image_input\":[\"https://static.aiquickdraw.com/tools/example/1772164675129_TZfXY2Sn.png\"],\"aspect_ratio\":\"auto\",\"google_search\":false,\"resolution\":\"1K\",\"output_format\":\"jpg\"}}",
+    "state": "fail",
+    "taskId": "bd3a37c523149e4adf45a3ddb5faf1a8",
+    "resultJson": null
+  },
+  "msg": "Playground task failed."
+}
+```
+
+> [!IMPORTANT]
+> The `param` field in callbacks contains the complete Create Task request parameters, not just the input section.
+> If `callBackUrl` is not provided, no callback notifications will be sent.
 
 ---
 
@@ -1347,6 +1428,111 @@ curl -X POST "https://api.kie.ai/api/v1/jobs/createTask" \
   }
 }
 ```
+
+---
+
+### Seedream 5 Lite
+**Provider**: KIE
+**Endpoint**: `/api/v1/jobs/createTask`
+**Pricing**: $0.0275/image
+
+Supports both text-to-image and image-to-image capabilities. When `image_urls` is provided, uses reference images for transformation; otherwise generates purely from text prompt. Basic outputs 2K images, while High outputs 3K images.
+
+#### Parameters
+| Parameter | Type | Required | Description | Example |
+| :--- | :--- | :--- | :--- | :--- |
+| `model` | string | Yes | Model ID. Use `"seedream/5-lite-image-to-image"` for I2I, `"seedream/5-lite-text-to-image"` for T2I. | `"seedream/5-lite-text-to-image"` |
+| `input.prompt` | string | Yes | Text description. Max 2996 chars. | `"Change the lighting effect to light spots"` |
+| `input.image_urls` | array(URL) | No | Input image URL for I2I mode. Max 10MB. Accepts: jpeg, png, webp. | `["https://..."]` |
+| `input.aspect_ratio` | string | Yes | Aspect ratio. Options: `"1:1"`, `"4:3"`, `"3:4"`, `"16:9"`, `"9:16"`, `"2:3"`, `"3:2"`, `"21:9"`. | `"1:1"` |
+| `input.quality` | string | Yes | Quality. Options: `"basic"` (2K), `"high"` (3K). | `"basic"` |
+| `callBackUrl` | string | No | Callback URL for task completion notifications. | `"https://..."` |
+
+#### Request Example (Text-to-Image)
+```bash
+curl -X POST "https://api.kie.ai/api/v1/jobs/createTask" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{
+    "model": "seedream/5-lite-text-to-image",
+    "callBackUrl": "https://your-domain.com/api/callback",
+    "input": {
+      "prompt": "Vintage museum–themed handbook stickers, featuring ancient artifacts, fossils, sculptures, and other elements.",
+      "aspect_ratio": "1:1",
+      "quality": "basic"
+    }
+}'
+```
+
+#### Request Example (Image-to-Image)
+```json
+{
+  "model": "seedream/5-lite-image-to-image",
+  "callBackUrl": "https://your-domain.com/api/callback",
+  "input": {
+    "prompt": "Change the lighting effect to light spots",
+    "image_urls": [
+      "https://static.aiquickdraw.com/tools/example/1772015399360_taMCXESx.png"
+    ],
+    "aspect_ratio": "1:1",
+    "quality": "basic"
+  }
+}
+```
+
+#### Response Example
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "taskId": "task_12345678"
+  }
+}
+```
+
+#### Callback Success Example
+```json
+{
+  "code": 200,
+  "data": {
+    "completeTime": 1755599644000,
+    "costTime": 8,
+    "createTime": 1755599634000,
+    "model": "seedream/5-lite-text-to-image",
+    "param": "{\"callBackUrl\":\"https://your-domain.com/api/callback\",\"model\":\"seedream/5-lite-text-to-image\",\"input\":{\"prompt\":\"...\",\"aspect_ratio\":\"1:1\",\"quality\":\"basic\"}}",
+    "resultJson": "{\"resultUrls\":[\"https://example.com/generated-image.jpg\"]}",
+    "state": "success",
+    "taskId": "e989621f54392584b05867f87b160672",
+    "failCode": null,
+    "failMsg": null
+  },
+  "msg": "Playground task completed successfully."
+}
+```
+
+#### Callback Failure Example
+```json
+{
+  "code": 501,
+  "data": {
+    "completeTime": 1755597081000,
+    "costTime": 0,
+    "createTime": 1755596341000,
+    "failCode": "500",
+    "failMsg": "Internal server error",
+    "model": "seedream/5-lite-image-to-image",
+    "state": "fail",
+    "taskId": "bd3a37c523149e4adf45a3ddb5faf1a8",
+    "resultJson": null
+  },
+  "msg": "Playground task failed."
+}
+```
+
+> [!IMPORTANT]
+> The `param` field in callbacks contains the complete Create Task request parameters, not just the input section.
+> If `callBackUrl` is not provided, no callback notifications will be sent.
 
 ---
 

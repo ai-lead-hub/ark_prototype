@@ -168,39 +168,60 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
     getUrls: parseKieResultUrls,
   },
   {
-    id: "nano-banana-edit",
-    label: "Nano Banana — Edit",
+    id: "nano-banana-2",
+    label: "Nano Banana 2",
     endpoint: "/api/v1/jobs/createTask",
     provider: "kie",
-    pricing: "$0.02/image",
+    pricing: "$0.06/image",
     mode: "edit",
-    maxRefs: 5,
+    maxRefs: 14,
     ui: {
       aspectRatios: [
-        { value: "1:1", label: "Square (1:1)" },
-        { value: "3:4", label: "Portrait (3:4)" },
-        { value: "2:3", label: "Portrait (2:3)" },
-        { value: "9:16", label: "Portrait (9:16)" },
-        { value: "4:3", label: "Landscape (4:3)" },
-        { value: "3:2", label: "Landscape (3:2)" },
-        { value: "16:9", label: "Landscape (16:9)" },
-        { value: "21:9", label: "Landscape (21:9)" },
+        { value: "1:1", label: "1:1" },
+        { value: "1:4", label: "1:4" },
+        { value: "1:8", label: "1:8" },
+        { value: "2:3", label: "2:3" },
+        { value: "3:2", label: "3:2" },
+        { value: "3:4", label: "3:4" },
+        { value: "4:1", label: "4:1" },
+        { value: "4:3", label: "4:3" },
+        { value: "4:5", label: "4:5" },
+        { value: "5:4", label: "5:4" },
+        { value: "8:1", label: "8:1" },
+        { value: "9:16", label: "9:16" },
+        { value: "16:9", label: "16:9" },
+        { value: "21:9", label: "21:9" },
+        { value: "auto", label: "Auto" },
+      ],
+      resolutions: [
+        { value: "1K", label: "1K" },
+        { value: "2K", label: "2K" },
+        { value: "4K", label: "4K" },
+      ],
+      outputFormats: [
+        { value: "jpg", label: "JPG" },
+        { value: "png", label: "PNG" },
       ],
     },
-    mapInput: ({ prompt, imageUrls, aspectRatio, outputFormat, size }) => {
-      // If references are provided, use edit mode; otherwise fall back to text-to-image.
+    mapInput: ({
+      prompt,
+      imageUrls,
+      aspectRatio,
+      imageResolution,
+      outputFormat,
+      size,
+    }) => {
       const resolvedAspect = aspectRatio ?? resolveAspectRatio(size);
-      const hasRefs = imageUrls.length > 0;
       return {
-        model: hasRefs ? "google/nano-banana-edit" : "google/nano-banana",
+        model: "nano-banana-2",
         input: {
           prompt,
-          ...(hasRefs
-            ? { image_urls: imageUrls.slice(0, 5) }
-            : resolvedAspect
-              ? { image_size: resolvedAspect }
-              : {}),
-          output_format: outputFormat ?? "png",
+          ...(imageUrls.length
+            ? { image_input: imageUrls.slice(0, 14) }
+            : {}),
+          ...(resolvedAspect ? { aspect_ratio: resolvedAspect } : {}),
+          ...(imageResolution ? { resolution: imageResolution } : {}),
+          output_format: outputFormat ?? "jpg",
         },
       };
     },
@@ -353,6 +374,55 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
       const isEdit = imageUrls.length > 0;
       return {
         model: isEdit ? "seedream/4.5-edit" : "seedream/4.5-text-to-image",
+        input: {
+          prompt,
+          ...(isEdit ? { image_urls: imageUrls.slice(0, 5) } : {}),
+          aspect_ratio: aspectRatio ?? "1:1",
+          quality: imageResolution ?? "basic",
+        },
+      };
+    },
+    getUrls: parseKieResultUrls,
+  },
+  {
+    id: "seedream-5-lite",
+    label: "Seedream 5 Lite",
+    endpoint: "/api/v1/jobs/createTask",
+    provider: "kie",
+    pricing: "$0.0275/image",
+    taskConfig: {
+      statusEndpoint: "/api/v1/jobs/recordInfo",
+      statePath: "data.state",
+      successStates: ["success"],
+      failureStates: ["fail"],
+      responseDataPath: "data",
+      pollIntervalMs: 4000,
+    },
+    mode: "edit",
+    maxRefs: 5,
+    ui: {
+      aspectRatios: [
+        { value: "1:1", label: "1:1" },
+        { value: "4:3", label: "4:3" },
+        { value: "3:4", label: "3:4" },
+        { value: "16:9", label: "16:9" },
+        { value: "9:16", label: "9:16" },
+        { value: "2:3", label: "2:3" },
+        { value: "3:2", label: "3:2" },
+        { value: "21:9", label: "21:9" },
+      ],
+      resolutions: [
+        { value: "basic", label: "Basic (2K)" },
+        { value: "high", label: "High (3K)" },
+      ],
+      defaultResolution: "basic",
+    },
+    mapInput: ({ prompt, imageUrls, aspectRatio, imageResolution }) => {
+      const isEdit = imageUrls.length > 0;
+      return {
+        model: isEdit
+          ? "seedream/5-lite-image-to-image"
+          : "seedream/5-lite-text-to-image",
         input: {
           prompt,
           ...(isEdit ? { image_urls: imageUrls.slice(0, 5) } : {}),
