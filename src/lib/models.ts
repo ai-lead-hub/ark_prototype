@@ -70,6 +70,7 @@ export type UnifiedPayload = {
   enable_safety_checker?: boolean;
   acceleration?: string;
   character_id_list?: string[];
+  model?: string;
 };
 
 // Helper function to extract video URL from KIE response

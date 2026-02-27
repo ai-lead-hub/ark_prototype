@@ -2197,6 +2197,7 @@ export default function ControlsPane() {
           duration: paramValues.duration as string | number | undefined,
           generate_audio: paramValues.generate_audio as boolean | undefined,
           character_id_list: paramValues.character_id_list as string[] | undefined,
+          model: paramValues.model as string | undefined,
         };
         const kling3Mode = isKling3
           ? String(paramValues.mode ?? modelSpec.params.mode?.default ?? "pro")

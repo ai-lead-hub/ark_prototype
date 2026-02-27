@@ -262,7 +262,6 @@
         },
         "seeds": {
           "type": "number",
-          "default": 15690,
           "hidden": true
         },
         "aspectRatio": {
@@ -335,7 +334,6 @@
         },
         "seeds": {
           "type": "number",
-          "default": 15690,
           "hidden": true
         },
         "aspectRatio": {
