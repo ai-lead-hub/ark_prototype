@@ -2,7 +2,7 @@ import { SYSTEM_PROMPTS } from "./prompts";
 
 // OpenRouter API configuration
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const MODEL_ID = "google/gemini-3-flash-preview";
+const MODEL_ID = "google/gemini-3-flash-preview:nitro";
 
 function getOpenRouterKey(): string {
     const key = import.meta.env.VITE_OPENROUTER_KEY;
@@ -69,6 +69,9 @@ async function callOpenRouter(
                 model: MODEL_ID,
                 messages,
                 temperature: 1,
+                reasoning: {
+                    effort: "medium",
+                },
             }),
         });
 
