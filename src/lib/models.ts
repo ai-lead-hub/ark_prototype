@@ -16,6 +16,8 @@ export type ParamDefinition = {
   default?: string | number | boolean;
   uiKey?: keyof UnifiedPayload;
   hidden?: boolean; // Internal params that shouldn't show in UI
+  min?: number;
+  max?: number;
 };
 
 export type ModelSpec = {
@@ -239,7 +241,14 @@ const jsonSpecs =
               const value = unified[uiKey];
 
               if (value !== undefined) {
-                input[paramKey] = value;
+                if (definition.type === "number") {
+                  let numVal = typeof value === "string" ? parseInt(value, 10) : Number(value);
+                  if (definition.min !== undefined) numVal = Math.max(definition.min, numVal);
+                  if (definition.max !== undefined) numVal = Math.min(definition.max, numVal);
+                  input[paramKey] = numVal;
+                } else {
+                  input[paramKey] = value;
+                }
               } else if (definition.default !== undefined) {
                 input[paramKey] = definition.default;
               } else if (

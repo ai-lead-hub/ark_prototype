@@ -263,7 +263,9 @@
         "seeds": {
           "type": "number",
           "hidden": true,
-          "uiKey": "seed"
+          "uiKey": "seed",
+          "min": 10000,
+          "max": 999999
         },
         "aspectRatio": {
           "type": "enum",
@@ -337,7 +339,9 @@
         "seeds": {
           "type": "number",
           "hidden": true,
-          "uiKey": "seed"
+          "uiKey": "seed",
+          "min": 10000,
+          "max": 999999
         },
         "aspectRatio": {
           "type": "enum",

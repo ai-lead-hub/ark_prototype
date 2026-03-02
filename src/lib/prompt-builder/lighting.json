@@ -155,34 +155,108 @@
       "prompt": "fairy lights, string lights bokeh, magical sparkle, dreamy atmosphere"
     }
   ],
-  "Environmental": [
+  "Soft Lighting": [
     {
-      "name": "Street Lights",
-      "prompt": "street light illumination, urban night lighting, pools of light, city atmosphere"
+      "name": "Soft Ambient",
+      "prompt": "soft ambient lighting, gentle all-around illumination, no harsh shadows, flattering and even"
     },
     {
-      "name": "Fluorescent",
-      "prompt": "fluorescent lighting, cool greenish tint, office or industrial setting"
+      "name": "Bounce Light",
+      "prompt": "bounce lighting, light reflected off white surface, soft wrap-around glow, studio quality"
+    },
+    {
+      "name": "Diffusion Panel",
+      "prompt": "diffusion panel lighting, large soft light source, silky smooth skin tones, fashion editorial"
+    },
+    {
+      "name": "Soft Daylight",
+      "prompt": "soft daylight, bright overcast sky, gentle natural fill, no harsh shadows, clean outdoor light"
+    },
+    {
+      "name": "Soft Moonlight",
+      "prompt": "soft moonlight, cool silver diffused glow, gentle night illumination, romantic and serene"
+    },
+    {
+      "name": "Hazy Sunlight",
+      "prompt": "hazy sunlight, soft glowing atmosphere, gentle warmth, dreamy diffused look"
+    },
+    {
+      "name": "Soft Dawn",
+      "prompt": "soft dawn light, pale warm glow, first light of day, misty and tranquil atmosphere"
+    },
+    {
+      "name": "Cloudy Day Diffuse",
+      "prompt": "cloudy day lighting, natural soft diffusion, no directional shadows, even color rendering"
+    },
+    {
+      "name": "Feathered Light",
+      "prompt": "feathered lighting, edge of light source used, ultra-soft gradual falloff, delicate shadows"
+    },
+    {
+      "name": "Soft Fill",
+      "prompt": "soft fill lighting, shadow side gently filled, balanced exposure, clean and natural look"
+    },
+    {
+      "name": "Wrap Light",
+      "prompt": "wrap-around lighting, light envelops subject from multiple angles, luminous skin, beauty photography"
+    },
+    {
+      "name": "Umbrella Light",
+      "prompt": "umbrella lighting, soft and wide light spread, gentle shadows, portrait photography"
+    },
+    {
+      "name": "Milk Glass Window",
+      "prompt": "frosted glass window light, fully diffused soft glow, intimate interior, gentle directionality"
+    }
+  ],
+  "Environmental": [
+    {
+      "name": "Campfire Glow",
+      "prompt": "campfire glow, warm flickering orange light, deep shadows, rustic outdoor night scene"
+    },
+    {
+      "name": "Neon Sign Reflection",
+      "prompt": "neon sign reflection, colored neon light spilling onto wet pavement, urban cinematic"
+    },
+    {
+      "name": "TV / Screen Glow",
+      "prompt": "TV screen glow, cool blue flickering light on face, dark room, cinematic mood"
+    },
+    {
+      "name": "Lantern Light",
+      "prompt": "lantern light, warm contained glow, surrounding darkness, intimate and atmospheric"
+    },
+    {
+      "name": "Bioluminescence",
+      "prompt": "bioluminescent light, soft blue-green natural glow, magical underwater or forest atmosphere"
+    },
+    {
+      "name": "Street Lights",
+      "prompt": "street light illumination, urban night lighting, pools of warm light, city atmosphere"
+    },
+    {
+      "name": "Stage Spotlight",
+      "prompt": "stage spotlight, harsh overhead beam, surrounding darkness, theatrical performance"
     },
     {
       "name": "Tungsten / Incandescent",
       "prompt": "tungsten lighting, warm orange indoor light, cozy interior atmosphere"
     },
     {
-      "name": "Mixed Ambient",
-      "prompt": "mixed ambient lighting, multiple light sources, natural indoor environment"
-    },
-    {
-      "name": "Stage Lighting",
-      "prompt": "stage lighting, dramatic spotlights, performance lighting, theatrical"
-    },
-    {
-      "name": "Car Headlights",
-      "prompt": "car headlight illumination, harsh directional beams, nighttime road scene"
+      "name": "Fluorescent",
+      "prompt": "fluorescent lighting, cool greenish tint, clinical or industrial setting"
     },
     {
       "name": "Underwater Light",
-      "prompt": "underwater lighting, caustic light patterns, blue-green filtered sunlight"
+      "prompt": "underwater lighting, caustic rippling light patterns, blue-green filtered sunlight, aquatic"
+    },
+    {
+      "name": "Northern Lights",
+      "prompt": "northern lights illumination, soft shifting aurora colors, green and purple glow, arctic night sky"
+    },
+    {
+      "name": "Car Headlights",
+      "prompt": "car headlight illumination, harsh directional beams, mist or rain, nighttime road scene"
     }
   ]
 }
