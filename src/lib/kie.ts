@@ -108,10 +108,8 @@ export async function callKie(
   const target = buildProviderUrl(KIE_BASE_URL, endpoint);
   const logger = options?.log;
 
-  // Log payload only when an explicit logger is provided.
   if (typeof logger === "function") {
-    logger(`KIE Request: POST ${endpoint}`);
-    logger(`Payload: ${JSON.stringify(payload, null, 2)}`);
+    logger(`Submitting task...`);
   }
 
   const response = await withRetry(() =>
@@ -155,9 +153,8 @@ export async function callKie(
     throw new Error(`KIE returned invalid JSON: ${responseText.substring(0, 200)}`);
   }
 
-  // Log response only when an explicit logger is provided.
   if (typeof logger === "function") {
-    logger(`KIE Response: ${JSON.stringify(data, null, 2)}`);
+    logger(`Task submitted.`);
   }
 
   if (!data || typeof data !== "object") {
@@ -206,7 +203,7 @@ export async function callKie(
       throw new Error("KIE response did not include a task id.");
     }
     if (typeof logger === "function") {
-      logger(`Task created with ID: ${taskId}, starting polling...`);
+      logger(`Waiting for generation...`);
     }
     const finalData = await pollKieTask(key, taskId, taskConfig, logger);
 
@@ -218,15 +215,15 @@ export async function callKie(
       isRecord(finalData) ? finalData : undefined
     );
     if (resultJsonUrl) {
+      if (logger) logger(`Downloading result...`);
       const resolvedResultUrl = await resolveKieDownloadUrl(key, resultJsonUrl, logger);
       if (options?.preferUrlResult) {
         return { url: resolvedResultUrl };
       }
       try {
-        return {
-          url: resolvedResultUrl,
-          blob: await downloadBlob(resolvedResultUrl),
-        };
+        const blob = await downloadBlob(resolvedResultUrl);
+        if (logger) logger(`Download complete.`);
+        return { url: resolvedResultUrl, blob };
       } catch (error) {
         console.warn("Failed to download blob from KIE result URL:", error);
         return { url: resolvedResultUrl };
@@ -243,15 +240,15 @@ export async function callKie(
       );
 
     if (taskUrl) {
+      if (logger) logger(`Downloading result...`);
       const resolvedTaskUrl = await resolveKieDownloadUrl(key, taskUrl, logger);
       if (options?.preferUrlResult) {
         return { url: resolvedTaskUrl };
       }
       try {
-        return {
-          url: resolvedTaskUrl,
-          blob: await downloadBlob(resolvedTaskUrl),
-        };
+        const blob = await downloadBlob(resolvedTaskUrl);
+        if (logger) logger(`Download complete.`);
+        return { url: resolvedTaskUrl, blob };
       } catch (error) {
         console.warn("Failed to download blob from KIE task URL:", error);
         return { url: resolvedTaskUrl };
@@ -269,7 +266,7 @@ export async function callKie(
     }
 
     if (typeof logger === "function") {
-      logger(`KIE finalData: ${JSON.stringify(finalData, null, 2)}`);
+      logger(`Task finished but no downloadable asset found.`);
     }
 
     throw new Error("KIE task completed without a downloadable asset.");
@@ -321,9 +318,14 @@ async function pollKieTask(
     const statusPayload = await fetchTaskStatus(key, taskId, config, defaults);
     const stateValue = getValueAtPath(statusPayload, defaults.statePath);
 
-    // Log poll status periodically (every 5 attempts)
+    // Log state changes to keep the user informed
     if (logger && attempt % 5 === 0) {
-      logger(`Polling attempt ${attempt + 1}/${defaults.maxAttempts}, state: ${stateValue}`);
+      const stateLabel =
+        stateValue === "queuing" ? "Queuing..." :
+        stateValue === "generating" ? "Generating..." :
+        stateValue === "waiting" ? "Generating..." :
+        `Generating...`;
+      logger(stateLabel);
     }
 
     // Handle both string and numeric state values (Veo uses numeric: 1=success, 2/3=fail)
@@ -335,7 +337,7 @@ async function pollKieTask(
       );
       if (isSuccess) {
         if (logger) {
-          logger(`Task completed successfully after ${attempt + 1} attempts`);
+          logger(`Generation complete.`);
         }
         return (
           getValueAtPath(statusPayload, defaults.responseDataPath) ??

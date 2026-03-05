@@ -2742,7 +2742,6 @@ export default function ControlsPane() {
             refreshTree: (path?: string) => Promise<void>;
           };
 
-          log("Calling model API...");
           const result = await callModelEndpoint(
             provider,
             endpoint,
@@ -2757,19 +2756,16 @@ export default function ControlsPane() {
             downloadedBlob = result.blob;
           } else if (result.url) {
             resultUrlStr = result.url;
-            log("Model finished. Downloading result...");
+            log("Downloading result...");
             try {
               downloadedBlob = await downloadBlob(result.url);
             } catch {
-              log(`Download failed, retrying in 2s...`);
-              // Retry once after 2 seconds
+              log(`Retrying download...`);
               try {
                 await new Promise(resolve => setTimeout(resolve, 2000));
                 downloadedBlob = await downloadBlob(result.url);
-                log("Retry successful!");
               } catch (retryError) {
-                log(`Failed to download result: ${retryError instanceof Error ? retryError.message : String(retryError)}`);
-                // Continue without blob
+                log(`Download failed: ${retryError instanceof Error ? retryError.message : String(retryError)}`);
               }
             }
           } else {
@@ -2802,7 +2798,7 @@ export default function ControlsPane() {
           const relPath = buildDatedMediaPath(folder, filename);
 
           if (downloadedBlob && connection) {
-            log("Saving to workspace...");
+            log("Saving...");
             await uploadFile(connection, relPath, downloadedBlob);
             try {
               await recordGeneration(connection, {
