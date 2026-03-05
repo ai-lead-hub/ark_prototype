@@ -45,6 +45,26 @@ export async function createMetaDb(dbPath) {
     ON generations (created_at DESC);
   `);
 
+  // Migrate: add columns introduced after the initial schema (old DBs have params_json/tab instead)
+  {
+    const existingCols = new Set(
+      db.prepare("PRAGMA table_info(generations)").all().map((r) => r.name)
+    );
+    const toAdd = [
+      { name: "category", type: "TEXT" },
+      { name: "provider", type: "TEXT" },
+      { name: "endpoint", type: "TEXT" },
+      { name: "prompt", type: "TEXT" },
+      { name: "seed", type: "TEXT" },
+      { name: "payload_json", type: "TEXT" },
+    ];
+    for (const col of toAdd) {
+      if (!existingCols.has(col.name)) {
+        db.exec(`ALTER TABLE generations ADD COLUMN ${col.name} ${col.type};`);
+      }
+    }
+  }
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS files (
       workspace_id TEXT NOT NULL,

@@ -24,6 +24,44 @@ export function getKieKey() {
   return (import.meta.env.VITE_KIE_KEY ?? "").trim();
 }
 
+/**
+ * Convert a KIE-generated file URL into a temporary downloadable link
+ * via the /api/v1/common/download-url endpoint.
+ * Returns the resolved URL, or falls back to the original if conversion fails.
+ */
+async function resolveKieDownloadUrl(
+  key: string,
+  url: string,
+  logger?: (msg: string) => void
+): Promise<string> {
+  try {
+    const target = buildProviderUrl(KIE_BASE_URL, "/api/v1/common/download-url");
+    const response = await fetchWithTimeout(target, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ url }),
+      timeoutMs: 15000,
+    });
+
+    if (!response.ok) {
+      if (logger) logger(`download-url conversion failed (${response.status}), using original URL`);
+      return url;
+    }
+
+    const data = (await response.json()) as { code: number; data?: string; msg?: string };
+    if (data.code === 200 && typeof data.data === "string" && data.data) {
+      return data.data;
+    }
+    return url;
+  } catch (error) {
+    if (logger) logger(`download-url conversion error: ${error instanceof Error ? error.message : String(error)}`);
+    return url;
+  }
+}
+
 export async function getKieCredits(): Promise<number> {
   const key = getKieKey();
   if (!key) return 0;
@@ -137,17 +175,18 @@ export async function callKie(
   const directUrl =
     extractUrl(data) ?? extractUrl((data.data as Record<string, unknown>) ?? {});
   if (directUrl) {
+    const resolvedDirectUrl = await resolveKieDownloadUrl(key, directUrl, logger);
     if (options?.preferUrlResult) {
-      return { url: directUrl };
+      return { url: resolvedDirectUrl };
     }
     try {
       return {
-        url: directUrl,
-        blob: await downloadBlob(directUrl),
+        url: resolvedDirectUrl,
+        blob: await downloadBlob(resolvedDirectUrl),
       };
     } catch (error) {
       console.warn("Failed to download blob from KIE direct URL:", error);
-      return { url: directUrl };
+      return { url: resolvedDirectUrl };
     }
   }
 
@@ -179,33 +218,35 @@ export async function callKie(
       );
 
     if (taskUrl) {
+      const resolvedTaskUrl = await resolveKieDownloadUrl(key, taskUrl, logger);
       if (options?.preferUrlResult) {
-        return { url: taskUrl };
+        return { url: resolvedTaskUrl };
       }
       try {
         return {
-          url: taskUrl,
-          blob: await downloadBlob(taskUrl),
+          url: resolvedTaskUrl,
+          blob: await downloadBlob(resolvedTaskUrl),
         };
       } catch (error) {
         console.warn("Failed to download blob from KIE task URL:", error);
-        return { url: taskUrl };
+        return { url: resolvedTaskUrl };
       }
     }
 
     const resultJsonUrl = extractUrlFromResultJson(finalData);
     if (resultJsonUrl) {
+      const resolvedResultUrl = await resolveKieDownloadUrl(key, resultJsonUrl, logger);
       if (options?.preferUrlResult) {
-        return { url: resultJsonUrl };
+        return { url: resolvedResultUrl };
       }
       try {
         return {
-          url: resultJsonUrl,
-          blob: await downloadBlob(resultJsonUrl),
+          url: resolvedResultUrl,
+          blob: await downloadBlob(resolvedResultUrl),
         };
       } catch (error) {
         console.warn("Failed to download blob from KIE result URL:", error);
-        return { url: resultJsonUrl };
+        return { url: resolvedResultUrl };
       }
     }
 
