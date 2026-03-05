@@ -209,6 +209,31 @@ export async function callKie(
       logger(`Task created with ID: ${taskId}, starting polling...`);
     }
     const finalData = await pollKieTask(key, taskId, taskConfig, logger);
+
+    // Check resultJson FIRST — this is the canonical KIE result format.
+    // extractUrl must NOT run first because the poll response contains a
+    // `param` field (JSON of the original request) which includes input
+    // image URLs that extractUrl would incorrectly pick up.
+    const resultJsonUrl = extractUrlFromResultJson(
+      isRecord(finalData) ? finalData : undefined
+    );
+    if (resultJsonUrl) {
+      const resolvedResultUrl = await resolveKieDownloadUrl(key, resultJsonUrl, logger);
+      if (options?.preferUrlResult) {
+        return { url: resolvedResultUrl };
+      }
+      try {
+        return {
+          url: resolvedResultUrl,
+          blob: await downloadBlob(resolvedResultUrl),
+        };
+      } catch (error) {
+        console.warn("Failed to download blob from KIE result URL:", error);
+        return { url: resolvedResultUrl };
+      }
+    }
+
+    // Fallback: try generic URL extraction (for non-standard responses)
     const taskUrl =
       extractUrl(finalData) ??
       extractUrl(
@@ -230,23 +255,6 @@ export async function callKie(
       } catch (error) {
         console.warn("Failed to download blob from KIE task URL:", error);
         return { url: resolvedTaskUrl };
-      }
-    }
-
-    const resultJsonUrl = extractUrlFromResultJson(finalData);
-    if (resultJsonUrl) {
-      const resolvedResultUrl = await resolveKieDownloadUrl(key, resultJsonUrl, logger);
-      if (options?.preferUrlResult) {
-        return { url: resolvedResultUrl };
-      }
-      try {
-        return {
-          url: resolvedResultUrl,
-          blob: await downloadBlob(resolvedResultUrl),
-        };
-      } catch (error) {
-        console.warn("Failed to download blob from KIE result URL:", error);
-        return { url: resolvedResultUrl };
       }
     }
 
@@ -359,13 +367,6 @@ async function pollKieTask(
       transientFailureCount = 0;
     }
 
-    const maybePayload =
-      getValueAtPath(statusPayload, defaults.responseDataPath) ?? statusPayload;
-    const maybeUrl = extractUrl(maybePayload);
-    if (maybeUrl) {
-      return maybePayload;
-    }
-
     await delay(defaults.pollIntervalMs);
   }
 
@@ -410,6 +411,7 @@ async function fetchTaskStatus(
         Authorization: `Bearer ${key}`,
         "Content-Type": "application/json",
       },
+      cache: "no-store" as RequestCache,
       body: method === "POST" ? JSON.stringify(body) : undefined,
       timeoutMs: 15000, // 15s timeout for status checks
     })
