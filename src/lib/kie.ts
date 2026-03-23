@@ -19,9 +19,77 @@ import type {
 } from "./providers/types";
 
 const KIE_BASE_URL = "https://api.kie.ai";
+const KIE_UPLOAD_URL = "https://kieai.redpandaai.co/api/file-stream-upload";
+const MAX_UPLOAD_SIZE_MB = 50;
 
 export function getKieKey() {
   return (import.meta.env.VITE_KIE_KEY ?? "").trim();
+}
+
+/**
+ * Upload a file to Kie's file-stream-upload service.
+ * Returns the public download URL for the uploaded file.
+ */
+export async function uploadToKie(file: File, customName?: string): Promise<string> {
+  const key = getKieKey();
+  if (!key) {
+    throw new Error("Missing KIE key.");
+  }
+
+  const sizeMB = file.size / (1024 * 1024);
+  if (sizeMB > MAX_UPLOAD_SIZE_MB) {
+    throw new Error(
+      `File "${file.name}" is too large (${sizeMB.toFixed(1)}MB). Maximum upload size is ${MAX_UPLOAD_SIZE_MB}MB.`
+    );
+  }
+
+  // Always append a unique suffix to avoid CDN cache collisions when the
+  // same logical slot (e.g. image_1.jpg) is re-uploaded with a different file.
+  const baseName = customName ?? file.name;
+  const dotIdx = baseName.lastIndexOf(".");
+  const stem = dotIdx > 0 ? baseName.slice(0, dotIdx) : baseName;
+  const ext = dotIdx > 0 ? baseName.slice(dotIdx) : "";
+  const uniqueSuffix = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const fileName = `${stem}_${uniqueSuffix}${ext}`;
+
+  const formData = new FormData();
+  formData.append("file", file, fileName);
+  formData.append("uploadPath", "uploads");
+  formData.append("fileName", fileName);
+
+  const response = await withRetry(
+    async () => {
+      const res = await fetchWithTimeout(KIE_UPLOAD_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${key}`,
+        },
+        body: formData,
+        timeoutMs: 120000,
+      });
+      if (!res.ok) {
+        const errorDetails = await readErrorDetails(res);
+        throw new Error(`KIE upload failed (${res.status}): ${errorDetails}`);
+      }
+      return res;
+    },
+    3,
+    1000,
+    2
+  );
+
+  const data = (await response.json()) as {
+    success: boolean;
+    code: number;
+    msg: string;
+    data?: { downloadUrl?: string };
+  };
+
+  if (!data.success || data.code !== 200 || !data.data?.downloadUrl) {
+    throw new Error(`KIE upload failed: ${data.msg ?? "No download URL returned."}`);
+  }
+
+  return data.data.downloadUrl;
 }
 
 /**

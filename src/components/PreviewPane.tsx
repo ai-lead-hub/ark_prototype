@@ -8,7 +8,7 @@ import { useQueue } from "../state/queue";
 import { downloadBlob } from "../lib/providers/shared";
 import { callModelEndpoint, getProviderEnvVar, getProviderKey, type ModelProvider, type ProviderCallOptions } from "../lib/providers";
 import { buildFilename } from "../lib/filename";
-import { uploadToFal } from "../lib/fal";
+import { uploadToKie } from "../lib/kie";
 import { compressImage } from "../lib/image-utils";
 import { recordFileMetadata, recordGeneration } from "../lib/api/meta";
 import { enqueueControlsAction } from "../lib/controls-store";
@@ -445,7 +445,7 @@ export default function PreviewPane({
         fileToUpload = await compressImage(file);
       }
 
-      const url = await uploadToFal(fileToUpload);
+      const url = await uploadToKie(fileToUpload);
 
       const payload = modelSpec.mapInput({
         sourceUrl: url,

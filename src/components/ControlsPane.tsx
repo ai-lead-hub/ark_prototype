@@ -30,7 +30,7 @@ import {
   buildSpecialModelInput,
 } from "../lib/special-models";
 import { getModelPricingLabel } from "../lib/pricing";
-import { uploadToFal } from "../lib/fal";
+import { uploadToKie } from "../lib/kie";
 import { extensionFromMime } from "../lib/mime";
 import { buildFilename } from "../lib/filename";
 import { useCatalog } from "../state/useCatalog";
@@ -1928,7 +1928,7 @@ export default function ControlsPane() {
           if (ref.file) {
             setStatus("Uploading image for prompt expansion...");
             const ext = ref.file.name.split('.').pop()?.toLowerCase() || 'jpg';
-            const url = await uploadToFal(ref.file, `prompt_ref.${ext}`);
+            const url = await uploadToKie(ref.file, `prompt_ref.${ext}`);
             if (setFileUrl) {
               setFileUrl(url);
             }
@@ -2082,7 +2082,7 @@ export default function ControlsPane() {
 
       if (startFrame.file && (!startFrame.url || startFrameUrlExpired)) {
         frameUploadPromises.push(
-          uploadToFal(startFrame.file).then((url) => {
+          uploadToKie(startFrame.file).then((url) => {
             uploadedStartFrameUrl = url;
             setStartFrame((prev) => ({ ...prev, url, createdAt: Date.now() }));
           })
@@ -2090,7 +2090,7 @@ export default function ControlsPane() {
       }
       if (endFrame.file && (!endFrame.url || endFrameUrlExpired)) {
         frameUploadPromises.push(
-          uploadToFal(endFrame.file).then((url) => {
+          uploadToKie(endFrame.file).then((url) => {
             uploadedEndFrameUrl = url;
             setEndFrame((prev) => ({ ...prev, url, createdAt: Date.now() }));
           })
@@ -2125,7 +2125,7 @@ export default function ControlsPane() {
           const ext = ref.file.name.split('.').pop()?.toLowerCase() || 'jpg';
           const standardizedName = `image_${idx + 1}.${ext}`;
           refUploadPromises.push(
-            uploadToFal(ref.file, standardizedName).then((uploadedUrl) => {
+            uploadToKie(ref.file, standardizedName).then((uploadedUrl) => {
               uploadedReferenceUrls[idx] = uploadedUrl;
               setReferenceUploads((prev) =>
                 prev.map((item) =>
@@ -2238,7 +2238,7 @@ export default function ControlsPane() {
                 `${el.name}_frontal.${frontalExt === "bin" ? "png" : frontalExt}`,
                 { type: frontalBlob.type || "image/png" }
               );
-              const uploadedFrontalUrl = await uploadToFal(frontalFile);
+              const uploadedFrontalUrl = await uploadToKie(frontalFile);
 
               const uploadedRefUrls: string[] = [];
               if (el.referenceImageUrls?.length > 0) {
@@ -2255,7 +2255,7 @@ export default function ControlsPane() {
                       `${el.name}_ref.${refExt === "bin" ? "png" : refExt}`,
                       { type: refBlob.type || "image/png" }
                     );
-                    return uploadToFal(refFile);
+                    return uploadToKie(refFile);
                   })
                 );
                 uploadedRefUrls.push(...refResults);
@@ -2402,7 +2402,7 @@ export default function ControlsPane() {
                 `${el.name}_frontal.${frontalExt === "bin" ? "png" : frontalExt}`,
                 { type: frontalBlob.type || "image/png" }
               );
-              const uploadedFrontalUrl = await uploadToFal(frontalFile);
+              const uploadedFrontalUrl = await uploadToKie(frontalFile);
 
               const uploadedRefUrls: string[] = [];
               if (el.referenceImageUrls?.length) {
@@ -2419,7 +2419,7 @@ export default function ControlsPane() {
                       `${el.name}_ref.${refExt === "bin" ? "png" : refExt}`,
                       { type: refBlob.type || "image/png" }
                     );
-                    return uploadToFal(refFile);
+                    return uploadToKie(refFile);
                   })
                 );
                 uploadedRefUrls.push(...refResults);
@@ -2499,7 +2499,7 @@ export default function ControlsPane() {
           uploadedStartFrameUrl = startFrame.url;
           if (startFrame.file && !startFrame.url) {
             try {
-              uploadedStartFrameUrl = await uploadToFal(startFrame.file);
+              uploadedStartFrameUrl = await uploadToKie(startFrame.file);
               setStartFrame((prev) => ({
                 ...prev,
                 url: uploadedStartFrameUrl,
@@ -2533,7 +2533,7 @@ export default function ControlsPane() {
           uploadedStartFrameUrl = startFrame.url;
           if (startFrame.file && !startFrame.url) {
             try {
-              uploadedStartFrameUrl = await uploadToFal(startFrame.file);
+              uploadedStartFrameUrl = await uploadToKie(startFrame.file);
               setStartFrame((prev) => ({
                 ...prev,
                 url: uploadedStartFrameUrl,
@@ -2589,7 +2589,7 @@ export default function ControlsPane() {
           referenceStyleImages.forEach((img, idx) => {
             if (img.file && !img.url) {
               styleUploadPromises.push(
-                uploadToFal(img.file).then((uploadedUrl) => {
+                uploadToKie(img.file).then((uploadedUrl) => {
                   uploadedImageUrls[idx] = uploadedUrl;
                   setReferenceStyleImages((prev) => prev.map((i) => i.id === img.id ? { ...i, url: uploadedUrl, uploading: false } : i));
                 }).catch((error) => {
@@ -2620,7 +2620,7 @@ export default function ControlsPane() {
               // Upload frontal image
               let frontalUrl = el.frontalUrl;
               if (el.frontalFile && !el.frontalUrl) {
-                frontalUrl = await uploadToFal(el.frontalFile);
+                frontalUrl = await uploadToKie(el.frontalFile);
                 setElements((prev) => prev.map((e) => e.id === el.id ? { ...e, frontalUrl, frontalUploading: false } : e));
               }
               if (!frontalUrl) return null;
@@ -2629,7 +2629,7 @@ export default function ControlsPane() {
               const refResults = await Promise.all(
                 el.referenceImages.map(async (ref) => {
                   if (ref.file && !ref.url) {
-                    const uploadedUrl = await uploadToFal(ref.file);
+                    const uploadedUrl = await uploadToKie(ref.file);
                     setElements((prev) => prev.map((e) => e.id === el.id ? {
                       ...e,
                       referenceImages: e.referenceImages.map((r) => r.id === ref.id ? { ...r, url: uploadedUrl, uploading: false } : r)
@@ -4247,7 +4247,7 @@ export default function ControlsPane() {
                         { id, preview, name: file.name, uploading: true },
                       ]);
                       try {
-                        const url = await uploadToFal(file);
+                        const url = await uploadToKie(file);
                         setVideoInputUploads((prev) =>
                           prev.map((item) =>
                             item.id === id
@@ -4301,7 +4301,7 @@ export default function ControlsPane() {
                           { id, preview, name: file.name, uploading: true },
                         ]);
                         try {
-                          const url = await uploadToFal(file);
+                          const url = await uploadToKie(file);
                           setVideoInputUploads((prev) =>
                             prev.map((item) =>
                               item.id === id
@@ -4570,7 +4570,7 @@ export default function ControlsPane() {
                         const preview = URL.createObjectURL(videoFile);
                         setVideoInputUploads([{ id: entryId, name: videoFile.name, preview, uploading: true }]);
                         try {
-                          const url = await uploadToFal(videoFile);
+                          const url = await uploadToKie(videoFile);
                           setVideoInputUploads((prev) => prev.map((item) => item.id === entryId ? { ...item, url, uploading: false, createdAt: Date.now() } : item));
                         } catch {
                           setVideoInputUploads((prev) => prev.map((item) => item.id === entryId ? { ...item, uploading: false, error: "Upload failed" } : item));

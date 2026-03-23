@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import EditorToolbar from "./EditorToolbar";
-import { uploadToFal } from "../lib/fal";
+import { uploadToKie } from "../lib/kie";
 
 export type AnnotationType = "rect" | "circle" | "text" | "brush" | "arrow";
 export type ToolType = "select" | "rect" | "circle" | "arrow" | "text" | "crop" | "brush";
@@ -901,7 +901,7 @@ export default function ImageEditor({
             const response = await fetch(imageUrl);
             const blob = await response.blob();
             const file = new File([blob], imageName, { type: blob.type || "image/png" });
-            const publicUrl = await uploadToFal(file);
+            const publicUrl = await uploadToKie(file);
 
             // Photopea URL format: https://www.photopea.com/#{"files":["url"]}
             const photopeaConfig = JSON.stringify({ files: [publicUrl] });
