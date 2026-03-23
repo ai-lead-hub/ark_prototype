@@ -1,6 +1,7 @@
 import { callFal, callFalSubscribe, getFalKey } from "../fal";
 import { getFreepikKey } from "../freepik";
 import { callKie, getKieKey } from "../kie";
+import { callWavespeed, getWavespeedKey } from "../wavespeed";
 import type {
   ModelProvider,
   ProviderCallOptions,
@@ -13,6 +14,7 @@ const ENV_MAP: Record<ModelProvider, string> = {
   "fal-client": "VITE_FAL_KEY",
   kie: "VITE_KIE_KEY",
   freepik: "VITE_FREEPIK_KEY",
+  wavespeed: "WAVESPEED_API_KEY",
 };
 
 export async function callModelEndpoint(
@@ -23,6 +25,9 @@ export async function callModelEndpoint(
 ): Promise<ProviderCallResult> {
   if (provider === "kie") {
     return callKie(endpoint, payload, options);
+  }
+  if (provider === "wavespeed") {
+    return callWavespeed(endpoint, payload, options);
   }
   if (provider === "fal-client") {
     return callFalSubscribe(endpoint, payload, options);
@@ -37,6 +42,7 @@ export function getProviderEnvVar(provider: ModelProvider): string {
 export function getProviderKey(provider: ModelProvider): string {
   if (provider === "kie") return getKieKey();
   if (provider === "freepik") return getFreepikKey();
+  if (provider === "wavespeed") return getWavespeedKey();
   return getFalKey();
 }
 

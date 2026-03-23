@@ -413,7 +413,7 @@ export default function PreviewPane({
       return;
     }
 
-    const modelId = isImage ? "seedvr-image-upscale" : "topaz-video-upscale";
+    const modelId = isImage ? "seedvr2-image-upscale" : "topaz-video-upscale";
     const modelSpec = UPSCALE_MODELS.find((m) => m.id === modelId);
 
     if (!modelSpec) {

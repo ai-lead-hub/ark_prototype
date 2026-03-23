@@ -20,19 +20,18 @@ export type UpscaleModelSpec = {
 
 export const UPSCALE_MODELS: UpscaleModelSpec[] = [
   {
-    id: "seedvr-image-upscale",
-    label: "SeedVR Image Upscaler",
-    endpoint: "fal-ai/seedvr/upscale/image",
-    provider: "fal",
+    id: "seedvr2-image-upscale",
+    label: "SeedVR2 Image Upscaler (WaveSpeed)",
+    endpoint: "wavespeed-ai/seedvr2/image",
+    provider: "wavespeed",
     pricing: "Varies",
     kind: "image",
-    mapInput: ({ sourceUrl, upscaleFactor }) => ({
-      image_url: sourceUrl,
-      upscale_mode: "factor",
-      upscale_factor: Number(upscaleFactor || "2"),
-      target_resolution: "1080p",
-      noise_scale: 0.1,
-      output_format: "png",
+    mapInput: ({ sourceUrl, targetResolution }) => ({
+      image: sourceUrl,
+      target_resolution: targetResolution ?? "4k",
+      output_format: "jpeg",
+      enable_base64_output: false,
+      enable_sync_mode: false,
     }),
   },
   {
