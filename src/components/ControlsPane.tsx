@@ -219,6 +219,11 @@ export default function ControlsPane() {
     "activeTab",
     DEFAULT_MODEL_KEY.startsWith("image:") ? "image" : "video"
   );
+  // Remember last-selected model per tab so switching tabs doesn't reset the choice
+  const lastModelPerTab = useRef<Record<string, string>>({});
+  useEffect(() => {
+    lastModelPerTab.current[activeTab] = modelKey;
+  }, [modelKey, activeTab]);
   const [imagePrompt, setImagePrompt] = usePersistentState("imagePrompt", "");
   const [videoPrompt, setVideoPrompt] = usePersistentState("videoPrompt", "");
   const [specialPrompt, setSpecialPrompt] = usePersistentState("specialPrompt", "");
@@ -2847,7 +2852,10 @@ export default function ControlsPane() {
                 disabled={isSubmitting || isExpanding}
                 onClick={() => {
                   setActiveTab(tab);
-                  if (tab === "image" && IMAGE_MODELS.length) {
+                  const remembered = lastModelPerTab.current[tab];
+                  if (remembered && remembered.startsWith(`${tab}:`)) {
+                    setModelKey(remembered);
+                  } else if (tab === "image" && IMAGE_MODELS.length) {
                     setModelKey(`image:${IMAGE_MODELS[0].id}`);
                   } else if (tab === "video" && MODEL_SPECS.length) {
                     setModelKey(`video:${MODEL_SPECS[0].id}`);
