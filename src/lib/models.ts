@@ -374,7 +374,7 @@ const jsonSpecs =
             }
 
             // Select endpoint based on whether image is provided
-            const hasImage = !!(unified.start_frame_url || input.image_url || input.image_urls);
+            const hasImage = !!(unified.start_frame_url || input.image_url || input.image_urls || (unified.reference_image_urls?.length ?? 0) > 0);
             const kieModel = hasImage ? endpoints.i2v : (endpoints.t2v ?? endpoints.i2v);
 
             // If using T2V endpoint, remove image-related fields
@@ -402,11 +402,18 @@ const jsonSpecs =
               }
             }
 
-            // Special handling for Grok Imagine I2V - image_urls must be an array
-            if (model.id === "grok-imagine/image-to-video" && hasImage) {
-              const imageUrl = input.image_urls ?? unified.start_frame_url;
-              if (typeof imageUrl === "string") {
-                input.image_urls = [imageUrl];
+            // Grok Imagine I2V — build image_urls from reference images (up to 7)
+            if (model.id === "grok-imagine/image-to-video") {
+              const refUrls = unified.reference_image_urls ?? [];
+              const allUrls: string[] = [];
+              if (unified.start_frame_url) allUrls.push(unified.start_frame_url);
+              allUrls.push(...refUrls);
+              if (allUrls.length > 0) {
+                input.image_urls = allUrls.slice(0, 7);
+              }
+              // aspect_ratio only applies in multi-image mode
+              if (allUrls.length > 1 && unified.aspect_ratio) {
+                input.aspect_ratio = unified.aspect_ratio;
               }
             }
 

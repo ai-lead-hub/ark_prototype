@@ -690,12 +690,16 @@
       "provider": "kie",
       "pricing": "$0.10/6s, $0.15/10s",
       "supports": {
-        "startFrame": true,
+        "startFrame": false,
         "endFrame": false,
         "audio": false,
         "resolution": true,
-        "aspectRatio": false,
+        "aspectRatio": true,
         "fps": false
+      },
+      "referenceImages": {
+        "min": 1,
+        "max": 7
       },
       "taskConfig": {
         "statusEndpoint": "/api/v1/jobs/recordInfo",
@@ -713,11 +717,6 @@
         "prompt": {
           "type": "string",
           "required": false
-        },
-        "image_urls": {
-          "type": "string",
-          "required": true,
-          "uiKey": "start_frame_url"
         },
         "mode": {
           "type": "string",

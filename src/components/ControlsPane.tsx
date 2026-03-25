@@ -657,7 +657,7 @@ export default function ControlsPane() {
   const videoReferenceConfig = selectedVideo?.referenceImages;
   const referenceLimit =
     modelKind === "video"
-      ? Math.min(videoReferenceConfig?.max ?? 0, 5)
+      ? Math.min(videoReferenceConfig?.max ?? 0, 7)
       : Math.min(selectedImage?.maxRefs ?? 0, 5);
   const imageReferenceLimit = modelKind === "image"
     ? Math.min(selectedImage?.maxRefs ?? 0, 5)
@@ -3543,6 +3543,138 @@ export default function ControlsPane() {
               })()
             )}
 
+            {/* Reference Images (for video models that support it) */}
+            {referenceLimit > 0 ? (
+              <div className="space-y-1">
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Reference Images (max {referenceLimit})
+                </label>
+                <div
+                  className={`relative flex min-h-[100px] flex-col justify-center rounded-2xl border border-white/10 bg-gradient-to-br from-white/10 to-transparent p-3 transition ${isReferenceDragActive
+                    ? "border-sky-400 shadow-lg shadow-sky-500/20"
+                    : "hover:border-white/20"
+                    }`}
+                  onDragEnter={(event) => {
+                    event.preventDefault();
+                    setIsReferenceDragActive(true);
+                  }}
+                  onDragLeave={(event) => {
+                    event.preventDefault();
+                    setIsReferenceDragActive(false);
+                  }}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    setIsReferenceDragActive(true);
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    setIsReferenceDragActive(false);
+                    void handleReferenceDrop(event.dataTransfer);
+                  }}
+                >
+                  <input
+                    ref={referenceInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                      void handleReferenceFiles(event.target.files);
+                      event.target.value = "";
+                    }}
+                  />
+
+                  {referenceUploads.length === 0 ? (
+                    <div
+                      className="flex flex-col items-center justify-center py-2 text-center cursor-pointer"
+                      onClick={() => referenceInputRef.current?.click()}
+                    >
+                      <div className="mb-2 rounded-full bg-white/5 p-2 text-slate-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" /></svg>
+                      </div>
+                      <div className="text-xs text-slate-400">
+                        <span className="font-medium text-slate-300">Click to upload</span> or drag
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {referenceUploads.map((entry) => {
+                        const entryAgeMs = entry.createdAt ? Date.now() - entry.createdAt : 0;
+                        const entryRemainingMs = entry.url && entry.createdAt ? UPLOAD_URL_TTL_MS - entryAgeMs : Infinity;
+                        const entryRemainingMins = Math.floor(entryRemainingMs / 60000);
+                        const isExpiring = entry.url && entryRemainingMs < Infinity && entryRemainingMins <= 10 && entryRemainingMins > 0;
+                        return (
+                          <div
+                            key={entry.id}
+                            className={`relative h-12 w-12 shrink-0 overflow-hidden rounded-md border bg-black/20 group ${isExpiring ? "border-amber-500/60" : "border-white/10"}`}
+                            title={isExpiring ? `${entry.name} — expires in ~${entryRemainingMins} min` : entry.name}
+                          >
+                            <img
+                              src={entry.preview}
+                              alt={entry.name}
+                              className="h-full w-full object-cover"
+                            />
+                            {isExpiring && (
+                              <div className="absolute bottom-0 left-0 right-0 bg-amber-600/80 text-[8px] text-center text-white leading-tight py-px pointer-events-none">
+                                {entryRemainingMins}m
+                              </div>
+                            )}
+                            {entry.uploading && (
+                              <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                                <Spinner size="sm" />
+                              </div>
+                            )}
+                            <button
+                              type="button"
+                              className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity hover:bg-rose-500 group-hover:opacity-100"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeReference(entry.id);
+                              }}
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+                            </button>
+                          </div>
+                        );
+                      })}
+
+                      {/* Add more button (small square) */}
+                      {referenceUploads.length < referenceLimit && (
+                        <button
+                          type="button"
+                          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md border border-dashed border-white/20 bg-white/5 text-slate-400 transition hover:border-sky-400 hover:text-sky-200"
+                          onClick={() => referenceInputRef.current?.click()}
+                          title="Add more images"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14" /><path d="M12 5v14" /></svg>
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+                {/* Video Reference Upload Expiration Warning */}
+                {(() => {
+                  const expiringRefs = referenceUploads.filter((e) => {
+                    if (!e.url || typeof e.createdAt !== "number") return false;
+                    const rem = UPLOAD_URL_TTL_MS - (Date.now() - e.createdAt);
+                    return rem > 0 && rem <= 10 * 60 * 1000;
+                  });
+                  if (expiringRefs.length > 0) {
+                    const minRemaining = Math.min(
+                      ...expiringRefs.map((e) => Math.floor((UPLOAD_URL_TTL_MS - (Date.now() - e.createdAt!)) / 60000))
+                    );
+                    return (
+                      <div className="text-xs text-amber-400 flex items-center gap-1 mt-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
+                        {expiringRefs.length === 1 ? "1 reference expires" : `${expiringRefs.length} references expire`} in ~{minRemaining} min. Re-upload if needed.
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+              </div>
+            ) : null}
+
             {/* Prompt */}
             <div className="space-y-1">
 
@@ -4038,137 +4170,6 @@ export default function ControlsPane() {
               </div>
             )}
 
-            {/* Reference Images (for video models that support it) */}
-            {referenceLimit > 0 ? (
-              <div className="space-y-1">
-                <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                  Reference Images (max 5)
-                </label>
-                <div
-                  className={`relative flex min-h-[100px] flex-col justify-center rounded-2xl border border-white/10 bg-gradient-to-br from-white/10 to-transparent p-3 transition ${isReferenceDragActive
-                    ? "border-sky-400 shadow-lg shadow-sky-500/20"
-                    : "hover:border-white/20"
-                    }`}
-                  onDragEnter={(event) => {
-                    event.preventDefault();
-                    setIsReferenceDragActive(true);
-                  }}
-                  onDragLeave={(event) => {
-                    event.preventDefault();
-                    setIsReferenceDragActive(false);
-                  }}
-                  onDragOver={(event) => {
-                    event.preventDefault();
-                    setIsReferenceDragActive(true);
-                  }}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    setIsReferenceDragActive(false);
-                    void handleReferenceDrop(event.dataTransfer);
-                  }}
-                >
-                  <input
-                    ref={referenceInputRef}
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    className="hidden"
-                    onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                      void handleReferenceFiles(event.target.files);
-                      event.target.value = "";
-                    }}
-                  />
-
-                  {referenceUploads.length === 0 ? (
-                    <div
-                      className="flex flex-col items-center justify-center py-2 text-center cursor-pointer"
-                      onClick={() => referenceInputRef.current?.click()}
-                    >
-                      <div className="mb-2 rounded-full bg-white/5 p-2 text-slate-400">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" /></svg>
-                      </div>
-                      <div className="text-xs text-slate-400">
-                        <span className="font-medium text-slate-300">Click to upload</span> or drag
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex flex-wrap items-center gap-2">
-                      {referenceUploads.map((entry) => {
-                        const entryAgeMs = entry.createdAt ? Date.now() - entry.createdAt : 0;
-                        const entryRemainingMs = entry.url && entry.createdAt ? UPLOAD_URL_TTL_MS - entryAgeMs : Infinity;
-                        const entryRemainingMins = Math.floor(entryRemainingMs / 60000);
-                        const isExpiring = entry.url && entryRemainingMs < Infinity && entryRemainingMins <= 10 && entryRemainingMins > 0;
-                        return (
-                          <div
-                            key={entry.id}
-                            className={`relative h-12 w-12 shrink-0 overflow-hidden rounded-md border bg-black/20 group ${isExpiring ? "border-amber-500/60" : "border-white/10"}`}
-                            title={isExpiring ? `${entry.name} — expires in ~${entryRemainingMins} min` : entry.name}
-                          >
-                            <img
-                              src={entry.preview}
-                              alt={entry.name}
-                              className="h-full w-full object-cover"
-                            />
-                            {isExpiring && (
-                              <div className="absolute bottom-0 left-0 right-0 bg-amber-600/80 text-[8px] text-center text-white leading-tight py-px pointer-events-none">
-                                {entryRemainingMins}m
-                              </div>
-                            )}
-                            {entry.uploading && (
-                              <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-                                <Spinner size="sm" />
-                              </div>
-                            )}
-                            <button
-                              type="button"
-                              className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity hover:bg-rose-500 group-hover:opacity-100"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                removeReference(entry.id);
-                              }}
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
-                            </button>
-                          </div>
-                        );
-                      })}
-
-                      {/* Add more button (small square) */}
-                      {referenceUploads.length < 5 && (
-                        <button
-                          type="button"
-                          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md border border-dashed border-white/20 bg-white/5 text-slate-400 transition hover:border-sky-400 hover:text-sky-200"
-                          onClick={() => referenceInputRef.current?.click()}
-                          title="Add more images"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14" /><path d="M12 5v14" /></svg>
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-                {/* Video Reference Upload Expiration Warning */}
-                {(() => {
-                  const expiringRefs = referenceUploads.filter((e) => {
-                    if (!e.url || typeof e.createdAt !== "number") return false;
-                    const rem = UPLOAD_URL_TTL_MS - (Date.now() - e.createdAt);
-                    return rem > 0 && rem <= 10 * 60 * 1000;
-                  });
-                  if (expiringRefs.length > 0) {
-                    const minRemaining = Math.min(
-                      ...expiringRefs.map((e) => Math.floor((UPLOAD_URL_TTL_MS - (Date.now() - e.createdAt!)) / 60000))
-                    );
-                    return (
-                      <div className="text-xs text-amber-400 flex items-center gap-1 mt-1">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
-                        {expiringRefs.length === 1 ? "1 reference expires" : `${expiringRefs.length} references expire`} in ~{minRemaining} min. Re-upload if needed.
-                      </div>
-                    );
-                  }
-                  return null;
-                })()}
-              </div>
-            ) : null}
 
           </div>
         ) : null
