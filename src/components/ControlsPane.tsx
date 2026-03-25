@@ -3606,7 +3606,7 @@ export default function ControlsPane() {
                     </div>
                   ) : (
                     <div className="flex flex-wrap items-center gap-2">
-                      {referenceUploads.map((entry) => {
+                      {referenceUploads.map((entry, idx) => {
                         const entryAgeMs = entry.createdAt ? Date.now() - entry.createdAt : 0;
                         const entryRemainingMs = entry.url && entry.createdAt ? UPLOAD_URL_TTL_MS - entryAgeMs : Infinity;
                         const entryRemainingMins = Math.floor(entryRemainingMs / 60000);
@@ -3615,13 +3615,17 @@ export default function ControlsPane() {
                           <div
                             key={entry.id}
                             className={`relative h-12 w-12 shrink-0 overflow-hidden rounded-md border bg-black/20 group ${isExpiring ? "border-amber-500/60" : "border-white/10"}`}
-                            title={isExpiring ? `${entry.name} — expires in ~${entryRemainingMins} min` : entry.name}
+                            title={isExpiring ? `${entry.name} — @image ${idx + 1} in prompt` : entry.name}
                           >
                             <img
                               src={entry.preview}
                               alt={entry.name}
                               className="h-full w-full object-cover"
                             />
+                            {/* Numbered badge */}
+                            <div className="absolute top-0.5 left-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-sky-500/80 px-1 text-[9px] font-bold text-white pointer-events-none">
+                              {idx + 1}
+                            </div>
                             {isExpiring && (
                               <div className="absolute bottom-0 left-0 right-0 bg-amber-600/80 text-[8px] text-center text-white leading-tight py-px pointer-events-none">
                                 {entryRemainingMins}m
@@ -3766,10 +3770,9 @@ export default function ControlsPane() {
                     const newValue = event.target.value;
                     setPrompt(newValue);
 
-                    const canAutocomplete =
-                      videoModelSupportsMultishot &&
-                      elementsState.selectedElements.length > 0;
-                    if (!canAutocomplete) {
+                    const hasElements = videoModelSupportsMultishot && elementsState.selectedElements.length > 0;
+                    const hasRefImages = referenceLimit > 0 && videoReferenceUploads.length > 0;
+                    if (!hasElements && !hasRefImages) {
                       setShowAutocomplete(false);
                       return;
                     }
@@ -3777,7 +3780,7 @@ export default function ControlsPane() {
                     // Show autocomplete when user types @...
                     const cursorPos = event.target.selectionStart;
                     const textBefore = newValue.slice(0, cursorPos);
-                    const atMatch = textBefore.match(/@([a-zA-Z0-9]*)$/);
+                    const atMatch = textBefore.match(/@([a-zA-Z0-9 ]*)$/);
                     if (atMatch) {
                       setShowAutocomplete(true);
                       setAutocompleteIndex(0);
@@ -3790,11 +3793,18 @@ export default function ControlsPane() {
                     setTimeout(() => setShowAutocomplete(false), 150);
                   }}
                   onKeyDown={(event) => {
-                    if (showAutocomplete && videoModelSupportsMultishot) {
-                      const options = Array.from(
-                        { length: elementsState.selectedElements.length },
-                        (_, idx) => `@Element${idx + 1}`
-                      );
+                    if (showAutocomplete) {
+                      const options: string[] = [];
+                      if (videoModelSupportsMultishot) {
+                        for (let i = 0; i < elementsState.selectedElements.length; i++) {
+                          options.push(`@Element${i + 1}`);
+                        }
+                      }
+                      if (referenceLimit > 0) {
+                        for (let i = 0; i < videoReferenceUploads.length; i++) {
+                          options.push(`@image ${i + 1}`);
+                        }
+                      }
 
                       if (options.length > 0) {
                         if (event.key === "ArrowDown") {
@@ -3813,7 +3823,7 @@ export default function ControlsPane() {
                           const textarea = event.target as HTMLTextAreaElement;
                           const cursorPos = textarea.selectionStart;
                           const textBefore = prompt.slice(0, cursorPos);
-                          const atMatch = textBefore.match(/@([a-zA-Z0-9]*)$/);
+                          const atMatch = textBefore.match(/@([a-zA-Z0-9 ]*)$/);
                           if (atMatch) {
                             const before = textBefore.slice(0, -atMatch[0].length);
                             const after = prompt.slice(cursorPos);
@@ -3858,11 +3868,18 @@ export default function ControlsPane() {
                   className={`w-full ${useMultishot && multishotPrompts.length > 0 ? "rounded-b-2xl rounded-t-none" : "rounded-2xl"} border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 pb-10 ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
                 />
 
-                {showAutocomplete && videoModelSupportsMultishot && (() => {
-                  const options = elementsState.selectedElements.map((selectedEl, idx) => ({
-                    label: `@Element${idx + 1}`,
-                    name: selectedEl.element.name,
-                  }));
+                {showAutocomplete && (() => {
+                  const options: Array<{ label: string; name: string }> = [];
+                  if (videoModelSupportsMultishot) {
+                    elementsState.selectedElements.forEach((selectedEl, idx) => {
+                      options.push({ label: `@Element${idx + 1}`, name: selectedEl.element.name });
+                    });
+                  }
+                  if (referenceLimit > 0) {
+                    videoReferenceUploads.forEach((ref, idx) => {
+                      options.push({ label: `@image ${idx + 1}`, name: ref.name || `Image ${idx + 1}` });
+                    });
+                  }
                   if (options.length === 0) return null;
 
                   return (
@@ -3877,7 +3894,7 @@ export default function ControlsPane() {
                             if (!textarea) return;
                             const cursorPos = textarea.selectionStart;
                             const textBefore = prompt.slice(0, cursorPos);
-                            const atMatch = textBefore.match(/@([a-zA-Z0-9]*)$/);
+                            const atMatch = textBefore.match(/@([a-zA-Z0-9 ]*)$/);
                             if (atMatch) {
                               const before = textBefore.slice(0, -atMatch[0].length);
                               const after = prompt.slice(cursorPos);
@@ -3888,7 +3905,7 @@ export default function ControlsPane() {
                           }}
                           className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition ${idx === autocompleteIndex ? "bg-sky-500/30 text-white" : "text-slate-300 hover:bg-white/10"}`}
                         >
-                          <span className="font-medium text-amber-300">{opt.label}</span>
+                          <span className="font-medium text-sky-300">{opt.label}</span>
                           <span className="truncate text-xs text-slate-500">{opt.name}</span>
                         </button>
                       ))}
