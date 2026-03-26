@@ -17,7 +17,7 @@ export async function callWavespeed(
 ): Promise<ProviderCallResult> {
   const logger = options?.log;
 
-  if (logger) logger("Submitting upscale task...");
+  if (logger) logger("Submitting task...");
 
   const result = await client.run(endpoint, payload);
 
@@ -27,7 +27,7 @@ export async function callWavespeed(
   }
 
   const url = outputs[0];
-  if (logger) logger("Upscale complete.");
+  if (logger) logger("Task complete.");
 
   if (options?.preferUrlResult) {
     return { url };

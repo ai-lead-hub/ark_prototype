@@ -447,78 +447,6 @@
       }
     },
     {
-      "id": "ltx-2",
-      "label": "LTX-2",
-      "endpoint": "fal-ai/ltx-2/image-to-video",
-      "provider": "fal-client",
-      "pricing": "$0.30/6s (+audio)",
-      "supports": {
-        "startFrame": true,
-        "endFrame": false,
-        "audio": true,
-        "resolution": true,
-        "aspectRatio": true,
-        "fps": true
-      },
-      "params": {
-        "prompt": {
-          "type": "string",
-          "required": true
-        },
-        "image_url": {
-          "type": "string",
-          "required": false,
-          "uiKey": "start_frame_url"
-        },
-        "duration": {
-          "type": "enum",
-          "required": true,
-          "values": [
-            6,
-            8,
-            10
-          ]
-        },
-        "resolution": {
-          "type": "enum",
-          "values": [
-            "1080p",
-            "1440p",
-            "2160p"
-          ],
-          "default": "1080p"
-        },
-        "aspect_ratio": {
-          "type": "enum",
-          "values": [
-            "16:9",
-            "9:16",
-            "1:1",
-            "4:3",
-            "3:4",
-            "21:9",
-            "9:21"
-          ],
-          "default": "16:9"
-        },
-        "fps": {
-          "type": "enum",
-          "values": [
-            25,
-            50
-          ],
-          "default": 25
-        },
-        "generate_audio": {
-          "type": "boolean",
-          "default": true
-        }
-      },
-      "output": {
-        "videoPath": "video.url"
-      }
-    },
-    {
       "id": "hailuo-2.3-pro",
       "label": "Hailuo 2.3 Pro",
       "endpoint": "/api/v1/jobs/createTask",
@@ -848,6 +776,51 @@
       },
       "output": {
         "videoPath": "video.url"
+      }
+    },
+    {
+      "id": "ltx-2.3",
+      "label": "LTX-2.3",
+      "endpoint": "wavespeed-ai/ltx-2.3/image-to-video",
+      "provider": "wavespeed",
+      "pricing": "$0.30/5s (+audio)",
+      "supports": {
+        "startFrame": true,
+        "endFrame": false,
+        "audio": true,
+        "resolution": true,
+        "aspectRatio": false,
+        "fps": false
+      },
+      "params": {
+        "prompt": {
+          "type": "string",
+          "required": false
+        },
+        "image": {
+          "type": "string",
+          "required": false,
+          "uiKey": "start_frame_url"
+        },
+        "duration": {
+          "type": "enum",
+          "required": false,
+          "values": [5, 8, 10],
+          "default": 5
+        },
+        "resolution": {
+          "type": "enum",
+          "values": ["480p", "720p", "1080p"],
+          "default": "720p"
+        },
+        "seed": {
+          "type": "number",
+          "default": -1,
+          "hidden": true
+        }
+      },
+      "output": {
+        "videoPath": "outputs.0"
       }
     }
   ]

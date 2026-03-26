@@ -95,111 +95,34 @@ const jsonSpecs =
     const model: ModelSpec = {
       ...spec,
       label: spec.label ?? spec.id,
-      provider: spec.provider ?? "fal",
+      provider: spec.provider ?? "kie",
     };
 
-    // Adapter for FAL Kling 2.5 Turbo Pro I2V
-    if (model.id === "kling-2.5-pro-fal") {
+    // Adapter for LTX-2.3 (WaveSpeed) — I2V / T2V endpoint switching
+    if (model.id === "ltx-2.3") {
       model.adapter = {
         mapInput: (unified) => {
-          if (!unified.start_frame_url) {
-            throw new Error("Start frame is required for Kling 2.5 Turbo Pro (FAL).");
-          }
-          const duration = String(unified.duration ?? "5");
           const input: Record<string, FalInputValue> = {
-            prompt: unified.prompt,
-            image_url: unified.start_frame_url,
-            duration,
-            negative_prompt: unified.negative_prompt ?? "",
-            cfg_scale:
-              typeof unified.cfg_scale === "number" && Number.isFinite(unified.cfg_scale)
-                ? unified.cfg_scale
-                : 0.5,
-          };
-          if (unified.end_frame_url) {
-            input.tail_image_url = unified.end_frame_url;
-          }
-          // FAL endpoint expects fields at the root, not nested under "input"
-          return input;
-        },
-        getVideoUrl: (data) => extractUrl(data, 0, 5),
-      };
-    }
-
-    // Adapter for FAL Kling V2.6 Pro I2V
-    if (model.id === "kling-2.6-pro-fal") {
-      model.adapter = {
-        mapInput: (unified) => {
-          if (!unified.start_frame_url) {
-            throw new Error("Start frame is required for Kling V2.6 Pro (FAL).");
-          }
-          const duration = String(unified.duration ?? "5");
-          const input: Record<string, FalInputValue> = {
-            prompt: unified.prompt,
-            image_url: unified.start_frame_url,
-            duration,
-            negative_prompt: unified.negative_prompt ?? "blur, distort, and low quality",
-            generate_audio: unified.generate_audio ?? false,
-          };
-          if (unified.end_frame_url) {
-            input.tail_image_url = unified.end_frame_url;
-          }
-          return input;
-        },
-        getVideoUrl: (data) => {
-          // FAL returns { video: { url: "..." } }
-          const video = (data as { video?: { url?: string } })?.video;
-          return video?.url;
-        },
-      };
-    }
-
-    // Adapter for LTX-2 (supports both I2V and T2V)
-    if (model.id === "ltx-2") {
-      model.adapter = {
-        mapInput: (unified) => {
-          const hasImage = !!unified.start_frame_url;
-
-          // Ensure duration is a number (API expects 6, 8, or 10 as integers)
-          let duration: number = 6;
-          if (unified.duration !== undefined) {
-            duration = typeof unified.duration === "string"
+            prompt: unified.prompt ?? "",
+            duration: typeof unified.duration === "string"
               ? parseInt(unified.duration, 10)
-              : unified.duration;
-          }
-
-          // Ensure fps is a number
-          let fps: number = 25;
-          if (unified.fps !== undefined) {
-            fps = typeof unified.fps === "number" ? unified.fps : parseInt(String(unified.fps), 10);
-          }
-
-          const input: Record<string, FalInputValue> = {
-            prompt: unified.prompt,
-            duration,
-            resolution: unified.resolution ?? "1080p",
-            aspect_ratio: unified.aspect_ratio ?? "16:9",
-            fps,
-            generate_audio: unified.generate_audio ?? true,
+              : (unified.duration ?? 5),
+            resolution: unified.resolution ?? "720p",
+            seed: unified.seed ?? -1,
           };
-
-          // Only include image_url if we have an image (I2V mode)
-          if (hasImage) {
-            input.image_url = unified.start_frame_url;
+          if (unified.start_frame_url) {
+            input.image = unified.start_frame_url;
           }
-
           return input;
         },
         getVideoUrl: (data) => {
-          // LTX-2 returns { video: { url: "..." } }
-          const video = (data as { video?: { url?: string } })?.video;
-          return video?.url;
+          const outputs = (data as { outputs?: string[] })?.outputs;
+          return outputs?.[0];
         },
-        // Dynamic endpoint selection
         getEndpoint: (unified) => {
           return unified.start_frame_url
-            ? "fal-ai/ltx-2/image-to-video"
-            : "fal-ai/ltx-2/text-to-video";
+            ? "wavespeed-ai/ltx-2.3/image-to-video"
+            : "wavespeed-ai/ltx-2.3/text-to-video";
         },
       };
     }

@@ -14,7 +14,7 @@ export type SpecialModelSpec = {
     id: string;
     label: string;
     endpoint: string;
-    provider: "kie" | "fal-client";
+    provider: "kie";
     pricing?: string;
     inputType: "video" | "image" | "both" | "references"; // "video" for V2V, "image" for T2V/I2V, "both" for image+video, "references" for multi-ref+elements
     videoInputConfig?: { min?: number; max: number }; // For video input models
