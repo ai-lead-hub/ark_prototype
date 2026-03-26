@@ -38,86 +38,6 @@ const kieTaskConfig: TaskPollingConfig = {
 
 export const SPECIAL_MODELS: SpecialModelSpec[] = [
     {
-        id: "sora-2",
-        label: "Sora 2",
-        endpoint: "/api/v1/jobs/createTask",
-        provider: "kie",
-        pricing: "$0.15",
-        inputType: "image",
-        imageInputConfig: { startFrame: true, endFrame: false },
-        taskConfig: kieTaskConfig,
-        params: {
-            prompt: {
-                type: "string",
-                required: true,
-            },
-            aspect_ratio: {
-                type: "enum",
-                required: false,
-                values: ["portrait", "landscape"],
-                default: "landscape",
-            },
-            duration: {
-                type: "enum",
-                required: true,
-                values: ["10", "15"],
-                default: "10",
-            },
-            remove_watermark: {
-                type: "boolean",
-                default: true,
-                hidden: true,
-            },
-            character_id_list: {
-                type: "array",
-                required: false,
-            },
-        },
-    },
-    {
-        id: "sora-2-pro",
-        label: "Sora 2 Pro",
-        endpoint: "/api/v1/jobs/createTask",
-        provider: "kie",
-        pricing: "$0.60",
-        inputType: "image",
-        imageInputConfig: { startFrame: true, endFrame: false },
-        taskConfig: kieTaskConfig,
-        params: {
-            prompt: {
-                type: "string",
-                required: true,
-            },
-            aspect_ratio: {
-                type: "enum",
-                required: false,
-                values: ["portrait", "landscape"],
-                default: "landscape",
-            },
-            duration: {
-                type: "enum",
-                required: true,
-                values: ["10", "15"],
-                default: "10",
-            },
-            size: {
-                type: "enum",
-                required: false,
-                values: ["standard", "high"],
-                default: "standard",
-            },
-            remove_watermark: {
-                type: "boolean",
-                default: true,
-                hidden: true,
-            },
-            character_id_list: {
-                type: "array",
-                required: false,
-            },
-        },
-    },
-    {
         id: "wan-2.6-v2v",
         label: "Wan 2.6 V2V",
         endpoint: "/api/v1/jobs/createTask",
@@ -145,8 +65,8 @@ export const SPECIAL_MODELS: SpecialModelSpec[] = [
         },
     },
     {
-        id: "kling-motion-control",
-        label: "Kling Motion Control",
+        id: "kling-3-motion-control",
+        label: "Kling 3.0 Motion Control",
         endpoint: "/api/v1/jobs/createTask",
         provider: "kie",
         pricing: "$0.045",
@@ -170,6 +90,12 @@ export const SPECIAL_MODELS: SpecialModelSpec[] = [
                 required: true,
                 values: ["720p", "1080p"],
                 default: "1080p",
+            },
+            background_source: {
+                type: "enum",
+                required: false,
+                values: ["input_video", "input_image"],
+                default: "input_video",
             },
         },
     },
@@ -251,32 +177,16 @@ export function buildSpecialModelInput(
     // Determine KIE model endpoint and handle model-specific logic
     let kieModelName: string;
 
-    if (model.id === "sora-2" || model.id === "sora-2-pro") {
-        // Sora 2 / Sora 2 Pro: T2V or I2V based on whether start frame is provided
-        const hasImage = !!payload.start_frame_url;
-        const prefix = model.id === "sora-2-pro" ? "sora-2-pro" : "sora-2";
-        kieModelName = hasImage ? `${prefix}-image-to-video` : `${prefix}-text-to-video`;
-
-        // Map duration to n_frames for Sora 2 API
-        if (input.duration !== undefined) {
-            input.n_frames = input.duration;
-            delete input.duration;
-        }
-
-        // Format image_urls as array for I2V
-        if (hasImage) {
-            input.image_urls = [payload.start_frame_url!];
-        }
-    } else if (model.id === "wan-2.6-v2v") {
+    if (model.id === "wan-2.6-v2v") {
         // Wan V2V
         kieModelName = "wan/2-6-video-to-video";
         // Add video URLs
         if (payload.video_urls) {
             input.video_urls = payload.video_urls;
         }
-    } else if (model.id === "kling-motion-control") {
-        // Kling Motion Control: requires both image and video
-        kieModelName = "kling-2.6/motion-control";
+    } else if (model.id === "kling-3-motion-control") {
+        // Kling 3.0 Motion Control: requires both image and video
+        kieModelName = "kling-3.0/motion-control";
 
         // Add image as input_urls array
         if (payload.start_frame_url) {

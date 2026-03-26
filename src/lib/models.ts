@@ -366,6 +366,14 @@ const jsonSpecs =
                 i2v: "bytedance/seedance-1.5-pro",
                 t2v: "bytedance/seedance-1.5-pro"
               },
+              "sora-2": {
+                i2v: "sora-2-image-to-video",
+                t2v: "sora-2-text-to-video"
+              },
+              "sora-2-pro": {
+                i2v: "sora-2-pro-image-to-video",
+                t2v: "sora-2-pro-text-to-video"
+              },
             };
 
             const endpoints = kieModelMap[model.id];
@@ -414,6 +422,14 @@ const jsonSpecs =
               // aspect_ratio only applies in multi-image mode
               if (allUrls.length > 1 && unified.aspect_ratio) {
                 input.aspect_ratio = unified.aspect_ratio;
+              }
+            }
+
+            // Sora 2 / Sora 2 Pro: image_urls must be an array for I2V
+            if ((model.id === "sora-2" || model.id === "sora-2-pro") && hasImage) {
+              const imageUrl = input.image_urls ?? unified.start_frame_url;
+              if (typeof imageUrl === "string") {
+                input.image_urls = [imageUrl];
               }
             }
 

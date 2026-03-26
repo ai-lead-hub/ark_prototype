@@ -745,6 +745,110 @@
       "output": {
         "videoPath": "video.url"
       }
+    },
+    {
+      "id": "sora-2",
+      "label": "Sora 2",
+      "endpoint": "/api/v1/jobs/createTask",
+      "provider": "kie",
+      "pricing": "$0.15",
+      "supports": {
+        "startFrame": true,
+        "endFrame": false,
+        "audio": false,
+        "resolution": false,
+        "aspectRatio": true,
+        "fps": false
+      },
+      "taskConfig": {
+        "statusEndpoint": "/api/v1/jobs/recordInfo",
+        "statePath": "data.state",
+        "successStates": ["success"],
+        "failureStates": ["fail"],
+        "responseDataPath": "data",
+        "pollIntervalMs": 4000
+      },
+      "params": {
+        "prompt": {
+          "type": "string",
+          "required": true
+        },
+        "image_urls": {
+          "type": "string",
+          "required": false,
+          "uiKey": "start_frame_url"
+        },
+        "n_frames": {
+          "type": "enum",
+          "required": true,
+          "values": ["10", "15"],
+          "default": "10",
+          "uiKey": "duration"
+        },
+        "remove_watermark": {
+          "type": "boolean",
+          "default": true,
+          "hidden": true
+        }
+      },
+      "output": {
+        "videoPath": "video.url"
+      }
+    },
+    {
+      "id": "sora-2-pro",
+      "label": "Sora 2 Pro",
+      "endpoint": "/api/v1/jobs/createTask",
+      "provider": "kie",
+      "pricing": "$0.60",
+      "supports": {
+        "startFrame": true,
+        "endFrame": false,
+        "audio": false,
+        "resolution": false,
+        "aspectRatio": true,
+        "fps": false
+      },
+      "taskConfig": {
+        "statusEndpoint": "/api/v1/jobs/recordInfo",
+        "statePath": "data.state",
+        "successStates": ["success"],
+        "failureStates": ["fail"],
+        "responseDataPath": "data",
+        "pollIntervalMs": 4000
+      },
+      "params": {
+        "prompt": {
+          "type": "string",
+          "required": true
+        },
+        "image_urls": {
+          "type": "string",
+          "required": false,
+          "uiKey": "start_frame_url"
+        },
+        "n_frames": {
+          "type": "enum",
+          "required": true,
+          "values": ["10", "15"],
+          "default": "10",
+          "uiKey": "duration"
+        },
+        "size": {
+          "type": "enum",
+          "required": false,
+          "values": ["standard", "high"],
+          "default": "standard"
+        },
+        "remove_watermark": {
+          "type": "boolean",
+          "default": true,
+          "hidden": true
+        }
+      },
+      "output": {
+        "videoPath": "video.url"
+      }
     }
   ]
 }
