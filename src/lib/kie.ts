@@ -382,6 +382,8 @@ async function pollKieTask(
   const defaults = resolveTaskConfig(config);
   let transientFailureCount = 0;
 
+  const maxPollMs = defaults.pollIntervalMs * 3;
+
   for (let attempt = 0; attempt < defaults.maxAttempts; attempt += 1) {
     const statusPayload = await fetchTaskStatus(key, taskId, config, defaults);
     const stateValue = getValueAtPath(statusPayload, defaults.statePath);
@@ -395,6 +397,11 @@ async function pollKieTask(
         `Generating...`;
       logger(stateLabel);
     }
+
+    // Mild backoff: base interval for first 20 attempts, then gradually increase
+    const pollMs = attempt < 20
+      ? defaults.pollIntervalMs
+      : Math.min(maxPollMs, defaults.pollIntervalMs * Math.pow(1.1, attempt - 20));
 
     // Handle both string and numeric state values (Veo uses numeric: 1=success, 2/3=fail)
     const stateStr = String(stateValue);
@@ -429,7 +436,7 @@ async function pollKieTask(
               `Transient KIE failure (${transientFailureCount}/${MAX_TRANSIENT_TASK_FAILURES}): ${errorMessage}. Retrying status poll...`
             );
           }
-          await delay(defaults.pollIntervalMs);
+          await delay(pollMs);
           continue;
         }
         throw new Error(`KIE task failed: ${errorMessage}`);
@@ -437,7 +444,7 @@ async function pollKieTask(
       transientFailureCount = 0;
     }
 
-    await delay(defaults.pollIntervalMs);
+    await delay(pollMs);
   }
 
   throw new Error("KIE task polling timed out.");

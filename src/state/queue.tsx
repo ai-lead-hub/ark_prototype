@@ -40,6 +40,17 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     const [isLogOpen, setIsLogOpen] = useState(false);
     const [schedulerTick, setSchedulerTick] = useState(0);
     const activeJobsRef = useRef<Set<string>>(new Set());
+    const fadeTimeoutsRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+
+    // Clear all pending auto-fade timers on unmount
+    useEffect(() => {
+        return () => {
+            for (const timer of fadeTimeoutsRef.current) {
+                clearTimeout(timer);
+            }
+            fadeTimeoutsRef.current.clear();
+        };
+    }, []);
 
     const deleteProcessors = useCallback((ids: string[]) => {
         if (ids.length === 0) return;
@@ -215,10 +226,12 @@ export function QueueProvider({ children }: { children: ReactNode }) {
                             )
                         );
                         // Auto-fade after 10 seconds
-                        setTimeout(() => {
+                        const fadeTimer = setTimeout(() => {
+                            fadeTimeoutsRef.current.delete(fadeTimer);
                             setJobs((prev) => prev.filter((j) => j.id !== nextJob.id));
                             deleteProcessors([nextJob.id]);
                         }, 10000);
+                        fadeTimeoutsRef.current.add(fadeTimer);
                     } catch (error) {
                         releaseSlot();
                         const rawMsg = error instanceof Error ? error.message : String(error ?? "");

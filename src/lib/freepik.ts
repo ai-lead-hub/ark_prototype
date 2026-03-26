@@ -107,7 +107,8 @@ async function pollTaskStatus(
 ): Promise<string[]> {
     const endpoint = `${FREEPIK_BASE_URL}/image-upscaler-precision-v2/${taskId}`;
     const maxAttempts = 120;
-    const pollIntervalMs = 5000;
+    const basePollMs = 5000;
+    const maxPollMs = basePollMs * 3;
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
         const response = await fetchWithTimeout(endpoint, {
@@ -142,7 +143,11 @@ async function pollTaskStatus(
             throw new Error(`Freepik upscale task failed: ${taskId}`);
         }
 
-        await delay(pollIntervalMs);
+        // Mild backoff: base interval for first 20 attempts, then gradually increase
+        const pollMs = attempt < 20
+            ? basePollMs
+            : Math.min(maxPollMs, basePollMs * Math.pow(1.1, attempt - 20));
+        await delay(pollMs);
     }
 
     throw new Error(`Freepik upscale task timed out after ${maxAttempts} attempts`);

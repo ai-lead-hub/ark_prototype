@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 interface VideoPlayerProps {
     videoUrl: string;
@@ -40,9 +40,23 @@ export default function VideoPlayer({
     const [playbackRate, setPlaybackRate] = useState(1);
     const [isSeeking, setIsSeeking] = useState(false);
     const [hoverTime, setHoverTime] = useState<number | null>(null);
+    const isSeekingRef = useRef(false);
 
     const [status, setStatus] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
+    const statusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Clean up status timeout on unmount
+    useEffect(() => {
+        return () => {
+            if (statusTimeoutRef.current) clearTimeout(statusTimeoutRef.current);
+        };
+    }, []);
+
+    // Keep ref in sync with state so event handlers always read the latest value
+    useEffect(() => {
+        isSeekingRef.current = isSeeking;
+    }, [isSeeking]);
 
     // Handle video metadata loaded
     useEffect(() => {
@@ -54,7 +68,7 @@ export default function VideoPlayer({
         };
 
         const handleTimeUpdate = () => {
-            if (!isSeeking) {
+            if (!isSeekingRef.current) {
                 setCurrentTime(video.currentTime);
             }
         };
@@ -81,7 +95,7 @@ export default function VideoPlayer({
             video.removeEventListener("pause", handlePause);
             video.removeEventListener("ended", handleEnded);
         };
-    }, [isSeeking]);
+    }, []);
 
     // Calculate fit-to-screen zoom when video dimensions are available
     useEffect(() => {
@@ -388,7 +402,8 @@ export default function VideoPlayer({
             setStatus(`Failed: ${err instanceof Error ? err.message : "Unknown error"}`);
         } finally {
             setSaving(false);
-            setTimeout(() => setStatus(null), 3000);
+            if (statusTimeoutRef.current) clearTimeout(statusTimeoutRef.current);
+            statusTimeoutRef.current = setTimeout(() => setStatus(null), 3000);
         }
     }, [videoName, currentTime, onSave]);
 
@@ -400,18 +415,15 @@ export default function VideoPlayer({
         return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}.${ms.toString().padStart(2, "0")}`;
     };
 
-    // Generate frame markers for timeline
-    const generateFrameMarkers = () => {
+    // Generate frame markers for timeline (memoized to avoid recreating on every render)
+    const frameMarkers = useMemo(() => {
         if (duration === 0) return [];
         const markers: number[] = [];
-        // Major markers every second
         for (let t = 0; t <= duration; t += 1) {
             markers.push(t);
         }
         return markers;
-    };
-
-    const frameMarkers = generateFrameMarkers();
+    }, [duration]);
 
     return (
         <div

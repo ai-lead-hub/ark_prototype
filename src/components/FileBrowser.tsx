@@ -91,6 +91,7 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
       setPublished({});
       return;
     }
+    sentFileMetaRef.current.clear();
     void refreshPins();
     setPublished(loadPublished(workspaceKey));
   }, [workspaceKey, refreshPins]);

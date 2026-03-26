@@ -73,6 +73,11 @@ export default function PreviewPane({
 
 
 
+  // Clear metadata dedup set when workspace changes
+  useEffect(() => {
+    sentFileMetaRef.current.clear();
+  }, [connection?.workspaceId]);
+
   useEffect(() => {
     setCanCapture(false);
     setCaptureStatus(null);
