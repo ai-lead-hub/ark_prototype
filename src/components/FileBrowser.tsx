@@ -55,6 +55,7 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const lastClickedIdRef = useRef<string | null>(null);
 
+  const [filterOpen, setFilterOpen] = useState(false);
   const [hoverPlayVideos] = useHoverPlayVideos();
 
   const iconButtonBase =
@@ -62,7 +63,7 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
   const iconButtonHidden = "opacity-0 group-hover:opacity-100";
   const iconButtonVisible = "opacity-100";
   const toolbarIconButtonBase =
-    "inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-black/40 text-sm text-slate-200 transition hover:border-sky-400 hover:text-sky-200";
+    "inline-flex h-9 min-w-9 px-2 items-center justify-center rounded-lg border border-white/10 bg-black/40 text-sm font-medium text-slate-200 transition hover:border-sky-400 hover:text-sky-200 whitespace-nowrap";
 
   const workspaceKey = useMemo(() => {
     if (!connection) return "";
@@ -678,7 +679,7 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
 
   return (
     <div className="flex h-full flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 relative">
         <input
           type="search"
           value={q}
@@ -686,18 +687,54 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
           placeholder="Search files"
           className="flex-1 rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
         />
-        <button
-          type="button"
-          onClick={() => {
-            setMultiSelectMode((v) => !v);
-            if (multiSelectMode) setSelectedIds(new Set());
-          }}
-          className={`${toolbarIconButtonBase} ${multiSelectMode ? "border-rose-400 text-rose-200 bg-rose-500/20" : ""}`}
-          title={multiSelectMode ? "Exit Multi-Select (Esc)" : "Multi-Select"}
-          aria-label="Toggle multi-select mode"
-        >
-          ☑
-        </button>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setFilterOpen(!filterOpen)}
+            className={`${toolbarIconButtonBase} ${filterOpen ? "border-sky-400 text-sky-200" : ""}`}
+            title="Filter & Sort"
+          >
+            <span className="mr-1">≡</span> Filter
+          </button>
+          
+          {filterOpen && (
+            <div className="absolute right-0 top-full z-50 mt-1 w-48 rounded-xl border border-white/10 bg-slate-900 shadow-xl backdrop-blur-md p-2 flex flex-col gap-1">
+              <button
+                type="button"
+                onClick={() => toggleGroup("images")}
+                className={`flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm transition-colors ${isImagesActive ? "bg-sky-500/20 text-sky-300" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}
+              >
+                Images <span>{isImagesActive ? "✓" : ""}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => toggleGroup("videos")}
+                className={`flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm transition-colors ${isVideosActive ? "bg-sky-500/20 text-sky-300" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}
+              >
+                Videos <span>{isVideosActive ? "✓" : ""}</span>
+              </button>
+              <div className="my-1 h-px bg-white/10" />
+              <button
+                type="button"
+                onClick={() => setSortByName((v) => !v)}
+                className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm text-slate-300 hover:bg-white/5 hover:text-white transition-colors"
+                title={sortByName ? "Sorted A-Z" : "Sorted by recency"}
+              >
+                Sort: {sortByName ? "A→Z" : "Newest"} <span>🔃</span>
+              </button>
+              {filterExt.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setFilters([])}
+                  className="mt-1 w-full rounded-lg bg-rose-500/10 px-2 py-1.5 text-xs font-semibold text-rose-300 hover:bg-rose-500/20 transition-colors"
+                >
+                  Clear Filters
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
         <button
           type="button"
           onClick={() => {
@@ -706,53 +743,17 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
           }}
           className={toolbarIconButtonBase}
           title="Refresh"
-          aria-label="Refresh file list"
         >
           ↻
         </button>
-      </div>
 
-      <div className="flex flex-wrap gap-1 text-xs">
         <button
           type="button"
-          onClick={() => toggleGroup("images")}
-          className={`rounded-full px-3 py-1 font-semibold transition-colors ${isImagesActive
-            ? "bg-sky-500/30 text-white"
-            : "bg-white/10 text-slate-300 hover:text-white"
-            }`}
+          className={`${toolbarIconButtonBase} bg-amber-500/10 text-amber-200 border-amber-500/20 hover:border-amber-400 hover:text-amber-100 hover:bg-amber-500/20 font-bold`}
+          title="Elements Store"
         >
-          Images
+          Elements Store ✨
         </button>
-        <button
-          type="button"
-          onClick={() => toggleGroup("videos")}
-          className={`rounded-full px-3 py-1 font-semibold transition-colors ${isVideosActive
-            ? "bg-sky-500/30 text-white"
-            : "bg-white/10 text-slate-300 hover:text-white"
-            }`}
-        >
-          Videos
-        </button>
-        <button
-          type="button"
-          onClick={() => setSortByName((v) => !v)}
-          className={`rounded-full px-3 py-1 font-semibold transition-colors ${sortByName
-            ? "bg-violet-500/30 text-white"
-            : "bg-white/10 text-slate-300 hover:text-white"
-            }`}
-          title={sortByName ? "Sorted A-Z" : "Sorted by recency"}
-        >
-          {sortByName ? "A→Z" : "New"}
-        </button>
-        {filterExt.length ? (
-          <button
-            type="button"
-            onClick={() => setFilters([])}
-            className="rounded-full px-3 py-1 font-semibold text-slate-300 hover:text-white"
-          >
-            Clear
-          </button>
-        ) : null}
       </div>
 
       <div
@@ -806,11 +807,11 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
           </div>
         ) : (
           <div className="flex flex-col min-h-full">
-              <div ref={gridContainerRef} className="grid grid-cols-2 gap-2 p-2 sm:grid-cols-3">
+              <div ref={gridContainerRef} className="grid grid-cols-3 gap-2 p-2">
                 {activeJobs.map((job) => (
                   <div
                     key={job.id}
-                    className="relative flex aspect-square flex-col overflow-hidden rounded-xl border border-white/10 bg-black/40 animate-pulse"
+                    className="relative flex aspect-video flex-col overflow-hidden rounded-xl border border-white/10 bg-black/40 animate-pulse"
                   >
                     <div className="flex h-full items-center justify-center">
                       <Spinner size="lg" />
@@ -849,7 +850,7 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
                       }}
                       onClick={(e) => multiSelectMode ? handleMultiSelectClick(entry, e) : select(entry)}
                       onKeyDown={(e) => handleKeyDown(e, entry)}
-                      className={`group relative flex aspect-square flex-col overflow-hidden rounded-xl border transition focus:outline-none focus:ring-2 focus:ring-sky-500 ${selected?.id === entry.id && !multiSelectMode ? "ring-2 ring-yellow-500" : ""
+                      className={`group relative flex aspect-video flex-col overflow-hidden rounded-xl border transition focus:outline-none focus:ring-2 focus:ring-sky-500 ${selected?.id === entry.id && !multiSelectMode ? "ring-2 ring-yellow-500" : ""
                         } ${selectedIds.has(entry.id) ? "ring-2 ring-rose-400" : ""
                         } ${isPublished(published, entry.relPath) ? "ring-2 ring-violet-400/70 shadow-lg shadow-violet-500/40" : ""
                         } ${styles}`}
