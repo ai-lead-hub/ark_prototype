@@ -137,30 +137,38 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
   useEffect(() => {
     if (!SHOW_QUEUE_PREVIEW_TILE || hasRealQueueTiles) return;
 
-    setDemoQueuePhase("processing");
-    setDemoQueueProgress(0);
+    let progressTimer: number | undefined;
+    let phaseTimer: number | undefined;
 
-    let progress = 0;
-    let completeTimer: number | undefined;
-    const progressTimer = window.setInterval(() => {
-      progress = Math.min(progress + 10, 100);
-      setDemoQueueProgress(progress);
+    if (demoQueuePhase === "processing") {
+      setDemoQueueProgress(0);
+      let progress = 0;
+      progressTimer = window.setInterval(() => {
+        progress = Math.min(progress + 10, 100);
+        setDemoQueueProgress(progress);
 
-      if (progress >= 100) {
-        window.clearInterval(progressTimer);
-        completeTimer = window.setTimeout(() => {
-          setDemoQueuePhase("completed");
-        }, 350);
-      }
-    }, 280);
+        if (progress >= 100) {
+          window.clearInterval(progressTimer);
+          phaseTimer = window.setTimeout(() => {
+            setDemoQueuePhase("completed");
+          }, 350);
+        }
+      }, 280);
+    } else {
+      phaseTimer = window.setTimeout(() => {
+        setDemoQueuePhase("processing");
+      }, 1600);
+    }
 
     return () => {
-      window.clearInterval(progressTimer);
-      if (completeTimer) {
-        window.clearTimeout(completeTimer);
+      if (progressTimer) {
+        window.clearInterval(progressTimer);
+      }
+      if (phaseTimer) {
+        window.clearTimeout(phaseTimer);
       }
     };
-  }, [hasRealQueueTiles]);
+  }, [demoQueuePhase, hasRealQueueTiles]);
 
   useEffect(() => {
     if (!workspaceKey) {

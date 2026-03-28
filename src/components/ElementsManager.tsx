@@ -133,9 +133,9 @@ export default function ElementsManager() {
           {!isFormOpen && (
             <button
               onClick={openForm}
-              className="rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-2 text-sm font-semibold text-sky-200 transition hover:bg-sky-500/20"
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-sky-400/30 bg-sky-500/10 text-sky-200 transition hover:bg-sky-500/20"
             >
-              + New Element
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
             </button>
           )}
           <button
@@ -182,7 +182,8 @@ export default function ElementsManager() {
             </button>
           </div>
         ) : (
-          <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-4">
+          <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto pr-1">
+            <div className="space-y-4">
             <section className="rounded-[24px] border border-white/10 bg-black/20 p-4">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div className="text-sm font-medium text-white">Pinned elements</div>
@@ -212,7 +213,7 @@ export default function ElementsManager() {
               )}
             </section>
 
-            <section className="flex min-h-0 flex-col rounded-[24px] border border-white/10 bg-black/20 p-4">
+            <section className="rounded-[24px] border border-white/10 bg-black/20 p-4">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
                   <div className="text-sm font-medium text-white">Elements library</div>
@@ -223,7 +224,7 @@ export default function ElementsManager() {
               </div>
 
               {libraryElements.length > 0 ? (
-                <div className="custom-scrollbar grid min-h-0 flex-1 grid-cols-5 gap-3 overflow-y-auto pr-1">
+                <div className="grid grid-cols-5 gap-3">
                   {libraryElements.map((element) => (
                     <ElementCard
                       key={element.id}
@@ -242,6 +243,7 @@ export default function ElementsManager() {
                 </div>
               )}
             </section>
+            </div>
           </div>
         )}
       </div>
