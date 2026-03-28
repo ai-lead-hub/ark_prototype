@@ -24,7 +24,18 @@ import { useHoverPlayVideos } from "../lib/useHoverPlayVideos";
 const IMAGE_EXTS = ["png", "jpg", "jpeg", "webp"];
 const VIDEO_EXTS = ["mp4", "webm", "mov", "mkv"];
 const SHOW_QUEUE_PREVIEW_TILE = true;
-const QUEUE_PROGRESS_ANIMATION = "queue-progress 1.8s ease-in-out infinite";
+
+type QueueTileView = {
+  id: string;
+  status: "pending" | "processing" | "failed";
+  type: "image" | "video" | "upscale";
+  name: string;
+  payload: unknown;
+  timestamp: number;
+  logs: string[];
+  error?: string;
+  demoProgress?: number;
+};
 
 type FileBrowserProps = {
   disableKeyboardNav?: boolean;
@@ -63,9 +74,13 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
         }),
     [jobs]
   );
+  const hasRealQueueTiles = queueTiles.length > 0;
+  const [demoQueuePhase, setDemoQueuePhase] = useState<"processing" | "completed">("processing");
+  const [demoQueueProgress, setDemoQueueProgress] = useState(0);
   const visibleQueueTiles = useMemo(() => {
-    if (queueTiles.length > 0) return queueTiles;
+    if (queueTiles.length > 0) return queueTiles as QueueTileView[];
     if (!SHOW_QUEUE_PREVIEW_TILE) return [];
+    if (demoQueuePhase === "completed") return [];
 
     return [
       {
@@ -76,13 +91,16 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
         payload: null,
         timestamp: Date.now(),
         logs: [
-          "Preview placeholder for the new in-grid queue UI.",
-          "Active jobs will replace this tile automatically.",
-          "Queued items stay pinned to the top of the grid.",
+          "Queued and waiting for a worker slot.",
+          "Prompt bundle uploaded.",
+          "Rendering first frame.",
         ],
+        demoProgress: demoQueueProgress,
       },
     ];
-  }, [queueTiles]);
+  }, [demoQueuePhase, demoQueueProgress, queueTiles]);
+  const showDemoCompletedTile =
+    SHOW_QUEUE_PREVIEW_TILE && !hasRealQueueTiles && demoQueuePhase === "completed";
 
   const [published, setPublished] = useState<PublishedMap>({});
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -115,6 +133,34 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
     if (!connection) return "";
     return `${connection.apiBase}|${connection.workspaceId}`;
   }, [connection]);
+
+  useEffect(() => {
+    if (!SHOW_QUEUE_PREVIEW_TILE || hasRealQueueTiles) return;
+
+    setDemoQueuePhase("processing");
+    setDemoQueueProgress(0);
+
+    let progress = 0;
+    let completeTimer: number | undefined;
+    const progressTimer = window.setInterval(() => {
+      progress = Math.min(progress + 10, 100);
+      setDemoQueueProgress(progress);
+
+      if (progress >= 100) {
+        window.clearInterval(progressTimer);
+        completeTimer = window.setTimeout(() => {
+          setDemoQueuePhase("completed");
+        }, 350);
+      }
+    }, 280);
+
+    return () => {
+      window.clearInterval(progressTimer);
+      if (completeTimer) {
+        window.clearTimeout(completeTimer);
+      }
+    };
+  }, [hasRealQueueTiles]);
 
   useEffect(() => {
     if (!workspaceKey) {
@@ -730,12 +776,6 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
 
   return (
     <div className="flex h-full flex-col gap-2">
-      <style>{`
-        @keyframes queue-progress {
-          0% { transform: translateX(-120%); }
-          100% { transform: translateX(320%); }
-        }
-      `}</style>
       <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 overflow-x-auto pb-1">
         <div className="flex shrink-0 items-center gap-2">
           <ProjectBar mode="leading" />
@@ -848,7 +888,7 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
           <div className="flex h-full items-center justify-center">
             <Spinner />
           </div>
-        ) : filteredEntries.length === 0 && entries.length === 0 ? (
+        ) : filteredEntries.length === 0 && entries.length === 0 && visibleQueueTiles.length === 0 && !showDemoCompletedTile ? (
           <div className="flex h-full items-center justify-center p-8">
             <div className="max-w-sm text-center">
               <div className="mb-3 text-4xl">🎨</div>
@@ -860,7 +900,7 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
               </div>
             </div>
           </div>
-        ) : filteredEntries.length === 0 ? (
+        ) : filteredEntries.length === 0 && visibleQueueTiles.length === 0 && !showDemoCompletedTile ? (
           <div className="p-4 text-center text-sm text-slate-300">
             <div className="mb-1">🔍 No files match your search</div>
             <div className="text-xs text-slate-400">Try a different search term or clear your filters</div>
@@ -879,21 +919,25 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
                   >
                     <div className="absolute inset-x-0 top-0 z-10 h-1 bg-white/5">
                       <div
-                        className={`h-full w-1/3 rounded-full ${
+                        className={`h-full rounded-full ${
                           job.status === "failed"
                             ? "bg-rose-500/80"
                             : "bg-sky-400/80"
                         }`}
-                        style={job.status === "failed" ? undefined : { animation: QUEUE_PROGRESS_ANIMATION }}
+                        style={{
+                          width: `${job.status === "failed"
+                            ? 100
+                            : job.id === "queue-preview-tile"
+                              ? job.demoProgress ?? 0
+                              : 45}%`,
+                        }}
                       />
                     </div>
 
                     <div className="flex h-full flex-col justify-between gap-3 p-3">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <div className="text-[11px] text-slate-400">
-                            {job.id === "queue-preview-tile" ? "Queue preview" : `${job.type} job`}
-                          </div>
+                          <div className="text-[11px] text-slate-400">{`${job.type} job`}</div>
                           <div className="truncate text-sm font-semibold text-white">
                             {job.name}
                           </div>
@@ -949,6 +993,28 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
                     </div>
                   </div>
                 ))}
+                {showDemoCompletedTile && (
+                  <div className="relative flex aspect-video flex-col overflow-hidden rounded-xl border border-emerald-500/30 bg-black/20">
+                    <div className="flex-1 overflow-hidden">
+                      <img
+                        src="https://picsum.photos/seed/demo-queue-result/640/360"
+                        alt="Demo generated result"
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
+                    <div className="absolute right-2 top-2 rounded-full bg-emerald-500/90 px-2 py-1 text-[10px] font-semibold text-white">
+                      New
+                    </div>
+                    <div className="absolute inset-x-0 bottom-0 bg-black/60 p-2 backdrop-blur-sm">
+                      <div className="truncate text-xs font-semibold text-white">
+                        demo_queue_result.png
+                      </div>
+                      <div className="text-[11px] text-slate-300">
+                        Simulated queue item completed
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {visibleEntries.map((entry) => {
                   const url = entry.id.startsWith("dummy-img")
                     ? `https://picsum.photos/seed/${entry.id}/400/225`

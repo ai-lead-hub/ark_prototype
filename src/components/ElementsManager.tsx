@@ -117,7 +117,7 @@ export default function ElementsManager() {
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-[28px] bg-[radial-gradient(circle_at_top,rgba(14,165,233,0.12),transparent_22%),linear-gradient(180deg,rgba(15,23,42,0.98),rgba(2,6,23,0.98))]">
       <div className="flex items-center justify-between gap-4 border-b border-white/10 px-5 py-4">
         <div className="min-w-0">
-          <div className="mt-1 flex items-center gap-3">
+          <div className="flex items-center gap-3">
             <h2 className="truncate text-lg font-semibold text-white">
               {isFormOpen ? "Create a new element" : "Project elements"}
             </h2>
@@ -127,11 +127,6 @@ export default function ElementsManager() {
               </span>
             )}
           </div>
-          {!isFormOpen && usingDemoElements && (
-            <p className="mt-1 text-sm text-slate-400">
-              Showing temporary frontend demo elements until real project elements exist.
-            </p>
-          )}
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
@@ -190,19 +185,14 @@ export default function ElementsManager() {
           <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-4">
             <section className="rounded-[24px] border border-white/10 bg-black/20 p-4">
               <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-sm font-medium text-white">Pinned elements</div>
-                  <div className="mt-1 text-sm text-slate-300">
-                    Keep your active cast and reusable references in reach.
-                  </div>
-                </div>
+                <div className="text-sm font-medium text-white">Pinned elements</div>
                 <div className="rounded-full bg-sky-500/10 px-3 py-1 text-xs font-medium text-sky-200">
                   {pinnedElements.length}
                 </div>
               </div>
 
               {pinnedElements.length > 0 ? (
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-5 gap-3">
                   {pinnedElements.map((element) => (
                     <ElementCard
                       key={element.id}
@@ -226,14 +216,14 @@ export default function ElementsManager() {
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
                   <div className="text-sm font-medium text-white">Elements library</div>
-                  <div className="mt-1 text-sm text-slate-300">
+                  <div className="mt-1 text-xs text-slate-400">
                     {libraryElements.length} element{libraryElements.length === 1 ? "" : "s"} in the remaining library
                   </div>
                 </div>
               </div>
 
               {libraryElements.length > 0 ? (
-                <div className="custom-scrollbar grid min-h-0 flex-1 grid-cols-3 gap-3 overflow-y-auto pr-1">
+                <div className="custom-scrollbar grid min-h-0 flex-1 grid-cols-5 gap-3 overflow-y-auto pr-1">
                   {libraryElements.map((element) => (
                     <ElementCard
                       key={element.id}

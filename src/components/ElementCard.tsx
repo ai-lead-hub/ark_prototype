@@ -117,34 +117,19 @@ export default function ElementCard({
           />
         )}
 
-        <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-2">
-          <div className="flex flex-wrap gap-1">
-            {isSelected && (
-              <span className="rounded-full bg-sky-500 px-2 py-1 text-[10px] font-semibold text-white">
-                Pinned
-              </span>
-            )}
+        {isSelected && (
+          <div className="absolute left-2 top-2 rounded-full bg-sky-500 px-2 py-1 text-[10px] font-semibold text-white">
+            Pinned
           </div>
-
-          <div className="flex gap-1">
-            {hasSheet && (
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-[10px] text-amber-300">
-                <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2" /><line x1="3" x2="21" y1="9" y2="9" /><line x1="9" x2="9" y1="21" y2="9" /></svg>
-              </span>
-            )}
-            {element.referenceImageUrls.length > 0 && (
-              <span className="flex h-6 items-center justify-center rounded-full bg-black/60 px-2 text-[10px] text-slate-200">
-                +{element.referenceImageUrls.length}
-              </span>
-            )}
-          </div>
-        </div>
+        )}
       </div>
 
-      <div className="space-y-3 p-3">
+      <div className="space-y-2 p-3">
         <div>
           <p className="truncate text-sm font-semibold text-white">{element.name}</p>
-          <p className="mt-1 text-[11px] text-slate-400">{element.referenceImageUrls.length} refs</p>
+          <p className="mt-1 text-[11px] text-slate-400">
+            {hasSheet ? "Sheet ready" : "No sheet"}
+          </p>
         </div>
 
         <div className="flex gap-2">
