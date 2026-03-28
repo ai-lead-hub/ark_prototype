@@ -16,8 +16,15 @@ function CandidateTile({
   c: ShotCandidate;
   isPublished: boolean;
 }) {
+  let borderClass = "border border-transparent hover:border-amber-400/30";
+  if (c.role === "pinned") {
+    borderClass = "border-2 border-indigo-500 shadow-[0_0_12px_rgba(99,102,241,0.25)]";
+  } else if (c.role === "input") {
+    borderClass = "border-2 border-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.25)]";
+  }
+
   return (
-    <div className="group/tile relative aspect-video overflow-hidden rounded-[14px] border border-white/6 bg-[#111318] transition hover:border-amber-400/30">
+    <div className={`group/tile relative aspect-video overflow-hidden rounded-[14px] bg-[#111318] transition ${borderClass}`}>
       {c.isVideo ? (
         <video
           src={c.previewPath}
@@ -47,12 +54,18 @@ function CandidateTile({
         </div>
       )}
 
-      <div className="absolute bottom-1.5 left-1.5 flex items-center gap-1">
-        <span className="rounded-full bg-black/50 px-1.5 py-0.5 text-[9px] font-medium text-white/70 backdrop-blur-sm">
+      {c.role === "pinned" && (
+        <div className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-indigo-500/90 text-white shadow-lg shadow-indigo-500/30 backdrop-blur-sm">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>
+        </div>
+      )}
+
+      <div className="absolute bottom-1.5 left-1.5 flex items-center gap-1 opacity-0 transition-opacity group-hover/tile:opacity-100">
+        <span className="rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-medium text-white/90 backdrop-blur-sm">
           r{c.revision}
         </span>
         {c.isVideo && c.duration > 0 && (
-          <span className="rounded-full bg-black/50 px-1.5 py-0.5 text-[9px] font-medium text-white/70 backdrop-blur-sm">
+          <span className="rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-medium text-white/90 backdrop-blur-sm">
             {Math.round(c.duration)}s
           </span>
         )}
