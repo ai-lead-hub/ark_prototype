@@ -344,9 +344,9 @@ function ElementsButton() {
         ? "border-amber-500 text-amber-400 bg-amber-500/10"
         : "border-white/10 text-slate-400 hover:text-white"
         }`}
-      title="Elements Manager"
+      title="Elements Store"
     >
-      👤 Elements
+      Elements Store ✨
       {totalCount > 0 && (
         <span className={`absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full text-[9px] text-white ${selectedCount > 0 ? "bg-amber-500" : "bg-slate-600"}`}>
           {selectedCount > 0 ? selectedCount : totalCount}

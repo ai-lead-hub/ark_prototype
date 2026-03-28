@@ -746,14 +746,6 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
         >
           ↻
         </button>
-
-        <button
-          type="button"
-          className={`${toolbarIconButtonBase} bg-amber-500/10 text-amber-200 border-amber-500/20 hover:border-amber-400 hover:text-amber-100 hover:bg-amber-500/20 font-bold`}
-          title="Elements Store"
-        >
-          Elements Store ✨
-        </button>
       </div>
 
       <div
