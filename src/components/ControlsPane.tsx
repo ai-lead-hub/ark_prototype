@@ -61,7 +61,6 @@ import {
   type ControlsAction,
   type ControlsFileRef,
 } from "../lib/controls-store";
-import { recordRecentReference } from "../lib/recent-references";
 import { useRandomizeSeed } from "../lib/useRandomizeSeed";
 import { useElements } from "../state/elements";
 
@@ -1002,12 +1001,6 @@ export default function ControlsPane() {
             file,
             sourceRelPath: action.file.relPath, // Capture workspace path for redo
           });
-          // Record as recent reference for quick access
-          const conn = connectionRef.current;
-          if (conn) {
-            const wk = `${conn.apiBase}|${conn.workspaceId}`;
-            recordRecentReference(wk, { relPath: action.file.relPath, name: action.file.name, mime: action.file.mime }, "startFrame");
-          }
           return;
         }
 
@@ -1035,12 +1028,6 @@ export default function ControlsPane() {
             file,
             sourceRelPath: action.file.relPath, // Capture workspace path for redo
           });
-          // Record as recent reference for quick access
-          const conn = connectionRef.current;
-          if (conn) {
-            const wk = `${conn.apiBase}|${conn.workspaceId}`;
-            recordRecentReference(wk, { relPath: action.file.relPath, name: action.file.name, mime: action.file.mime }, "endFrame");
-          }
           return;
         }
 
@@ -1087,12 +1074,6 @@ export default function ControlsPane() {
             }
             return [...prev, newRef];
           });
-          // Record as recent reference for quick access
-          const conn = connectionRef.current;
-          if (conn) {
-            const wk = `${conn.apiBase}|${conn.workspaceId}`;
-            recordRecentReference(wk, { relPath: action.file.relPath, name: action.file.name, mime: action.file.mime }, "reference");
-          }
           return;
         }
 
@@ -1473,12 +1454,6 @@ export default function ControlsPane() {
             name?: string;
             mime?: string;
           };
-          if (payload.workspaceId === connection.workspaceId) {
-            // Record as recent reference for workspace files
-            const wk = `${connection.apiBase}|${connection.workspaceId}`;
-            const name = payload.name ?? payload.path.split("/").filter(Boolean).pop() ?? "file";
-            recordRecentReference(wk, { relPath: payload.path, name, mime: payload.mime ?? "image/png" }, "reference");
-          }
         } catch {
           // Ignore parsing errors
         }

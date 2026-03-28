@@ -23,8 +23,6 @@ type QueueContextType = {
     retryJob: (id: string) => void;
     clearCompleted: () => void;
     removeJob: (id: string) => void;
-    toggleLog: () => void;
-    isLogOpen: boolean;
 };
 
 const QueueContext = createContext<QueueContextType | null>(null);
@@ -37,7 +35,6 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     const [processors, setProcessors] = useState<
         Record<string, (payload: unknown, log: (msg: string) => void) => Promise<unknown>>
     >({});
-    const [isLogOpen, setIsLogOpen] = useState(false);
     const [schedulerTick, setSchedulerTick] = useState(0);
     const activeJobsRef = useRef<Set<string>>(new Set());
     const fadeTimeoutsRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
@@ -132,8 +129,6 @@ export function QueueProvider({ children }: { children: ReactNode }) {
             );
         });
     }, [deleteProcessors]);
-
-    const toggleLog = useCallback(() => setIsLogOpen((v) => !v), []);
 
     // Track pending job count to avoid wasteful effect runs
     const pendingJobCount = useMemo(
@@ -293,10 +288,8 @@ export function QueueProvider({ children }: { children: ReactNode }) {
             retryJob,
             clearCompleted,
             removeJob,
-            toggleLog,
-            isLogOpen,
         }),
-        [jobs, addJob, retryJob, clearCompleted, removeJob, toggleLog, isLogOpen]
+        [jobs, addJob, retryJob, clearCompleted, removeJob]
     );
 
     return (

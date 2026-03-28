@@ -6,7 +6,6 @@ import { FILE_ENTRY_MIME } from "../lib/drag-constants";
 import { Spinner } from "./ui/Spinner";
 import { PublishModal } from "./PublishModal";
 import { buildDatedMediaPath, mediaFolderFromMime } from "../lib/storage-paths";
-import { setControlsPrompt } from "../lib/controls-store";
 import {
   loadPublished,
   addPublished,
@@ -14,16 +13,7 @@ import {
   type PublishedMap,
 } from "../lib/published";
 import {
-  loadRecentReferences,
-  onRecentReferencesChange,
-  removeRecentReference,
-  renameRecentReference,
-  type RecentReference,
-} from "../lib/recent-references";
-import {
-  listPrompts,
   recordFileMetadata,
-  type PromptHistoryEntry,
   setPin as apiSetPin,
   removePin as apiRemovePin,
   renamePin as apiRenamePin,
@@ -48,14 +38,7 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
     jobs.filter(j => j.status === "pending" || j.status === "processing"),
     [jobs]);
 
-  const [viewMode, setViewMode] = useState<"list" | "grid">("grid");
   const [published, setPublished] = useState<PublishedMap>({});
-  const [showRecent, setShowRecent] = useState(false);
-  const [recentTab, setRecentTab] = useState<"references" | "prompts">("references");
-  const [recentReferences, setRecentReferences] = useState<RecentReference[]>([]);
-  const [recentPrompts, setRecentPrompts] = useState<PromptHistoryEntry[]>([]);
-  const [promptBusy, setPromptBusy] = useState(false);
-  const [promptError, setPromptError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [publishingEntry, setPublishingEntry] = useState<FileEntry | null>(null);
   const [editName, setEditName] = useState("");
@@ -125,36 +108,14 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
     }
   }, [connection, pins, refreshPins, setPins]);
 
-  const refreshReferences = useCallback(() => {
-    if (!workspaceKey) return;
-    setRecentReferences(loadRecentReferences(workspaceKey));
-  }, [workspaceKey]);
-
-  useEffect(() => {
-    if (!workspaceKey) return;
-    const off = onRecentReferencesChange(() => {
-      setRecentReferences(loadRecentReferences(workspaceKey));
-    });
-    return off;
-  }, [workspaceKey]);
-
   const getFileStyles = useCallback((entry: FileEntry) => {
     if (entry.mime.startsWith("image/")) {
-      return {
-        grid: "border-red-500/50 bg-red-500/5",
-        list: "border-l-red-500/50",
-      };
+      return "border-red-500/50 bg-red-500/5";
     }
     if (entry.mime.startsWith("video/")) {
-      return {
-        grid: "border-green-500/50 bg-green-500/5",
-        list: "border-l-green-500/50",
-      };
+      return "border-green-500/50 bg-green-500/5";
     }
-    return {
-      grid: "border-white/5 bg-slate-900/40 hover:bg-slate-800/60 hover:border-white/10",
-      list: "border-l-transparent",
-    };
+    return "border-white/5 bg-slate-900/40 hover:bg-slate-800/60 hover:border-white/10";
   }, []);
 
   const handleRename = async (entry: FileEntry) => {
@@ -180,15 +141,6 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
           if (pinnedAt) next[newPath] = pinnedAt;
           return next;
         });
-      }
-      if (workspaceKey) {
-        setRecentReferences(
-          renameRecentReference(workspaceKey, entry.relPath, {
-            relPath: newPath,
-            name: nextName,
-            mime: entry.mime,
-          })
-        );
       }
     } catch (error) {
       console.error(error);
@@ -218,10 +170,6 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
             delete next[entry.relPath];
             return next;
           });
-        }
-        // Remove from recent references
-        if (workspaceKey) {
-          setRecentReferences(removeRecentReference(workspaceKey, entry.relPath));
         }
         // Refresh file list
         await refreshTree();
@@ -269,13 +217,12 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
 
       const result = await trashFiles(connection, paths);
 
-      // Remove pins and recent refs for trashed files
+      // Remove pins for trashed files
       if (connection) {
         for (const relPath of result.success) {
           if (pins[relPath]) {
             await apiRemovePin(connection, relPath).catch(console.error);
           }
-          setRecentReferences(removeRecentReference(workspaceKey, relPath));
         }
         // Refresh pins from server
         void refreshPins();
@@ -534,42 +481,6 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
 
   const [visibleCount, setVisibleCount] = useState(30);
 
-  const formatAgo = (timestamp: number) => {
-    const deltaMs = Date.now() - timestamp;
-    const s = Math.floor(deltaMs / 1000);
-    if (!Number.isFinite(s) || s < 0) return "";
-    if (s < 60) return `${s}s`;
-    const m = Math.floor(s / 60);
-    if (m < 60) return `${m}m`;
-    const h = Math.floor(m / 60);
-    if (h < 24) return `${h}h`;
-    const d = Math.floor(h / 24);
-    return `${d}d`;
-  };
-
-  const refreshPrompts = useCallback(async () => {
-    if (!connection) return;
-    setPromptBusy(true);
-    setPromptError(null);
-    try {
-      const entries = await listPrompts(connection, { limit: 30 });
-      setRecentPrompts(entries);
-    } catch (error) {
-      setPromptError(error instanceof Error ? error.message : "Failed to load prompt history");
-    } finally {
-      setPromptBusy(false);
-    }
-  }, [connection]);
-
-  useEffect(() => {
-    if (!showRecent) return;
-    if (recentTab === "prompts") {
-      void refreshPrompts();
-    } else {
-      refreshReferences();
-    }
-  }, [showRecent, recentTab, refreshPrompts, refreshReferences, connection?.workspaceId]);
-
   // Reset visible count when filters change
   useEffect(() => {
     setVisibleCount(30);
@@ -640,9 +551,6 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
       if (editingId) return;
       // Don't navigate if modifier keys are pressed (allow Ctrl/Cmd for other shortcuts)
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      // Only handle in grid view for up/down
-      if (viewMode !== 'grid' && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) return;
-
       const isUp = e.key === 'ArrowUp';
       const isDown = e.key === 'ArrowDown';
       const isLeft = e.key === 'ArrowLeft';
@@ -816,40 +724,6 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
           placeholder="Search files"
           className="flex-1 rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
         />
-        <div className="flex items-center rounded-lg border border-white/10 bg-black/40 p-0.5">
-          <button
-            type="button"
-            onClick={() => setViewMode("list")}
-            className={`rounded px-2 py-1.5 text-xs font-medium transition-colors ${viewMode === "list"
-              ? "bg-white/10 text-white"
-              : "text-slate-400 hover:text-white"
-              }`}
-            title="List View"
-          >
-            ☰
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode("grid")}
-            className={`rounded px-2 py-1.5 text-xs font-medium transition-colors ${viewMode === "grid"
-              ? "bg-white/10 text-white"
-              : "text-slate-400 hover:text-white"
-              }`}
-            title="Grid View"
-          >
-            ⊞
-          </button>
-        </div>
-        <button
-          type="button"
-          onClick={() => setShowRecent((v) => !v)}
-          className={`${toolbarIconButtonBase} ${showRecent ? "border-sky-400 text-sky-200" : ""
-            }`}
-          title="Recent"
-          aria-label="Toggle recent panel"
-        >
-          🕘
-        </button>
         <button
           type="button"
           onClick={() => {
@@ -876,134 +750,7 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
         </button>
       </div>
 
-      {showRecent ? (
-        <div className="rounded-lg border border-white/10 bg-black/20">
-          <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
-            <div className="flex items-center gap-2">
-              <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                Recent
-              </div>
-              <div className="flex items-center rounded-md border border-white/10 bg-black/30 p-0.5">
-                <button
-                  type="button"
-                  onClick={() => setRecentTab("references")}
-                  className={`rounded px-2 py-1 text-[11px] font-semibold transition ${recentTab === "references"
-                    ? "bg-white/10 text-white"
-                    : "text-slate-400 hover:text-white"
-                    }`}
-                >
-                  References
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRecentTab("prompts")}
-                  className={`rounded px-2 py-1 text-[11px] font-semibold transition ${recentTab === "prompts"
-                    ? "bg-white/10 text-white"
-                    : "text-slate-400 hover:text-white"
-                    }`}
-                >
-                  Prompts
-                </button>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => void (recentTab === "prompts" ? refreshPrompts() : refreshReferences())}
-              disabled={recentTab === "prompts" ? promptBusy : false}
-              className="rounded-md border border-white/10 px-2 py-1 text-[11px] font-semibold text-slate-200 transition hover:border-sky-400 hover:text-sky-200 disabled:opacity-60"
-            >
-              {recentTab === "prompts" && promptBusy ? "..." : "Refresh"}
-            </button>
-          </div>
-
-          {recentTab === "references" ? (
-            recentReferences.length === 0 ? (
-              <div className="px-3 py-3 text-xs text-slate-400">
-                No recent references yet. Select an image and use “1st / Last / Ref” in the preview pane.
-              </div>
-            ) : (
-              <div className="max-h-[220px] overflow-auto">
-                {recentReferences.map((ref) => {
-                  const match = entries.find((e) => e.relPath === ref.relPath);
-                  const subtitle =
-                    ref.lastUse === "startFrame"
-                      ? "Start frame"
-                      : ref.lastUse === "endFrame"
-                        ? "End frame"
-                        : "Reference";
-
-                  return (
-                    <button
-                      key={ref.relPath}
-                      type="button"
-                      onClick={() => {
-                        if (match) {
-                          select(match);
-                        } else {
-                          void refreshTree(ref.relPath);
-                        }
-                      }}
-                      className="group flex w-full items-center gap-3 border-b border-white/5 px-3 py-2 text-left text-xs transition hover:bg-white/5"
-                      title={ref.relPath}
-                    >
-                      <div className="w-10 shrink-0 text-[10px] font-semibold text-slate-400">
-                        {formatAgo(ref.lastUsedAt)}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate font-semibold text-slate-100">
-                          {ref.name}
-                        </div>
-                        <div className="truncate text-[10px] text-slate-400">
-                          {subtitle} · {ref.relPath}
-                        </div>
-                      </div>
-                      {!match ? (
-                        <div className="shrink-0 text-[10px] font-semibold text-amber-300">
-                          Missing
-                        </div>
-                      ) : null}
-                    </button>
-                  );
-                })}
-              </div>
-            )
-          ) : promptError ? (
-            <div className="px-3 py-2 text-xs text-rose-300">
-              {promptError}
-            </div>
-          ) : recentPrompts.length === 0 ? (
-            <div className="px-3 py-3 text-xs text-slate-400">
-              No prompt history yet for this workspace.
-            </div>
-          ) : (
-            <div className="max-h-[220px] overflow-auto">
-              {recentPrompts.map((p) => (
-                <button
-                  key={String(p.id)}
-                  type="button"
-                  onClick={() => setControlsPrompt(p.prompt)}
-                  className="flex w-full items-center gap-3 border-b border-white/5 px-3 py-2 text-left text-xs transition hover:bg-white/5"
-                  title="Click to use prompt"
-                >
-                  <div className="w-10 shrink-0 text-[10px] font-semibold text-slate-400">
-                    {formatAgo(p.created_at)}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate font-semibold text-slate-100">
-                      {p.prompt}
-                    </div>
-                    <div className="truncate text-[10px] text-slate-400">
-                      {p.model_id || "prompt"}
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      ) : null}
-
-      <div className="flex flex-wrap gap-1 text-xs">
+      <div className=”flex flex-wrap gap-1 text-xs”>
         <button
           type="button"
           onClick={() => toggleGroup("images")}
@@ -1097,7 +844,6 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
           </div>
         ) : (
           <div className="flex flex-col min-h-full">
-            {viewMode === "grid" ? (
               <div ref={gridContainerRef} className="grid grid-cols-2 gap-2 p-2 sm:grid-cols-3">
                 {activeJobs.map((job) => (
                   <div
@@ -1144,7 +890,7 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
                       className={`group relative flex aspect-square flex-col overflow-hidden rounded-xl border transition focus:outline-none focus:ring-2 focus:ring-sky-500 ${selected?.id === entry.id && !multiSelectMode ? "ring-2 ring-yellow-500" : ""
                         } ${selectedIds.has(entry.id) ? "ring-2 ring-rose-400" : ""
                         } ${isPublished(published, entry.relPath) ? "ring-2 ring-violet-400/70 shadow-lg shadow-violet-500/40" : ""
-                        } ${styles.grid}`}
+                        } ${styles}`}
                     >
                       {/* Multi-select checkbox */}
                       {multiSelectMode && (
@@ -1339,135 +1085,7 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
                     </button>
                   );
                 })}
-              </div>
-            ) : (
-              <ul>
-                {activeJobs.map((job) => (
-                  <li key={job.id} className="flex w-full items-center gap-3 border-l-4 border-l-transparent px-3 py-2 text-left text-sm opacity-70">
-                    <div className="flex h-5 w-5 items-center justify-center">
-                      <Spinner size="sm" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-semibold text-slate-400 truncate italic">
-                        {job.status === "processing" ? "Generating..." : "Queued..."}
-                      </div>
-                    </div>
-                  </li>
-                ))}
-                {visibleEntries.map((entry) => {
-                  const url = getFileUrl(connection, entry.relPath, { includeToken: true });
-                  const styles = getFileStyles(entry);
-                  const dims = fileDims[entry.id];
-
-                  return (
-                    <li key={entry.id} data-file-id={entry.id}>
-                      <button
-                        type="button"
-                        draggable={entry.kind === "file"}
-                        onDragStart={(event) => {
-                          if (entry.kind === "file") {
-                            event.dataTransfer.setData(
-                              FILE_ENTRY_MIME,
-                              JSON.stringify({
-                                workspaceId: connection.workspaceId,
-                                path: entry.relPath,
-                                name: entry.name,
-                                mime: entry.mime,
-                              })
-                            );
-                            event.dataTransfer.effectAllowed = "copy";
-                            event.dataTransfer.setData("DownloadURL", `${entry.mime}:${entry.name}:${url}`);
-                          }
-                        }}
-                        onClick={() => select(entry)}
-                        onKeyDown={(e) => handleKeyDown(e, entry)}
-                        className={`group flex w-full items-center justify-between gap-3 border-l-4 px-3 py-2 text-left text-sm transition focus:outline-none focus:ring-2 focus:ring-sky-500 ${selected?.id === entry.id ? "bg-yellow-500/20" : ""
-                          } ${isPublished(published, entry.relPath) ? "bg-violet-500/15 shadow-md shadow-violet-500/30" : ""
-                          } ${styles.list}`}
-                      >
-                        {/* Hidden media for metadata capture - REMOVED for memory optimization */}
-
-                        <div className="flex-1 min-w-0">
-                          {editingId === entry.id ? (
-                            <input
-                              autoFocus
-                              type="text"
-                              value={editName}
-                              onChange={(e) => setEditName(e.target.value)}
-                              onBlur={() => handleRename(entry)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") handleRename(entry);
-                                if (e.key === "Escape") setEditingId(null);
-                              }}
-                              onClick={(e) => e.stopPropagation()}
-                              className="w-full rounded border border-sky-500/50 bg-black/50 px-1 py-0.5 text-white outline-none"
-                            />
-                          ) : (
-                            <div className="flex items-center justify-between gap-2">
-                              <div
-                                className="font-semibold text-white truncate flex items-center gap-1"
-                                title={entry.name}
-                                onDoubleClick={(e) => {
-                                  e.stopPropagation();
-                                  setEditingId(entry.id);
-                                  setEditName(entry.name);
-                                }}
-                              >
-                                {isPublished(published, entry.relPath) && <span className="text-violet-400">⭐</span>}
-                                {entry.name}
-                                {entry.kind === "dir" ? "/" : ""}
-                              </div>
-                              {dims && (
-                                <span className="flex-shrink-0 text-[10px] text-slate-500 font-mono">
-                                  {dims.w}x{dims.h} ({(() => {
-                                    const gcd = (a: number, b: number): number => b === 0 ? a : gcd(b, a % b);
-                                    const div = gcd(dims.w, dims.h);
-                                    return `${dims.w / div}:${dims.h / div}`;
-                                  })()})
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 text-right text-xs text-slate-400">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void handleTogglePin(entry.relPath);
-                            }}
-                            className={`${iconButtonBase} hover:bg-yellow-500 hover:text-black ${pins[entry.relPath] ? iconButtonVisible : iconButtonHidden
-                              }`}
-                            title={pins[entry.relPath] ? "Unpin" : "Pin"}
-                          >
-                            📌
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setPublishingEntry(entry);
-                            }}
-                            className={`${iconButtonBase} ${iconButtonHidden} hover:bg-sky-500 hover:text-white`}
-                            title="Publish"
-                          >
-                            🚀
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => handleDelete(entry, e)}
-                            className={`${iconButtonBase} ${iconButtonHidden} hover:bg-red-500 hover:text-white`}
-                            title="Delete (Del)"
-                          >
-                            🗑️
-                          </button>
-                        </div>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
+              </div>}
 
             {visibleCount < filteredEntries.length && (
               <div className="p-4 flex justify-center">
