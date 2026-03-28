@@ -1043,14 +1043,49 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
             </div>
 
             {/* Active shot */}
-            {activeShot && (
-              <ShotContainer
-                shot={activeShot}
-                isActive={true}
-                onActivate={() => {}}
-                onNavigate={navigateShot}
-              />
-            )}
+            {activeShot && (() => {
+              const globalPinnedCandidates: import("../state/shots").ShotCandidate[] = orderedEntries
+                .filter(entry => Boolean(pins[entry.relPath]))
+                .map(entry => {
+                  const isVideoTile = entry.mime.startsWith("video/");
+                  const url = entry.id.startsWith("dummy-img")
+                    ? `https://picsum.photos/seed/${entry.id}/400/225`
+                    : entry.id.startsWith("dummy-vid")
+                    ? "https://www.w3schools.com/html/mov_bbb.mp4"
+                    : getFileUrl(connection, entry.relPath, { includeToken: true });
+                    
+                  return {
+                    id: `global-pin-${entry.id}`,
+                    extension: entry.ext,
+                    isVideo: isVideoTile,
+                    revision: 1,
+                    width: typeof entry.width === 'number' ? entry.width : 0,
+                    height: typeof entry.height === 'number' ? entry.height : 0,
+                    duration: typeof entry.duration === 'number' ? entry.duration : 0,
+                    originalName: entry.name,
+                    createdAt: new Date(entry.mtime).toISOString(),
+                    taskTypeId: "",
+                    thumbnailPath: url,
+                    previewPath: url,
+                    role: "pinned",
+                  };
+                });
+
+              return (
+                <ShotContainer
+                  shot={{
+                    ...activeShot,
+                    candidates: [
+                      ...globalPinnedCandidates,
+                      ...activeShot.candidates,
+                    ],
+                  }}
+                  isActive={true}
+                  onActivate={() => {}}
+                  onNavigate={navigateShot}
+                />
+              );
+            })()}
 
             {/* Inactive shots */}
             {inactiveShots.map((shot) => (
