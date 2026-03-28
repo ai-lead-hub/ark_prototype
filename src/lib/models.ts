@@ -3,7 +3,7 @@ import type {
   ModelProvider,
   TaskPollingConfig,
 } from "./providers";
-import { extractUrl } from "./providers/shared";
+
 
 type SupportFlag = boolean | "unstable" | "unspecified";
 

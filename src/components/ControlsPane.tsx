@@ -1448,12 +1448,7 @@ export default function ControlsPane() {
       const payloadRaw = dataTransfer.getData(FILE_ENTRY_MIME);
       if (payloadRaw && connection) {
         try {
-          const payload = JSON.parse(payloadRaw) as {
-            workspaceId: string;
-            path: string;
-            name?: string;
-            mime?: string;
-          };
+          JSON.parse(payloadRaw);
         } catch {
           // Ignore parsing errors
         }
@@ -2149,7 +2144,7 @@ export default function ControlsPane() {
 
       let endpoint = "";
       let category: "image" | "video" = "image";
-      let provider: ModelProvider = "fal";
+      let provider: ModelProvider = "kie";
 
       let payload: Record<string, unknown> | undefined;
 
@@ -2158,7 +2153,7 @@ export default function ControlsPane() {
       if (modelSpec) {
         endpoint = modelSpec.endpoint;
         category = "video";
-        provider = modelSpec.provider ?? "fal";
+        provider = modelSpec.provider ?? "kie";
         callOptions = modelSpec.taskConfig ? { taskConfig: modelSpec.taskConfig } : undefined;
 
         // Use freshly uploaded URLs (deferred upload)
@@ -2325,7 +2320,7 @@ export default function ControlsPane() {
       } else if (imageModelSpec) {
         endpoint = imageModelSpec.endpoint;
         category = "image";
-        provider = imageModelSpec.provider ?? "fal";
+        provider = imageModelSpec.provider ?? "kie";
         callOptions = imageModelSpec.taskConfig ? { taskConfig: imageModelSpec.taskConfig } : undefined;
 
         const maxImagesConfig = imageModelSpec.ui?.maxImages;
@@ -2650,7 +2645,7 @@ export default function ControlsPane() {
 
           // For fal-client provider, use just the input part since callFalSubscribe wraps it
           // For kie provider, use the full payload structure
-          payload = selectedSpecial.provider === "fal-client" ? specialPayload.input : specialPayload;
+          payload = String(selectedSpecial.provider) === "fal-client" ? specialPayload.input : specialPayload;
         }
 
 

@@ -44,7 +44,7 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
   const [editName, setEditName] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
-  const [fileDims, setFileDims] = useState<Record<string, { w: number; h: number }>>({});
+
   const [operationLoading, setOperationLoading] = useState<string | null>(null);
   const playingVideoRef = useRef<HTMLVideoElement | null>(null);
   const sentFileMetaRef = useRef<Set<string>>(new Set());
@@ -616,7 +616,7 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
 
     document.addEventListener('keydown', handleArrowNav);
     return () => document.removeEventListener('keydown', handleArrowNav);
-  }, [selected, visibleEntries, select, editingId, viewMode, disableKeyboardNav]);
+  }, [selected, visibleEntries, select, editingId, disableKeyboardNav]);
 
   // Handle multi-select click with shift support for range selection
   const handleMultiSelectClick = useCallback((entry: FileEntry, event: React.MouseEvent) => {
@@ -645,44 +645,6 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
     toggleSelection(entry);
   }, [visibleEntries, toggleSelection]);
 
-  // Cleanup fileDims for removed files
-  useEffect(() => {
-    setFileDims((prev) => {
-      const next = { ...prev };
-      let changed = false;
-      const currentIds = new Set(entries.map((e) => e.id));
-      for (const id in next) {
-        if (!currentIds.has(id)) {
-          delete next[id];
-          changed = true;
-        }
-      }
-      return changed ? next : prev;
-    });
-  }, [entries]);
-
-  // Seed fileDims from server-provided metadata when available
-  useEffect(() => {
-    setFileDims((prev) => {
-      let changed = false;
-      const next = { ...prev };
-      for (const entry of entries) {
-        if (
-          typeof entry.width === "number" &&
-          typeof entry.height === "number" &&
-          entry.width > 0 &&
-          entry.height > 0
-        ) {
-          const existing = next[entry.id];
-          if (!existing || existing.w !== entry.width || existing.h !== entry.height) {
-            next[entry.id] = { w: entry.width, h: entry.height };
-            changed = true;
-          }
-        }
-      }
-      return changed ? next : prev;
-    });
-  }, [entries]);
 
   const toggleGroup = (group: "images" | "videos") => {
     const groupExts = group === "images" ? IMAGE_EXTS : VIDEO_EXTS;
@@ -945,10 +907,7 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
                             onLoadedMetadata={(e) => {
                               const target = e.target as HTMLVideoElement;
                               const dims = { w: target.videoWidth, h: target.videoHeight };
-                              setFileDims((prev) => ({
-                                ...prev,
-                                [entry.id]: dims,
-                              }));
+
                               if (
                                 typeof entry.width === "number" &&
                                 typeof entry.height === "number" &&
@@ -989,10 +948,7 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
                             onLoad={(e) => {
                               const target = e.target as HTMLImageElement;
                               const dims = { w: target.naturalWidth, h: target.naturalHeight };
-                              setFileDims((prev) => ({
-                                ...prev,
-                                [entry.id]: dims,
-                              }));
+
                               if (
                                 typeof entry.width === "number" &&
                                 typeof entry.height === "number" &&
