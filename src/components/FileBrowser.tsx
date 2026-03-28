@@ -20,6 +20,9 @@ import {
   renamePin as apiRenamePin,
 } from "../lib/api/meta";
 import { useHoverPlayVideos } from "../lib/useHoverPlayVideos";
+import CanvasBrowser, { type CanvasBrowserItem } from "./CanvasBrowser";
+import ShotContainer from "./ShotContainer";
+import { useShots } from "../state/shots";
 
 const IMAGE_EXTS = ["png", "jpg", "jpeg", "webp"];
 const VIDEO_EXTS = ["mp4", "webm", "mov", "mkv"];
@@ -40,6 +43,17 @@ type QueueTileView = {
 type FileBrowserProps = {
   disableKeyboardNav?: boolean;
 };
+
+function formatTileDuration(duration?: number): string | null {
+  if (!Number.isFinite(duration) || !duration || duration <= 0) {
+    return null;
+  }
+
+  const totalSeconds = Math.max(1, Math.round(duration));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
 
 export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
   const {
@@ -62,6 +76,7 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
   }, [catalogEntries]);
 
   const { jobs, retryJob } = useQueue();
+  const { shots, activeShot, inactiveShots, setActiveShot, navigateShot, sceneName } = useShots();
   const queueTiles = useMemo(
     () => {
       const rank: Record<"processing" | "pending" | "failed" | "completed", number> = {
@@ -127,6 +142,7 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
   const lastClickedIdRef = useRef<string | null>(null);
 
   const [filterOpen, setFilterOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<"grid" | "canvas">("grid");
   const [hoverPlayVideos] = useHoverPlayVideos();
 
   const iconButtonBase =
@@ -134,7 +150,11 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
   const iconButtonHidden = "opacity-0 group-hover:opacity-100";
   const iconButtonVisible = "opacity-100";
   const toolbarIconButtonBase =
-    "kv-icon-button inline-flex h-10 min-w-10 items-center justify-center gap-2 rounded-full px-3 text-sm font-medium whitespace-nowrap";
+    "kv-icon-button inline-flex h-9 w-9 items-center justify-center rounded-full";
+  const tileMetaIconChip =
+    "flex h-7 w-7 items-center justify-center rounded-full bg-[#b7ae9d]/42 text-white/92 shadow-[0_8px_18px_rgba(0,0,0,0.12)] backdrop-blur-[10px]";
+  const tileMetaInfoChip =
+    "flex items-center gap-1.5 rounded-full bg-[#b7ae9d]/42 px-2.5 py-1.5 text-[11px] font-medium text-white/92 shadow-[0_8px_18px_rgba(0,0,0,0.12)] backdrop-blur-[10px]";
 
   const workspaceKey = useMemo(() => {
     if (!connection) return "";
@@ -217,11 +237,8 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
   }, [connection, pins, refreshPins, setPins]);
 
   const getFileStyles = useCallback((entry: FileEntry) => {
-    if (entry.mime.startsWith("image/")) {
-      return "border-red-500/50 bg-red-500/5";
-    }
-    if (entry.mime.startsWith("video/")) {
-      return "border-green-500/50 bg-green-500/5";
+    if (entry.mime.startsWith("image/") || entry.mime.startsWith("video/")) {
+      return "border-transparent bg-[linear-gradient(180deg,rgba(255,255,255,0.02),rgba(17,19,23,0.94))] hover:border-transparent";
     }
     return "border-white/5 bg-slate-900/40 hover:bg-slate-800/60 hover:border-white/10";
   }, []);
@@ -643,12 +660,70 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
     return orderedEntries.slice(0, visibleCount);
   }, [orderedEntries, visibleCount]);
 
+  const canvasItems = useMemo<CanvasBrowserItem[]>(() => {
+    if (!connection) return [];
+
+    const queueItems: CanvasBrowserItem[] = visibleQueueTiles.map((job) => ({
+      id: job.id,
+      type: "queue",
+      name: job.name,
+      status: job.status,
+      jobType: job.type,
+      logs: job.logs,
+      progress:
+        job.status === "failed"
+          ? 100
+          : job.id === "queue-preview-tile"
+            ? job.demoProgress ?? 0
+            : 45,
+      error: job.error,
+      retryable: job.status === "failed" && job.id !== "queue-preview-tile",
+    }));
+
+    const resultItems: CanvasBrowserItem[] = showDemoCompletedTile
+      ? [
+          {
+            id: "queue-preview-result",
+            type: "result",
+            name: "Demo generated result",
+            url: "https://picsum.photos/seed/demo-queue-result/640/360",
+          },
+        ]
+      : [];
+
+    const fileItems: CanvasBrowserItem[] = visibleEntries.map((entry) => {
+      const isVideo = entry.mime.startsWith("video/");
+      const durationLabel = isVideo
+        ? entry.id.startsWith("dummy-vid")
+          ? "0:04"
+          : formatTileDuration(entry.duration)
+        : null;
+      const url = entry.id.startsWith("dummy-img")
+        ? `https://picsum.photos/seed/${entry.id}/400/225`
+        : entry.id.startsWith("dummy-vid")
+          ? "https://www.w3schools.com/html/mov_bbb.mp4"
+          : getFileUrl(connection, entry.relPath, { includeToken: true });
+
+      return {
+        id: entry.id,
+        type: "file",
+        entry,
+        url,
+        isVideo,
+        durationLabel,
+        isPublished: isPublished(published, entry.relPath),
+      };
+    });
+
+    return [...queueItems, ...resultItems, ...fileItems];
+  }, [connection, published, showDemoCompletedTile, visibleEntries, visibleQueueTiles]);
+
   // Ref for grid container to calculate column count
   const gridContainerRef = useRef<HTMLDivElement | null>(null);
 
   // Arrow key navigation for file browser (full grid navigation with auto-scroll)
   useEffect(() => {
-    if (disableKeyboardNav) return;
+    if (disableKeyboardNav || viewMode === "canvas") return;
     const handleArrowNav = (e: KeyboardEvent) => {
       // Don't navigate if user is typing in an input
       const target = e.target as HTMLElement;
@@ -724,7 +799,7 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
 
     document.addEventListener('keydown', handleArrowNav);
     return () => document.removeEventListener('keydown', handleArrowNav);
-  }, [selected, visibleEntries, select, editingId, disableKeyboardNav]);
+  }, [selected, visibleEntries, select, editingId, disableKeyboardNav, viewMode]);
 
   // Handle multi-select click with shift support for range selection
   const handleMultiSelectClick = useCallback((entry: FileEntry, event: React.MouseEvent) => {
@@ -790,92 +865,119 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
   }
 
   return (
-    <div className="flex h-full flex-col gap-2">
-      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 overflow-x-auto pb-1">
-        <div className="flex shrink-0 items-center gap-2">
-          <ProjectBar mode="leading" />
-        </div>
-
-        <div className="flex min-w-0 items-center justify-center gap-2">
-          <input
-            type="search"
-            value={q}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search files"
-            className="kv-input w-52 rounded-full px-4 py-2.5 text-sm xl:w-60"
-          />
-
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setFilterOpen(!filterOpen)}
-              className={`${toolbarIconButtonBase} ${filterOpen ? "border-amber-400/50 bg-amber-500/10 text-amber-200" : ""}`}
-              aria-label="Open filters and sort options"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M7 12h10" /><path d="M10 18h4" /></svg>
-              <span className="kv-mono text-[10px] uppercase tracking-[0.16em]">Filter</span>
-            </button>
-
-            {filterOpen && (
-              <div className="kv-panel absolute right-0 top-full z-50 mt-2 flex w-52 flex-col gap-1 rounded-[22px] p-2">
-                <button
-                  type="button"
-                  onClick={() => toggleGroup("images")}
-                  className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm transition-colors ${isImagesActive ? "bg-amber-500/12 text-amber-200" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}
-                >
-                  Images <span>{isImagesActive ? "✓" : ""}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => toggleGroup("videos")}
-                  className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm transition-colors ${isVideosActive ? "bg-amber-500/12 text-amber-200" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}
-                >
-                  Videos <span>{isVideosActive ? "✓" : ""}</span>
-                </button>
-                <div className="my-1 h-px bg-white/6" />
-                <button
-                  type="button"
-                  onClick={() => setSortByName((v) => !v)}
-                  className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm text-slate-300 transition-colors hover:bg-white/5 hover:text-white"
-                >
-                  Sort: {sortByName ? "A→Z" : "Newest"} <span>🔃</span>
-                </button>
-                {filterExt.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setFilters([])}
-                    className="mt-1 w-full rounded-xl bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-300 transition-colors hover:bg-rose-500/20"
-                  >
-                    Clear Filters
-                  </button>
-                )}
-              </div>
-            )}
+    <div className="flex h-full min-h-0 flex-col gap-2 overflow-hidden overscroll-none">
+      <div className="z-30 shrink-0 rounded-[22px] bg-[#111318]/94 pb-2 pt-1 backdrop-blur-xl">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
+            <ProjectBar mode="leading" />
           </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              refreshTree();
-              setVisibleCount(30);
-            }}
-            className={toolbarIconButtonBase}
-            aria-label="Refresh files"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2v6h-6" /><path d="M3 12a9 9 0 0 1 15.55-6.36L21 8" /><path d="M3 22v-6h6" /><path d="M21 12a9 9 0 0 1-15.55 6.36L3 16" /></svg>
-            <span className="kv-mono text-[10px] uppercase tracking-[0.16em]">Refresh</span>
-          </button>
-        </div>
+          <div className="flex items-center gap-2 pl-1">
+            <input
+              type="search"
+              value={q}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search files"
+              className="kv-input w-36 rounded-full px-3 py-2 text-xs xl:w-48"
+            />
 
-        <div className="flex shrink-0 items-center justify-end gap-2">
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setFilterOpen(!filterOpen)}
+                className={`${toolbarIconButtonBase} ${filterOpen ? "border-amber-400/50 bg-amber-500/10 text-amber-200" : ""}`}
+                aria-label="Open filters and sort options"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M7 12h10" /><path d="M10 18h4" /></svg>
+              </button>
+
+              {filterOpen && (
+                <div className="kv-panel absolute right-0 top-full z-50 mt-2 flex w-52 flex-col gap-1 rounded-[22px] p-2">
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup("images")}
+                    className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm transition-colors ${isImagesActive ? "bg-amber-500/12 text-amber-200" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}
+                  >
+                    Images <span>{isImagesActive ? "✓" : ""}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup("videos")}
+                    className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm transition-colors ${isVideosActive ? "bg-amber-500/12 text-amber-200" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}
+                  >
+                    Videos <span>{isVideosActive ? "✓" : ""}</span>
+                  </button>
+                  <div className="my-1 h-px bg-white/6" />
+                  <button
+                    type="button"
+                    onClick={() => setSortByName((v) => !v)}
+                    className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm text-slate-300 transition-colors hover:bg-white/5 hover:text-white"
+                  >
+                    Sort: {sortByName ? "A→Z" : "Newest"} <span>🔃</span>
+                  </button>
+                  {filterExt.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setFilters([])}
+                      className="mt-1 w-full rounded-xl bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-300 transition-colors hover:bg-rose-500/20"
+                    >
+                      Clear Filters
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                refreshTree();
+                setVisibleCount(30);
+              }}
+              className={toolbarIconButtonBase}
+              aria-label="Refresh files"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2v6h-6" /><path d="M3 12a9 9 0 0 1 15.55-6.36L21 8" /><path d="M3 22v-6h6" /><path d="M21 12a9 9 0 0 1-15.55 6.36L3 16" /></svg>
+            </button>
+          </div>
+
+          <div className="ml-auto flex shrink-0 items-center justify-end gap-2 pl-2">
+          <div className="kv-glass flex items-center gap-1 rounded-full p-1">
+            <button
+              type="button"
+              onClick={() => setViewMode("grid")}
+              className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-xs font-medium transition ${
+                viewMode === "grid"
+                  ? "bg-amber-500 text-black shadow-[0_10px_24px_rgba(245,158,11,0.3)]"
+                  : "text-slate-300 hover:text-white"
+              }`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /></svg>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("canvas")}
+              className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-xs font-medium transition ${
+                viewMode === "canvas"
+                  ? "bg-amber-500 text-black shadow-[0_10px_24px_rgba(245,158,11,0.3)]"
+                  : "text-slate-300 hover:text-white"
+              }`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3H5a2 2 0 0 0-2 2v14" /><path d="M12 3h7a2 2 0 0 1 2 2v7" /><path d="M12 21h7a2 2 0 0 0 2-2v-7" /><path d="M3 12v7a2 2 0 0 0 2 2h7" /></svg>
+            </button>
+          </div>
+
           <ProjectBar mode="utilities" />
+        </div>
         </div>
       </div>
 
       <div
-        className={`kv-grid-surface relative flex-1 overflow-auto rounded-[24px] border transition-colors ${isDragging
+        className={`kv-grid-surface relative min-h-0 flex-1 rounded-[24px] border shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] transition-colors ${
+          viewMode === "canvas" ? "overflow-hidden overscroll-none" : "overflow-auto"
+        } ${isDragging
           ? "border-amber-400/45 bg-amber-500/10"
-          : "border-white/6"
+          : "border-transparent"
           }`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -921,16 +1023,56 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
             <div className="mb-1">🔍 No files match your search</div>
             <div className="text-xs text-slate-400">Try a different search term or clear your filters</div>
           </div>
+        ) : viewMode === "canvas" ? (
+          <CanvasBrowser
+            items={canvasItems}
+            selectedId={selected?.id}
+            onSelectFile={select}
+            onRetryQueueJob={retryJob}
+            hoverPlayVideos={hoverPlayVideos}
+            storageKey={workspaceKey ? `canvas-layout:${workspaceKey}` : undefined}
+            shots={shots}
+          />
+        ) : shots.length > 0 ? (
+          <div className="flex flex-col gap-3 p-3 min-h-full">
+            {/* Scene header */}
+            <div className="flex items-center gap-2 px-1">
+              <span className="kv-mono text-[10px] uppercase tracking-[0.16em] text-slate-500">Scene</span>
+              <span className="kv-mono text-sm font-semibold text-amber-200/80">{sceneName}</span>
+              <span className="kv-mono text-[10px] text-slate-600">{shots.length} shots</span>
+            </div>
+
+            {/* Active shot */}
+            {activeShot && (
+              <ShotContainer
+                shot={activeShot}
+                isActive={true}
+                onActivate={() => {}}
+                onNavigate={navigateShot}
+              />
+            )}
+
+            {/* Inactive shots */}
+            {inactiveShots.map((shot) => (
+              <ShotContainer
+                key={shot.id}
+                shot={shot}
+                isActive={false}
+                onActivate={() => setActiveShot(shot.id)}
+                onNavigate={navigateShot}
+              />
+            ))}
+          </div>
         ) : (
           <div className="flex flex-col min-h-full">
               <div ref={gridContainerRef} className="grid grid-cols-3 gap-2 p-2">
                 {visibleQueueTiles.map((job) => (
                   <div
                     key={job.id}
-                    className={`relative flex aspect-video flex-col overflow-hidden rounded-[22px] border ${
+                    className={`relative flex aspect-video flex-col overflow-hidden rounded-[16px] border ${
                       job.status === "failed"
                         ? "border-rose-500/40 bg-rose-950/12"
-                        : "border-amber-400/16 bg-[#17191f]"
+                        : "border-amber-400/10 bg-[#17191f]"
                     }`}
                   >
                     <div className="absolute inset-x-0 top-0 z-10 h-1 bg-white/5">
@@ -970,7 +1112,7 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
                         </div>
                       </div>
 
-                      <div className="flex flex-1 items-center justify-center overflow-hidden rounded-[18px] border border-white/8 bg-black/25">
+                      <div className="flex flex-1 items-center justify-center overflow-hidden rounded-[12px] border border-transparent bg-black/25">
                         {job.status === "failed" ? (
                           <div className="flex h-full w-full flex-col items-center justify-center bg-rose-500/10 px-4 text-center">
                             <div className="text-sm font-medium text-rose-200">Generation failed</div>
@@ -981,7 +1123,7 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
                         )}
                       </div>
 
-                      <div className="space-y-2 rounded-[18px] bg-black/30 p-2.5">
+                      <div className="space-y-2 rounded-[12px] bg-black/30 p-2.5">
                         <div className="kv-mono text-[10px] uppercase tracking-[0.16em] text-slate-400">
                           {job.status === "failed" ? (job.error ?? "Job failed") : "Latest status"}
                         </div>
@@ -1010,7 +1152,7 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
                   </div>
                 ))}
                 {showDemoCompletedTile && (
-                  <div className="relative flex aspect-video flex-col overflow-hidden rounded-[22px] border border-amber-400/18 bg-[#15171d]">
+                  <div className="relative flex aspect-video flex-col overflow-hidden rounded-[16px] border border-transparent bg-[linear-gradient(180deg,rgba(255,255,255,0.02),rgba(17,19,23,0.94))]">
                     <div className="flex-1 overflow-hidden">
                       <img
                         src="https://picsum.photos/seed/demo-queue-result/640/360"
@@ -1021,12 +1163,17 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
                     <div className="absolute right-2 top-2 rounded-full bg-amber-500 px-2 py-1 text-[10px] font-semibold text-black">
                       New
                     </div>
-                    <div className="absolute inset-x-0 bottom-0 bg-black/60 p-2 backdrop-blur-sm">
-                      <div className="truncate text-xs font-semibold text-white">
-                        demo_queue_result.png
+                    <div className="absolute bottom-2 left-2 z-10 flex items-center gap-1.5">
+                      <div className={tileMetaIconChip}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 3l1.9 4.4L18 9.3l-4.1 1.8L12 15.5l-1.9-4.4L6 9.3l4.1-1.9z" />
+                        </svg>
                       </div>
-                      <div className="text-[11px] text-slate-300">
-                        Simulated queue item completed
+                      <div className={tileMetaInfoChip}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+                          <circle cx="12" cy="13" r="3" />
+                        </svg>
                       </div>
                     </div>
                   </div>
@@ -1038,6 +1185,14 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
                     ? "https://www.w3schools.com/html/mov_bbb.mp4"
                     : getFileUrl(connection, entry.relPath, { includeToken: true });
                   const styles = getFileStyles(entry);
+                  const isVideoTile = entry.mime.startsWith("video/");
+                  const isImageTile = entry.mime.startsWith("image/");
+                  const tileDuration =
+                    isVideoTile
+                      ? entry.id.startsWith("dummy-vid")
+                        ? "0:04"
+                        : formatTileDuration(entry.duration)
+                      : null;
 
                   return (
                     <button
@@ -1062,7 +1217,7 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
                       }}
                       onClick={(e) => multiSelectMode ? handleMultiSelectClick(entry, e) : select(entry)}
                       onKeyDown={(e) => handleKeyDown(e, entry)}
-                      className={`group relative flex aspect-video flex-col overflow-hidden rounded-xl border transition focus:outline-none focus:ring-2 focus:ring-sky-500 ${selected?.id === entry.id && !multiSelectMode ? "ring-2 ring-yellow-500" : ""
+                      className={`group relative flex aspect-video flex-col overflow-hidden rounded-[16px] border transition focus:outline-none focus:ring-2 focus:ring-amber-400/50 ${selected?.id === entry.id && !multiSelectMode ? "ring-2 ring-amber-400" : ""
                         } ${selectedIds.has(entry.id) ? "ring-2 ring-rose-400" : ""
                         } ${isPublished(published, entry.relPath) ? "ring-2 ring-violet-400/70 shadow-lg shadow-violet-500/40" : ""
                         } ${styles}`}
@@ -1079,7 +1234,34 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
                           ⭐
                         </div>
                       )}
-                      <div className="flex-1 w-full overflow-hidden rounded-t-xl bg-white/5">
+                      {entry.kind === "file" && (isVideoTile || isImageTile) ? (
+                        <div className="absolute bottom-2 left-2 z-10 flex items-center gap-1.5">
+                          <div className={tileMetaIconChip}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M12 3l1.9 4.4L18 9.3l-4.1 1.8L12 15.5l-1.9-4.4L6 9.3l4.1-1.9z" />
+                            </svg>
+                          </div>
+                          <div className={tileMetaInfoChip}>
+                            {isVideoTile ? (
+                              <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="m22 8-6 4 6 4V8Z" />
+                                <rect x="2" y="6" width="14" height="12" rx="2" ry="2" />
+                              </svg>
+                            ) : (
+                              <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+                                <circle cx="12" cy="13" r="3" />
+                              </svg>
+                            )}
+                            {tileDuration ? (
+                              <span className="kv-mono text-[10px] tracking-[0.08em] text-white/85">
+                                {tileDuration}
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+                      ) : null}
+                      <div className="flex-1 w-full overflow-hidden rounded-t-[16px] bg-white/[0.03]">
                         {entry.kind === "dir" ? (
                           <div className="flex h-full items-center justify-center text-4xl">
                             📁
@@ -1186,8 +1368,8 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
                           />
                         )}
                       </div>
-                      <div className="absolute inset-x-0 bottom-0 rounded-b-xl bg-black/60 p-2 backdrop-blur-sm">
-                        {editingId === entry.id ? (
+                      {editingId === entry.id ? (
+                        <div className="absolute inset-x-0 bottom-0 rounded-b-[16px] bg-black/60 p-2 backdrop-blur-sm">
                           <input
                             autoFocus
                             type="text"
@@ -1199,22 +1381,10 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
                               if (e.key === "Escape") setEditingId(null);
                             }}
                             onClick={(e) => e.stopPropagation()}
-                            className="w-full rounded border border-sky-500/50 bg-black/50 px-1 py-0.5 text-xs text-white outline-none"
+                            className="kv-input w-full rounded-md px-2 py-1 text-xs"
                           />
-                        ) : (
-                          <div
-                            className="truncate text-xs font-semibold text-white cursor-text"
-                            title={entry.name}
-                            onDoubleClick={(e) => {
-                              e.stopPropagation();
-                              setEditingId(entry.id);
-                              setEditName(entry.name);
-                            }}
-                          >
-                            {entry.name}
-                          </div>
-                        )}
-                      </div>
+                        </div>
+                      ) : null}
                       {operationLoading === entry.id && (
                         <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60 backdrop-blur-sm">
                           <Spinner size="md" />

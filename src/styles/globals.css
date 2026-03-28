@@ -65,8 +65,9 @@ body::after {
 }
 
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 ::-webkit-scrollbar-track {
@@ -91,7 +92,11 @@ a {
 }
 
 .custom-scrollbar {
-  scrollbar-color: rgba(247, 147, 26, 0.32) transparent;
+  scrollbar-width: none;
+}
+
+* {
+  scrollbar-width: none;
 }
 
 .kv-shell {

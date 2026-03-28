@@ -179,13 +179,10 @@ export default function ProjectBar({ mode = "full" }: ProjectBarProps) {
         <>
           <div className="kv-glass flex min-w-0 items-center gap-2 rounded-full px-3 py-1.5">
             <span
-              className={`h-2.5 w-2.5 rounded-full ${connection ? "bg-amber-400" : "bg-slate-500"}`}
+              className={`h-2.5 w-2.5 shrink-0 rounded-full ${connection ? "bg-amber-400" : "bg-slate-500"}`}
               aria-hidden="true"
             />
-            <span className="kv-mono text-[10px] uppercase tracking-[0.18em] text-slate-500">
-              Workspace
-            </span>
-            <span className="max-w-[150px] truncate text-xs font-medium text-slate-200">
+            <span className="max-w-[120px] truncate text-xs font-medium text-slate-200">
               {connectionLabel}
             </span>
           </div>
@@ -361,7 +358,7 @@ function ElementsButton() {
   return (
     <button
       onClick={toggleManager}
-      className={`kv-icon-button relative flex items-center gap-2 rounded-full px-3 py-2 text-xs font-semibold ${isManagerOpen || selectedCount > 0
+      className={`kv-icon-button relative flex h-9 w-9 items-center justify-center rounded-full ${isManagerOpen || selectedCount > 0
         ? "border-amber-400/50 bg-amber-500/10 text-amber-200"
         : "text-slate-300"
         }`}
@@ -373,7 +370,6 @@ function ElementsButton() {
         <rect x="14" y="14" width="7" height="7" rx="1.5" />
         <rect x="3" y="14" width="7" height="7" rx="1.5" />
       </svg>
-      <span className="kv-mono uppercase tracking-[0.18em]">Elements</span>
       {totalCount > 0 && (
         <span className={`absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] text-white ${selectedCount > 0 ? "bg-amber-500" : "bg-slate-600"}`}>
           {selectedCount > 0 ? selectedCount : totalCount}

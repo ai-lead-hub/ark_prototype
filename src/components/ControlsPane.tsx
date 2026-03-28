@@ -2812,7 +2812,7 @@ export default function ControlsPane() {
 
   return (
     <form ref={formRef} className="flex h-full flex-col text-sm text-slate-200" onSubmit={handleGenerate}>
-      <div className="flex-1 space-y-4 pb-32">
+      <div className="custom-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
         <div className="space-y-3">
           <div className="kv-panel-soft flex rounded-full p-1">
             {(["image", "video", "special"] as const).map((tab) => (
@@ -5118,7 +5118,7 @@ export default function ControlsPane() {
 
       </div >
 
-      <div className="kv-glass sticky bottom-0 left-0 right-0 mt-auto space-y-2 rounded-[24px] p-3 shadow-[0_-6px_25px_rgba(0,0,0,0.45)]">
+      <div className="kv-glass mt-3 space-y-2 rounded-[24px] p-3 shadow-[0_-6px_25px_rgba(0,0,0,0.45)]">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <button
             type="submit"
