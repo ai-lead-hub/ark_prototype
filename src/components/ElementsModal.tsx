@@ -22,7 +22,7 @@ export default function ElementsModal() {
       onClick={closeManager}
     >
       <div
-        className="flex h-[min(84vh,780px)] w-[min(92vw,1180px)] overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/95 shadow-[0_30px_120px_rgba(0,0,0,0.65)]"
+        className="flex h-[min(78vh,680px)] w-[min(84vw,980px)] overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/95 shadow-[0_30px_120px_rgba(0,0,0,0.65)]"
         onClick={(event) => event.stopPropagation()}
       >
         <ElementsManager />

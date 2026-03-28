@@ -32,6 +32,7 @@ interface ElementsContextType {
     closeForm: () => void;
     fetchElements: () => Promise<void>;
     addElement: (input: ElementInput) => Promise<Element>;
+    updateElement: (id: string, updates: { name: string }) => Promise<Element>;
     deleteElement: (id: string) => Promise<void>;
     selectElement: (element: Element) => void;
     deselectElement: (id: string) => void;
@@ -115,6 +116,30 @@ export function ElementsProvider({ children }: { children: ReactNode }) {
         return newElement;
     }, []);
 
+    const updateElement = useCallback(async (id: string, updates: { name: string }): Promise<Element> => {
+        const res = await fetch(`${API_BASE}/elements/${id}`, {
+            method: "PATCH",
+            headers: {
+                "Content-Type": "application/json",
+                ...authHeaders(),
+            },
+            body: JSON.stringify(updates),
+        });
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.error ?? "Failed to update element");
+        }
+        const data = await res.json();
+        const updatedElement = data.element as Element;
+        setElements((prev) => prev.map((el) => (el.id === id ? updatedElement : el)));
+        setSelectedElements((prev) =>
+            prev.map((sel) =>
+                sel.element.id === id ? { ...sel, element: updatedElement } : sel
+            )
+        );
+        return updatedElement;
+    }, []);
+
     const deleteElement = useCallback(async (id: string) => {
         const res = await fetch(`${API_BASE}/elements/${id}`, {
             method: "DELETE",
@@ -165,6 +190,7 @@ export function ElementsProvider({ children }: { children: ReactNode }) {
         closeForm,
         fetchElements,
         addElement,
+        updateElement,
         deleteElement,
         selectElement,
         deselectElement,
