@@ -63,15 +63,22 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
 
   const { jobs, retryJob } = useQueue();
   const queueTiles = useMemo(
-    () =>
-      [...jobs]
+    () => {
+      const rank: Record<"processing" | "pending" | "failed" | "completed", number> = {
+        processing: 0,
+        pending: 1,
+        failed: 2,
+        completed: 3,
+      };
+
+      return [...jobs]
         .filter((job) => job.status === "pending" || job.status === "processing" || job.status === "failed")
         .sort((a, b) => {
-          const rank = { processing: 0, pending: 1, failed: 2 };
           const statusDiff = rank[a.status] - rank[b.status];
           if (statusDiff !== 0) return statusDiff;
           return b.timestamp - a.timestamp;
-        }),
+        });
+    },
     [jobs]
   );
   const hasRealQueueTiles = queueTiles.length > 0;
