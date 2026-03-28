@@ -11,9 +11,6 @@ function MainLayout() {
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-slate-950 text-slate-100">
-      <div className="flex-shrink-0">
-        <ProjectBar />
-      </div>
       <div className="flex flex-1 gap-1.5 p-1.5 overflow-hidden bg-gradient-to-b from-slate-950 to-slate-900/50 relative">
         {/* Left - Controls */}
         <aside className="flex w-[420px] min-h-0 flex-col rounded-xl border border-white/5 bg-slate-900/60 backdrop-blur-sm">

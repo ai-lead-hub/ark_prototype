@@ -3,6 +3,7 @@ import { useCatalog } from "../state/useCatalog";
 import { useQueue } from "../state/queue";
 import { type FileEntry, getFileUrl, publishFile, uploadFile, trashFiles } from "../lib/api/files";
 import { FILE_ENTRY_MIME } from "../lib/drag-constants";
+import ProjectBar from "./ProjectBar";
 import { Spinner } from "./ui/Spinner";
 import { PublishModal } from "./PublishModal";
 import { buildDatedMediaPath, mediaFolderFromMime } from "../lib/storage-paths";
@@ -29,9 +30,23 @@ type FileBrowserProps = {
 
 export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
   const {
-    state: { entries, q, filterExt, sortByName, pins, selected, loading, connection },
+    state: { entries: catalogEntries, q, filterExt, sortByName, pins, selected, loading, connection },
     actions: { setQuery, setFilters, setSortByName, setPins, refreshPins, select, refreshTree, rename },
   } = useCatalog();
+
+  // DUMMY DATA FOR TESTING LAYOUT
+  const entries = useMemo<FileEntry[]>(() => {
+    if (!catalogEntries) return [];
+    const dummies: FileEntry[] = [
+      { id: "dummy-img-1", name: "hero_shot.jpg", relPath: "dummy/hero_shot.jpg", kind: "file", size: 1024, mtime: Date.now(), mime: "image/jpeg", ext: "jpg" },
+      { id: "dummy-vid-1", name: "cinematic_pan.mp4", relPath: "dummy/cinematic_pan.mp4", kind: "file", size: 4096, mtime: Date.now() - 1000, mime: "video/mp4", ext: "mp4" },
+      { id: "dummy-img-2", name: "character_design.png", relPath: "dummy/character_design.png", kind: "file", size: 2048, mtime: Date.now() - 2000, mime: "image/png", ext: "png" },
+      { id: "dummy-vid-2", name: "action_sequence.webm", relPath: "dummy/action_sequence.webm", kind: "file", size: 8192, mtime: Date.now() - 3000, mime: "video/webm", ext: "webm" },
+      { id: "dummy-img-3", name: "environment_concept.jpeg", relPath: "dummy/environment_concept.jpeg", kind: "file", size: 5048, mtime: Date.now() - 4000, mime: "image/jpeg", ext: "jpeg" },
+      { id: "dummy-img-4", name: "close_up_portrait.png", relPath: "dummy/close_up_portrait.png", kind: "file", size: 3048, mtime: Date.now() - 5000, mime: "image/png", ext: "png" },
+    ];
+    return [...dummies, ...catalogEntries];
+  }, [catalogEntries]);
 
   const { jobs } = useQueue();
   const activeJobs = useMemo(() =>
@@ -666,12 +681,17 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
 
   if (!connection) {
     return (
-      <div className="rounded-lg border border-dashed border-white/20 bg-gradient-to-br from-sky-500/5 to-indigo-500/5 p-6 text-sm">
-        <div className="mb-2 text-base font-semibold text-sky-200">
-          📂 No Workspace Connected
+      <div className="flex h-full flex-col gap-2">
+        <div className="flex flex-wrap items-center gap-2 relative">
+          <ProjectBar />
         </div>
-        <div className="text-slate-300">
-          Click <strong>"Connect"</strong> at the top to link your workspace API and start browsing files.
+        <div className="rounded-lg border border-dashed border-white/20 bg-gradient-to-br from-sky-500/5 to-indigo-500/5 p-6 text-sm">
+          <div className="mb-2 text-base font-semibold text-sky-200">
+            📂 No Workspace Connected
+          </div>
+          <div className="text-slate-300">
+            Click <strong>"Connect"</strong> at the top to link your workspace API and start browsing files.
+          </div>
         </div>
       </div>
     );
@@ -680,12 +700,14 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
   return (
     <div className="flex h-full flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2 relative">
+        <ProjectBar />
+        <div className="flex-1 min-w-[100px]" />
         <input
           type="search"
           value={q}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Search files"
-          className="flex-1 rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
+          className="w-48 ml-auto rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
         />
         <div className="relative">
           <button
@@ -816,7 +838,11 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
                   </div>
                 ))}
                 {visibleEntries.map((entry) => {
-                  const url = getFileUrl(connection, entry.relPath, { includeToken: true });
+                  const url = entry.id.startsWith("dummy-img")
+                    ? `https://picsum.photos/seed/${entry.id}/400/225`
+                    : entry.id.startsWith("dummy-vid")
+                    ? "https://www.w3schools.com/html/mov_bbb.mp4"
+                    : getFileUrl(connection, entry.relPath, { includeToken: true });
                   const styles = getFileStyles(entry);
 
                   return (

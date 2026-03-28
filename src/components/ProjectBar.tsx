@@ -170,20 +170,19 @@ export default function ProjectBar() {
   const connectionLabel = connection ? connection.workspaceId : "Not connected";
 
   return (
-    <header className="sticky top-0 z-10 border-b border-white/10 bg-slate-950/70 backdrop-blur-lg">
-      <div className="flex items-center justify-between gap-2 px-3 py-1.5 text-sm">
-        {/* Left: Status */}
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="text-xs" title={connection ? "Connected" : "Disconnected"}>
-            {connectionStatusIcon}
-          </span>
-          <span className="text-xs font-medium text-slate-300 truncate max-w-[200px]">
-            {connectionLabel}
-          </span>
-        </div>
+    <>
+      {/* Left: Status */}
+      <div className="flex items-center gap-2 min-w-0 bg-white/5 border border-white/5 rounded-lg px-2 py-1">
+        <span className="text-xs" title={connection ? "Connected" : "Disconnected"}>
+          {connectionStatusIcon}
+        </span>
+        <span className="text-xs font-medium text-slate-300 truncate max-w-[150px]">
+          {connectionLabel}
+        </span>
+      </div>
 
-        {/* Right: Actions */}
-        <div className="flex items-center gap-2">
+      {/* Right: Actions */}
+      <div className="flex items-center gap-2">
           <CreditTracker />
           <ElementsButton />
 
@@ -326,9 +325,7 @@ export default function ProjectBar() {
             <span className="text-xs font-bold">?</span>
           </a>
         </div>
-      </div>
-
-    </header>
+    </>
   );
 }
 
