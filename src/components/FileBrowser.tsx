@@ -23,6 +23,7 @@ import { useHoverPlayVideos } from "../lib/useHoverPlayVideos";
 
 const IMAGE_EXTS = ["png", "jpg", "jpeg", "webp"];
 const VIDEO_EXTS = ["mp4", "webm", "mov", "mkv"];
+const SHOW_QUEUE_PREVIEW_TILE = true;
 
 type FileBrowserProps = {
   disableKeyboardNav?: boolean;
@@ -61,6 +62,26 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
         }),
     [jobs]
   );
+  const visibleQueueTiles = useMemo(() => {
+    if (queueTiles.length > 0) return queueTiles;
+    if (!SHOW_QUEUE_PREVIEW_TILE) return [];
+
+    return [
+      {
+        id: "queue-preview-tile",
+        status: "processing" as const,
+        type: "image" as const,
+        name: "Queue Preview Tile",
+        payload: null,
+        timestamp: Date.now(),
+        logs: [
+          "Preview placeholder for the new in-grid queue UI.",
+          "Active jobs will replace this tile automatically.",
+          "Queued items stay pinned to the top of the grid.",
+        ],
+      },
+    ];
+  }, [queueTiles]);
 
   const [published, setPublished] = useState<PublishedMap>({});
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -840,7 +861,7 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
         ) : (
           <div className="flex flex-col min-h-full">
               <div ref={gridContainerRef} className="grid grid-cols-3 gap-2 p-2">
-                {queueTiles.map((job) => (
+                {visibleQueueTiles.map((job) => (
                   <div
                     key={job.id}
                     className={`relative flex aspect-video flex-col overflow-hidden rounded-xl border ${
@@ -862,6 +883,11 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
                     <div className="flex h-full flex-col justify-between gap-3 p-3">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
+                          {job.id === "queue-preview-tile" && (
+                            <div className="mb-1 text-[10px] uppercase tracking-[0.2em] text-amber-300/80">
+                              Preview
+                            </div>
+                          )}
                           <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400">
                             {job.type} job
                           </div>
@@ -910,6 +936,7 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
                           <button
                             type="button"
                             onClick={() => retryJob(job.id)}
+                            disabled={job.id === "queue-preview-tile"}
                             className="inline-flex rounded-lg border border-rose-400/30 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-100 transition hover:bg-rose-500/20"
                           >
                             Retry
