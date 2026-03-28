@@ -75,6 +75,8 @@ export default function ElementsManager() {
     () => visibleElements.filter((element) => !pinnedIds.has(element.id)),
     [pinnedIds, visibleElements]
   );
+  const showLoading = isLoading && !usingDemoElements;
+  const showError = Boolean(error) && !usingDemoElements;
 
   const handleEditElement = async (element: Element) => {
     const nextName = prompt("Rename element", element.name)?.trim();
@@ -115,9 +117,6 @@ export default function ElementsManager() {
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-[28px] bg-[radial-gradient(circle_at_top,rgba(14,165,233,0.12),transparent_22%),linear-gradient(180deg,rgba(15,23,42,0.98),rgba(2,6,23,0.98))]">
       <div className="flex items-center justify-between gap-4 border-b border-white/10 px-5 py-4">
         <div className="min-w-0">
-          <div className="text-[11px] uppercase tracking-[0.2em] text-slate-500">
-            Element Store
-          </div>
           <div className="mt-1 flex items-center gap-3">
             <h2 className="truncate text-lg font-semibold text-white">
               {isFormOpen ? "Create a new element" : "Project elements"}
@@ -127,12 +126,12 @@ export default function ElementsManager() {
                 Selection mode
               </span>
             )}
-            {usingDemoElements && !isFormOpen && (
-              <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-200">
-                Demo content
-              </span>
-            )}
           </div>
+          {!isFormOpen && usingDemoElements && (
+            <p className="mt-1 text-sm text-slate-400">
+              Showing temporary frontend demo elements until real project elements exist.
+            </p>
+          )}
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
@@ -147,7 +146,6 @@ export default function ElementsManager() {
           <button
             onClick={closeManager}
             className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-400 transition hover:border-white/20 hover:bg-white/10 hover:text-white"
-            title="Close element store"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
           </button>
@@ -159,7 +157,7 @@ export default function ElementsManager() {
           <div className="min-h-0 overflow-y-auto rounded-[24px] border border-white/10 bg-black/25 p-5 custom-scrollbar">
             <ElementForm />
           </div>
-        ) : isLoading ? (
+        ) : showLoading ? (
           <div className="flex min-h-0 flex-1 items-center justify-center rounded-[24px] border border-white/10 bg-black/20 text-sm text-slate-400">
             <svg className="mr-2 h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -167,7 +165,7 @@ export default function ElementsManager() {
             </svg>
             Loading elements...
           </div>
-        ) : error ? (
+        ) : showError ? (
           <div className="flex min-h-0 flex-1 items-center justify-center rounded-[24px] border border-rose-500/20 bg-rose-500/5 text-sm text-rose-300">
             {error}
           </div>
@@ -193,9 +191,7 @@ export default function ElementsManager() {
             <section className="rounded-[24px] border border-white/10 bg-black/20 p-4">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
-                  <div className="text-[11px] uppercase tracking-[0.2em] text-slate-500">
-                    Pinned Elements
-                  </div>
+                  <div className="text-sm font-medium text-white">Pinned elements</div>
                   <div className="mt-1 text-sm text-slate-300">
                     Keep your active cast and reusable references in reach.
                   </div>
@@ -206,7 +202,7 @@ export default function ElementsManager() {
               </div>
 
               {pinnedElements.length > 0 ? (
-                <div className="grid grid-cols-4 gap-3">
+                <div className="grid grid-cols-3 gap-3">
                   {pinnedElements.map((element) => (
                     <ElementCard
                       key={element.id}
@@ -216,7 +212,6 @@ export default function ElementsManager() {
                       onSelect={selectElement}
                       onEdit={handleEditElement}
                       onDelete={handleDeleteElement}
-                      previewLabel={usingDemoElements ? "Demo" : undefined}
                     />
                   ))}
                 </div>
@@ -230,9 +225,7 @@ export default function ElementsManager() {
             <section className="flex min-h-0 flex-col rounded-[24px] border border-white/10 bg-black/20 p-4">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
-                  <div className="text-[11px] uppercase tracking-[0.2em] text-slate-500">
-                    Library
-                  </div>
+                  <div className="text-sm font-medium text-white">Elements library</div>
                   <div className="mt-1 text-sm text-slate-300">
                     {libraryElements.length} element{libraryElements.length === 1 ? "" : "s"} in the remaining library
                   </div>
@@ -240,7 +233,7 @@ export default function ElementsManager() {
               </div>
 
               {libraryElements.length > 0 ? (
-                <div className="custom-scrollbar grid min-h-0 flex-1 grid-cols-4 gap-3 overflow-y-auto pr-1">
+                <div className="custom-scrollbar grid min-h-0 flex-1 grid-cols-3 gap-3 overflow-y-auto pr-1">
                   {libraryElements.map((element) => (
                     <ElementCard
                       key={element.id}
@@ -250,7 +243,6 @@ export default function ElementsManager() {
                       onSelect={selectElement}
                       onEdit={handleEditElement}
                       onDelete={handleDeleteElement}
-                      previewLabel={usingDemoElements ? "Demo" : undefined}
                     />
                   ))}
                 </div>

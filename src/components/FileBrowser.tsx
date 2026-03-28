@@ -24,6 +24,7 @@ import { useHoverPlayVideos } from "../lib/useHoverPlayVideos";
 const IMAGE_EXTS = ["png", "jpg", "jpeg", "webp"];
 const VIDEO_EXTS = ["mp4", "webm", "mov", "mkv"];
 const SHOW_QUEUE_PREVIEW_TILE = true;
+const QUEUE_PROGRESS_ANIMATION = "queue-progress 1.8s ease-in-out infinite";
 
 type FileBrowserProps = {
   disableKeyboardNav?: boolean;
@@ -729,6 +730,12 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
 
   return (
     <div className="flex h-full flex-col gap-2">
+      <style>{`
+        @keyframes queue-progress {
+          0% { transform: translateX(-120%); }
+          100% { transform: translateX(320%); }
+        }
+      `}</style>
       <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 overflow-x-auto pb-1">
         <div className="flex shrink-0 items-center gap-2">
           <ProjectBar mode="leading" />
@@ -872,26 +879,22 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
                   >
                     <div className="absolute inset-x-0 top-0 z-10 h-1 bg-white/5">
                       <div
-                        className={`h-full ${
+                        className={`h-full w-1/3 rounded-full ${
                           job.status === "failed"
-                            ? "w-full bg-rose-500/80"
-                            : "w-2/3 animate-pulse bg-sky-400/80"
+                            ? "bg-rose-500/80"
+                            : "bg-sky-400/80"
                         }`}
+                        style={job.status === "failed" ? undefined : { animation: QUEUE_PROGRESS_ANIMATION }}
                       />
                     </div>
 
                     <div className="flex h-full flex-col justify-between gap-3 p-3">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          {job.id === "queue-preview-tile" && (
-                            <div className="mb-1 text-[10px] uppercase tracking-[0.2em] text-amber-300/80">
-                              Preview
-                            </div>
-                          )}
-                          <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400">
-                            {job.type} job
+                          <div className="text-[11px] text-slate-400">
+                            {job.id === "queue-preview-tile" ? "Queue preview" : `${job.type} job`}
                           </div>
-                          <div className="truncate text-sm font-semibold text-white" title={job.name}>
+                          <div className="truncate text-sm font-semibold text-white">
                             {job.name}
                           </div>
                         </div>
@@ -907,17 +910,18 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
                         </div>
                       </div>
 
-                      <div className="flex flex-1 items-center justify-center">
+                      <div className="flex flex-1 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-black/30">
                         {job.status === "failed" ? (
-                          <div className="rounded-full border border-rose-400/30 bg-rose-500/10 px-4 py-2 text-xs font-medium text-rose-200">
-                            Generation failed
+                          <div className="flex h-full w-full flex-col items-center justify-center bg-rose-500/10 px-4 text-center">
+                            <div className="text-sm font-medium text-rose-200">Generation failed</div>
+                            <div className="mt-1 text-xs text-rose-200/80">Error preview space</div>
                           </div>
                         ) : (
-                          <Spinner size="lg" />
+                          <div className="h-full w-full bg-[linear-gradient(135deg,rgba(51,65,85,0.45),rgba(15,23,42,0.82))]" />
                         )}
                       </div>
 
-                      <div className="space-y-2 rounded-xl bg-black/40 p-2 backdrop-blur-sm">
+                      <div className="space-y-2 rounded-xl bg-black/40 p-2">
                         <div className="text-[11px] font-medium text-slate-300">
                           {job.status === "failed" ? (job.error ?? "Job failed") : "Latest status"}
                         </div>
@@ -926,7 +930,6 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
                             <div
                               key={`${job.id}-log-${index}`}
                               className="truncate text-[11px] text-slate-400"
-                              title={log}
                             >
                               {log}
                             </div>

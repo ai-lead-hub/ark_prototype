@@ -28,7 +28,6 @@ interface ElementCardProps {
   onSelect: (element: Element) => void;
   onEdit?: (element: Element) => void;
   onDelete?: (element: Element) => void;
-  previewLabel?: string;
 }
 
 export default function ElementCard({
@@ -38,7 +37,6 @@ export default function ElementCard({
   onSelect,
   onEdit,
   onDelete,
-  previewLabel,
 }: ElementCardProps) {
   const { deleteElement, deselectElement } = useElements();
   const [isDeleting, setIsDeleting] = useState(false);
@@ -103,7 +101,6 @@ export default function ElementCard({
       draggable={hasSheet}
       onDragStart={handleDragStart}
       onClick={handleCardClick}
-      title={hasSheet ? "Drag to add character sheet to Image references" : undefined}
     >
       <div className="relative aspect-square">
         {imageError ? (
@@ -122,11 +119,6 @@ export default function ElementCard({
 
         <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-2">
           <div className="flex flex-wrap gap-1">
-            {previewLabel && (
-              <span className="rounded-full bg-amber-500/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
-                {previewLabel}
-              </span>
-            )}
             {isSelected && (
               <span className="rounded-full bg-sky-500 px-2 py-1 text-[10px] font-semibold text-white">
                 Pinned
@@ -136,7 +128,7 @@ export default function ElementCard({
 
           <div className="flex gap-1">
             {hasSheet && (
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-[10px] text-amber-300" title="Character sheet">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-[10px] text-amber-300">
                 <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2" /><line x1="3" x2="21" y1="9" y2="9" /><line x1="9" x2="9" y1="21" y2="9" /></svg>
               </span>
             )}
@@ -152,9 +144,7 @@ export default function ElementCard({
       <div className="space-y-3 p-3">
         <div>
           <p className="truncate text-sm font-semibold text-white">{element.name}</p>
-          <p className="mt-1 text-[11px] text-slate-400">
-            {hasSheet ? "Has character sheet" : "Image-only element"}
-          </p>
+          <p className="mt-1 text-[11px] text-slate-400">{element.referenceImageUrls.length} refs</p>
         </div>
 
         <div className="flex gap-2">
