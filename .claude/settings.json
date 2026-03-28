@@ -3,7 +3,17 @@
     "allow": [
       "WebFetch(domain:kie.ai)",
       "Bash(git push:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(git remote:*)",
+      "Bash(git branch:*)",
+      "Bash(git fetch:*)",
+      "Bash(git checkout:*)",
+      "Bash(grep -E \"\\\\.tsx$\")",
+      "Bash(wc -l /Users/ayushjalan/Documents/ark_prototype/src/components/*.tsx)",
+      "WebFetch(domain:flashboards.yaroflasher.com)",
+      "Bash(open /Users/ayushjalan/Documents/ark_prototype/docs/generate-flow.html)",
+      "Bash(npx tsc:*)",
+      "Bash(git add:*)"
     ]
   }
 }

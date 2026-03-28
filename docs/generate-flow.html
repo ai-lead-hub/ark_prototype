@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Universal Generate Flow</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0c0c0c;color:#e0e0e0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh;padding:40px 28px;display:flex;flex-direction:column;align-items:center}
+h1{font-size:20px;font-weight:600;color:#fff;margin-bottom:4px;letter-spacing:-0.3px}
+.sub{font-size:12px;color:#444;margin-bottom:36px}
+
+/* ── layout ── */
+.page{display:grid;grid-template-columns:480px 1fr;gap:24px;max-width:1080px;width:100%}
+
+/* ── flowchart column ── */
+.chart{display:flex;flex-direction:column;align-items:center;gap:0}
+
+/* node types */
+.node{width:100%;cursor:pointer;position:relative;transition:all .15s}
+.node:hover .box{border-color:#333}
+.node.active .box{border-color:var(--c)!important;box-shadow:0 0 0 1px var(--c)20}
+
+.box{background:#111;border:1.5px solid #1c1c1c;border-radius:8px;padding:13px 16px;transition:border-color .15s}
+.box-title{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--c);margin-bottom:5px;display:flex;align-items:center;gap:8px}
+.box-title .num{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--c);display:inline-flex;align-items:center;justify-content:center;font-size:10px;color:var(--c);flex-shrink:0}
+.box-desc{font-size:12px;color:#666;line-height:1.5}
+.box-hint{font-size:10px;color:#333;margin-top:6px;font-family:'SF Mono','Fira Code',monospace}
+
+/* diamond */
+.diamond-wrap{display:flex;flex-direction:column;align-items:center;cursor:pointer;width:100%}
+.diamond{width:160px;height:52px;background:#111;border:1.5px solid #1c1c1c;transform:perspective(400px) rotateX(10deg);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;transition:border-color .15s;text-align:center;padding:0 16px;color:#5ab9ea}
+.diamond-wrap:hover .diamond{border-color:#333}
+.diamond-wrap.active .diamond{border-color:#5ab9ea;box-shadow:0 0 0 1px #5ab9ea20}
+
+/* arrows */
+.arrow{display:flex;flex-direction:column;align-items:center;gap:0;width:100%}
+.arrow-line{width:1.5px;height:20px;background:#222;margin:0 auto}
+.arrow-head{width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid #2a2a2a;margin:0 auto}
+.arrow-label{font-size:10px;color:#3a3a3a;margin-top:3px;text-align:center}
+
+/* branch arrows */
+.branch-row{display:flex;width:100%;align-items:flex-start;gap:0;position:relative}
+.branch-item{flex:1;display:flex;flex-direction:column;align-items:center}
+.branch-label{font-size:10px;color:#3a3a3a;margin-bottom:4px}
+.branch-line-h{height:1.5px;background:#222;width:100%}
+.branch-corner{width:1.5px;height:16px;background:#222}
+
+/* special: provider bridge box */
+.bridge-box{background:#0f0f0f;border:1.5px solid #1c1c1c;border-radius:8px;padding:12px 14px;width:100%}
+.bridge-title{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#e5956b;margin-bottom:8px}
+.bridge-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.provider-chip{background:#161616;border:1px solid #222;border-radius:5px;padding:6px 8px;text-align:center;font-size:10px;cursor:pointer;transition:all .15s}
+.provider-chip:hover{border-color:#333;background:#1a1a1a}
+.provider-chip.active{border-color:#e5956b;color:#e5956b}
+.provider-chip .pname{font-weight:700;color:#888;display:block;margin-bottom:1px;font-size:10px}
+.provider-chip .pmodels{color:#444;font-size:9px}
+.bridge-note{font-size:10px;color:#333;margin-top:8px;line-height:1.5;font-family:'SF Mono','Fira Code',monospace}
+
+/* poll loop indicator */
+.loop-box{width:100%;background:#111;border:1.5px solid #1c1c1c;border-radius:8px;padding:13px 16px;cursor:pointer;transition:border-color .15s;position:relative}
+.loop-box:hover{border-color:#333}
+.loop-box.active{border-color:#5ab9ea;box-shadow:0 0 0 1px #5ab9ea20}
+.loop-indicator{position:absolute;right:-28px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;align-items:center;gap:0}
+.loop-arrow-up{font-size:11px;color:#2a2a2a;writing-mode:vertical-rl;letter-spacing:2px;color:#2a2a2a}
+
+/* colours */
+.c-validate{--c:#7c8cf8}
+.c-job{--c:#c792ea}
+.c-payload{--c:#e5956b}
+.c-assets{--c:#f0c674}
+.c-submit{--c:#e5956b}
+.c-poll{--c:#5ab9ea}
+.c-save{--c:#a8cc8c}
+.c-complete{--c:#a8cc8c}
+
+/* end node */
+.end-node{background:#111;border:1.5px solid #1c1c1c;border-radius:20px;padding:8px 24px;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#a8cc8c;margin-top:4px}
+
+/* ── detail panel ── */
+.detail{background:#111;border:1.5px solid #1c1c1c;border-radius:10px;padding:24px;position:sticky;top:40px;max-height:calc(100vh - 80px);overflow-y:auto;min-height:300px}
+.detail-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:200px;color:#2a2a2a;font-size:12px;text-align:center;gap:8px}
+.detail-empty .icon{font-size:28px}
+.detail-step-num{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px}
+.detail-title{font-size:17px;font-weight:600;color:#fff;margin-bottom:12px;letter-spacing:-0.3px}
+.detail-body{font-size:13px;color:#666;line-height:1.7;margin-bottom:16px}
+.detail-section{margin-bottom:16px}
+.detail-section-title{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#333;margin-bottom:8px}
+.code{background:#0d0d0d;border:1px solid #191919;border-radius:6px;padding:12px 14px;font-family:'SF Mono','Fira Code',monospace;font-size:11px;line-height:1.8;overflow-x:auto}
+.code .k{color:#7c8cf8}.code .v{color:#a8cc8c}.code .s{color:#f0c674}.code .c{color:#444;font-style:italic}.code .e{color:#d9534f}.code .ok{color:#5cb85c}.code .o{color:#e5956b}.code .b{color:#5ab9ea}
+
+.note-box{background:#0d0d0d;border-left:3px solid var(--c,#444);border-radius:4px;padding:10px 12px;font-size:12px;color:#555;line-height:1.6;margin-top:12px}
+.note-box strong{color:#888}
+
+.tag{display:inline-block;font-size:9px;padding:2px 6px;border-radius:3px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;margin-left:4px;vertical-align:middle}
+.tag-json{background:#e5956b15;color:#e5956b}
+.tag-bridge{background:#5ab9ea15;color:#5ab9ea}
+.tag-both{background:#c792ea15;color:#c792ea}
+
+.provider-detail{background:#0f0f0f;border:1px solid #1a1a1a;border-radius:6px;padding:12px;margin-top:8px}
+.provider-detail-title{font-size:11px;font-weight:700;color:#e5956b;margin-bottom:8px}
+.provider-row{display:flex;justify-content:space-between;align-items:baseline;padding:4px 0;border-bottom:1px solid #141414;font-size:11px}
+.provider-row:last-child{border-bottom:none}
+.provider-row .what{color:#666}
+.provider-row .how{color:#888;font-family:'SF Mono','Fira Code',monospace;font-size:10px;text-align:right}
+
+hr.divider{border:none;border-top:1px solid #191919;margin:16px 0}
+</style>
+</head>
+<body>
+
+<div style="max-width:1080px;width:100%">
+  <h1>Universal Generate Pipeline</h1>
+  <p class="sub">Click any step to see full detail &nbsp;·&nbsp; One function handles every model across any API provider</p>
+
+  <div class="page">
+
+    <!-- ══════════════ FLOWCHART ══════════════ -->
+    <div class="chart">
+
+      <!-- start -->
+      <div style="background:#111;border:1.5px solid #1c1c1c;border-radius:20px;padding:8px 28px;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#555;margin-bottom:0">Start</div>
+
+      <div class="arrow"><div class="arrow-line"></div><div class="arrow-head"></div></div>
+
+      <!-- 1 validate -->
+      <div class="node c-validate" data-step="1" onclick="show(1)">
+        <div class="box">
+          <div class="box-title"><span class="num">1</span>Validate Inputs</div>
+          <div class="box-desc">Check user's values against model rules before any API call</div>
+          <div class="box-hint">required fields · enum options · conditional locks</div>
+        </div>
+      </div>
+
+      <!-- branch: invalid -->
+      <div style="display:flex;width:100%;margin-top:0">
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center">
+          <div style="width:1.5px;height:16px;background:#222;margin:0 auto"></div>
+          <div style="width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid #2a2a2a"></div>
+        </div>
+        <div style="width:120px;display:flex;flex-direction:column;align-items:center;position:relative">
+          <div style="position:absolute;left:0;top:8px;height:1.5px;background:#1e1e1e;width:100%"></div>
+          <div style="position:absolute;right:0;top:8px;height:32px;width:1.5px;background:#1e1e1e"></div>
+          <div style="position:absolute;right:0;top:40px;background:#111;border:1px solid #1e1e1e;border-radius:5px;padding:4px 8px;font-size:10px;color:#d9534f;white-space:nowrap">✕ Error → UI</div>
+          <div style="position:absolute;right:52px;top:2px;font-size:9px;color:#2e2e2e;font-weight:700;letter-spacing:.5px">INVALID</div>
+        </div>
+      </div>
+
+      <div class="arrow" style="margin-top:-4px">
+        <div class="arrow-label">valid</div>
+        <div class="arrow-line" style="height:10px"></div>
+        <div class="arrow-head"></div>
+      </div>
+
+      <!-- 2 create job -->
+      <div class="node c-job" data-step="2" onclick="show(2)">
+        <div class="box">
+          <div class="box-title"><span class="num">2</span>Create Job Record</div>
+          <div class="box-desc">Write to DB before the API call — input is frozen here forever</div>
+          <div class="box-hint">status: "pending" · inputSnapshot immutable · enables redo/history</div>
+        </div>
+      </div>
+
+      <div class="arrow"><div class="arrow-line"></div><div class="arrow-head"></div></div>
+
+      <!-- 3 build payload -->
+      <div class="node c-payload" data-step="3" onclick="show(3)">
+        <div class="box">
+          <div class="box-title"><span class="num">3</span>Build Payload</div>
+          <div class="box-desc">Map our field names → API field names. Resolve which endpoint to hit.</div>
+          <div class="box-hint">mapTo · transforms · conditional endpoint selection</div>
+        </div>
+      </div>
+
+      <div class="arrow"><div class="arrow-line"></div><div class="arrow-head"></div></div>
+
+      <!-- 4 resolve assets -->
+      <div class="node c-assets" data-step="4" onclick="show(4)">
+        <div class="box">
+          <div class="box-title"><span class="num">4</span>Resolve Assets</div>
+          <div class="box-desc">Turn local files and asset references into public URLs the API can reach</div>
+          <div class="box-hint">local upload · CDN URL lookup · base64 encode if required</div>
+        </div>
+      </div>
+
+      <div class="arrow"><div class="arrow-line"></div><div class="arrow-head"></div></div>
+
+      <!-- provider bridge -->
+      <div class="bridge-box" style="cursor:pointer" onclick="show('bridge')">
+        <div class="bridge-title">⬡ Provider Bridge <span style="color:#333;font-size:9px;font-weight:400;text-transform:none;letter-spacing:0">— provider-specific module, not config</span></div>
+        <div class="bridge-grid">
+          <div class="provider-chip" id="chip-kie">
+            <span class="pname">KIE</span>
+            <span class="pmodels">Kling · Sora · Grok · Hailuo · Wan</span>
+          </div>
+          <div class="provider-chip" id="chip-fal">
+            <span class="pname">FAL</span>
+            <span class="pmodels">Flux · Ideogram · various</span>
+          </div>
+          <div class="provider-chip" id="chip-ws">
+            <span class="pname">WaveSpeed</span>
+            <span class="pmodels">LTX · fast image</span>
+          </div>
+        </div>
+        <div class="bridge-note">auth · file upload method · poll pattern · error handling<br/>new provider = new module (~80 lines) · new model = JSON config (if same shape) or bridge extension</div>
+      </div>
+
+      <div class="arrow"><div class="arrow-line"></div><div class="arrow-head"></div></div>
+
+      <!-- 5 submit -->
+      <div class="node c-submit" data-step="5" onclick="show(5)">
+        <div class="box">
+          <div class="box-title"><span class="num">5</span>Submit to API</div>
+          <div class="box-desc">Send payload to provider. Most video APIs return a task ID immediately — not the result.</div>
+          <div class="box-hint">POST → { task_id: "..." }</div>
+        </div>
+      </div>
+
+      <div class="arrow"><div class="arrow-line"></div><div class="arrow-head"></div></div>
+
+      <!-- decision: sync vs async -->
+      <div class="diamond-wrap" onclick="show('decision')">
+        <div class="diamond">Sync or Async response?</div>
+      </div>
+
+      <!-- branch -->
+      <div style="display:flex;width:100%;position:relative;margin-top:0">
+        <!-- left: async -->
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center">
+          <div style="height:1.5px;background:#222;width:50%;align-self:flex-end"></div>
+          <div style="width:1.5px;height:12px;background:#222"></div>
+          <div style="font-size:9px;color:#2e2e2e;font-weight:700;letter-spacing:.5px;margin-bottom:4px">ASYNC</div>
+        </div>
+        <!-- right: sync -->
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center">
+          <div style="height:1.5px;background:#222;width:50%;align-self:flex-start"></div>
+          <div style="width:1.5px;height:12px;background:#222"></div>
+          <div style="font-size:9px;color:#2e2e2e;font-weight:700;letter-spacing:.5px;margin-bottom:4px">SYNC</div>
+        </div>
+      </div>
+
+      <div style="display:flex;width:100%;gap:8px;align-items:flex-start">
+        <!-- async path: poll -->
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0">
+          <div style="width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid #2a2a2a"></div>
+          <div class="loop-box c-poll" style="width:100%" onclick="event.stopPropagation();show(6)">
+            <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#5ab9ea;margin-bottom:4px">
+              <span style="border:1.5px solid #5ab9ea30;border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;font-size:9px;margin-right:6px">6</span>Poll Status
+            </div>
+            <div style="font-size:11px;color:#555;line-height:1.5">GET /status every 3s until success or fail</div>
+            <div style="font-size:9px;color:#2a2a2a;margin-top:5px;font-family:'SF Mono',monospace">↻ loops until terminal state</div>
+          </div>
+          <div style="width:1.5px;height:12px;background:#222"></div>
+          <div style="width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid #2a2a2a"></div>
+          <div style="font-size:9px;color:#2e2e2e;margin-bottom:4px">result URL</div>
+        </div>
+        <!-- sync path: direct -->
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;padding-top:28px">
+          <div style="font-size:10px;color:#2a2a2a;text-align:center;padding:8px;border:1px dashed #1a1a1a;border-radius:6px;font-family:'SF Mono',monospace;width:100%">URL in response<br/>directly</div>
+          <div style="width:1.5px;height:12px;background:#222"></div>
+          <div style="width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid #2a2a2a"></div>
+        </div>
+      </div>
+
+      <!-- merge back -->
+      <div style="display:flex;width:100%;height:1.5px;background:#222;margin-bottom:0"></div>
+      <div style="width:1.5px;height:12px;background:#222;margin:0 auto"></div>
+      <div style="width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid #2a2a2a;margin:0 auto 4px"></div>
+
+      <!-- 7 save asset -->
+      <div class="node c-save" data-step="7" onclick="show(7)">
+        <div class="box">
+          <div class="box-title"><span class="num">7</span>Save Asset</div>
+          <div class="box-desc">Download output file, create Asset record with lineage link back to this job</div>
+          <div class="box-hint">createdByJobId → enables "what made this?" traversal</div>
+        </div>
+      </div>
+
+      <div class="arrow"><div class="arrow-line"></div><div class="arrow-head"></div></div>
+
+      <!-- 8 complete -->
+      <div class="node c-complete" data-step="8" onclick="show(8)">
+        <div class="box">
+          <div class="box-title"><span class="num">8</span>Update Job → Complete</div>
+          <div class="box-desc">Stamp job as completed, attach output asset IDs, notify UI</div>
+          <div class="box-hint">status: "completed" · outputAssetIds: [...] · UI polling detects change</div>
+        </div>
+      </div>
+
+      <div class="arrow"><div class="arrow-line" style="height:12px"></div></div>
+      <div class="end-node">Asset appears in grid</div>
+
+    </div><!-- /chart -->
+
+    <!-- ══════════════ DETAIL PANEL ══════════════ -->
+    <div class="detail" id="detail">
+      <div class="detail-empty" id="detail-empty">
+        <div class="icon">←</div>
+        <div>Click any step<br/>to see full detail</div>
+      </div>
+      <div id="detail-content" style="display:none"></div>
+    </div>
+
+  </div><!-- /page -->
+</div>
+
+<script>
+const steps = {
+  1: {
+    color: '#7c8cf8',
+    title: 'Validate Inputs',
+    tag: 'tag-json',
+    tagLabel: 'config-driven',
+    body: `Before any API call or database write, the user's input is checked against the model's declared rules. This runs entirely on the client — no network request needed. Bad inputs are blocked here, not at the API.`,
+    sections: [
+      {
+        title: 'What gets validated',
+        content: `<div class="code"><span class="c">// from model JSON config</span>
+<span class="k">required</span>: <span class="s">"prompt"</span>           <span class="c">→ blocked if empty</span>
+<span class="k">duration</span> <span class="k">options</span>: [<span class="v">5</span>, <span class="v">10</span>]  <span class="c">→ blocked if user set 7</span>
+<span class="k">end_frame</span> <span class="k">disableWhen</span>:       <span class="c">→ blocked if multi_shot=true</span>
+  multi_shot <span class="k">===</span> <span class="v">true</span>
+<span class="k">start_frame</span> <span class="k">required</span> <span class="k">if</span>:     <span class="c">→ blocked if mode is I2V</span>
+  mode <span class="k">===</span> <span class="s">"i2v"</span></div>`
+      },
+      {
+        title: 'Why before the DB write',
+        content: `<div class="note-box" style="--c:#7c8cf8">If validation ran after job creation, you'd have orphaned "pending" job records for every failed attempt. Validate first — only write a job record if input is clean.</div>`
+      }
+    ]
+  },
+  2: {
+    color: '#c792ea',
+    title: 'Create Job Record',
+    tag: 'tag-json',
+    tagLabel: 'core data model',
+    body: `A job record is written to the database before any API call. The input is captured as an immutable snapshot at this moment. Even if the generation fails, this record exists — enabling full history, redo, and lineage.`,
+    sections: [
+      {
+        title: 'Job schema',
+        content: `<div class="code">{
+  <span class="k">id</span>:             <span class="s">"job_abc123"</span>,
+  <span class="k">modelId</span>:        <span class="s">"kling-3.0"</span>,
+  <span class="k">status</span>:         <span class="s">"pending"</span>,
+  <span class="k">createdAt</span>:      <span class="v">2024-03-27T14:20:00Z</span>,
+
+  <span class="c">// frozen at creation — never mutated</span>
+  <span class="k">inputSnapshot</span>: {
+    <span class="k">params</span>: {
+      <span class="k">prompt</span>:   <span class="s">"wide establishing shot..."</span>,
+      <span class="k">duration</span>: <span class="v">10</span>,
+      <span class="k">cfg_scale</span>:<span class="v">0.5</span>
+    },
+    <span class="k">assetRefs</span>: [
+      { <span class="k">portKey</span>: <span class="s">"start_frame"</span>, <span class="k">assetId</span>: <span class="s">"asset_456"</span> }
+    ]
+  },
+
+  <span class="k">parentJobId</span>: <span class="v">null</span>  <span class="c">// set if this is a redo</span>
+}</div>`
+      },
+      {
+        title: 'What this enables',
+        content: `<div class="code"><span class="c">// redo = clone inputSnapshot into new job</span>
+deriveJob(jobId)
+
+<span class="c">// variation = same but new seed</span>
+deriveJob(jobId, { seed: random() })
+
+<span class="c">// tweak = override one param</span>
+deriveJob(jobId, { cfg_scale: 0.8 })
+
+<span class="c">// same prompt, different model</span>
+createJob({ modelId: <span class="s">"veo-3"</span>, ...oldJob.inputSnapshot })</div>`
+      }
+    ]
+  },
+  3: {
+    color: '#e5956b',
+    title: 'Build Payload',
+    tag: 'tag-json',
+    tagLabel: 'config-driven',
+    body: `Translates from the app's internal field names to what this specific API actually expects. Also picks the correct endpoint URL based on which inputs are present. Defined entirely in the model's JSON config — no code.`,
+    sections: [
+      {
+        title: 'Field mapping example — Sora 2 on KIE',
+        content: `<div class="code"><span class="c">// Our internal name → KIE API field</span>
+<span class="k">start_frame</span>  (image)  →  <span class="v">input.image_urls</span>: [url]  <span class="c">wrap-array</span>
+<span class="k">prompt</span>               →  <span class="v">input.prompt</span>: "..."
+<span class="k">duration</span>     10       →  <span class="v">input.n_frames</span>: <span class="s">"10"</span>   <span class="c">int→string</span>
+<span class="k">aspect_ratio</span>         →  <span class="v">input.aspect_ratio</span>
+
+<span class="c">// model ID injected by bridge (not user-facing)</span>
+<span class="k">model</span>: <span class="s">"sora-2-image-to-video"</span>  <span class="c">← I2V mode</span>
+<span class="k">model</span>: <span class="s">"sora-2-text-to-video"</span>   <span class="c">← T2V mode (no image)</span></div>`
+      },
+      {
+        title: 'Endpoint resolution — from model config',
+        content: `<div class="code"><span class="c">// declared in kling-3.0.json</span>
+<span class="k">"endpoint"</span>: [
+  { <span class="k">when</span>: { port: <span class="s">"start_frame"</span>, exists: <span class="v">true</span> },
+    <span class="k">use</span>: <span class="s">"/v1/kling/i2v"</span> },
+  { <span class="k">default</span>: <span class="v">true</span>,
+    <span class="k">use</span>: <span class="s">"/v1/kling/t2v"</span> }
+]
+<span class="c">// resolveEndpoint() picks the right URL at runtime</span></div>`
+      }
+    ]
+  },
+  4: {
+    color: '#f0c674',
+    title: 'Resolve Assets',
+    tag: 'tag-bridge',
+    tagLabel: 'provider-aware',
+    body: `APIs can't access files on the user's machine. Any local file must be uploaded first to get a public URL. Asset references from previous generations are looked up in the asset store. The method used depends on what the provider accepts.`,
+    sections: [
+      {
+        title: 'Resolution strategies',
+        content: `<div class="code"><span class="c">// User uploaded local file</span>
+<span class="o">local: /Users/.../frame.jpg</span>
+  → bridge.uploadFile(file)
+  → <span class="ok">https://cdn.provider.com/tmp/abc.jpg</span>
+
+<span class="c">// User picked a previous generation</span>
+<span class="o">assetRef: "asset_456"</span>
+  → assetStore.getUrl("asset_456")
+  → <span class="ok">https://storage.ark/asset_456.mp4</span>
+
+<span class="c">// Some providers want base64 instead of URL</span>
+<span class="o">local: /Users/.../frame.jpg</span>
+  → readFile → Buffer → base64
+  → <span class="ok">"data:image/jpeg;base64,/9j/4AAQ..."</span></div>`
+      },
+      {
+        title: 'Provider differences here',
+        content: `<div class="note-box" style="--c:#f0c674">KIE requires public HTTPS URLs (max 10MB, jpeg/png/webp). Some providers accept multipart form upload. Others accept base64. The bridge module handles this — the JSON config just declares the port type as "image".</div>`
+      }
+    ]
+  },
+  bridge: {
+    color: '#e5956b',
+    title: 'Provider Bridge',
+    tag: 'tag-bridge',
+    tagLabel: 'code, not config',
+    body: `This is the one place where code is written per provider — not per model. Each bridge implements three methods: submit, poll, and extractOutput. Within a provider, models that share the same API shape need only a JSON config. Models with a different shape may need a bridge extension.`,
+    sections: [
+      {
+        title: 'Bridge interface (same for every provider)',
+        content: `<div class="code"><span class="k">interface</span> Provider {
+  <span class="c">// send payload, return provider's job ID</span>
+  submit(endpoint, payload): <span class="b">Promise&lt;string&gt;</span>
+
+  <span class="c">// poll until done, return raw response</span>
+  poll(jobId, taskConfig): <span class="b">Promise&lt;any&gt;</span>
+
+  <span class="c">// extract result URL from response</span>
+  extractOutput(result, outputMapping): <span class="b">string[]</span>
+}</div>`
+      },
+      {
+        title: 'KIE bridge — what it handles',
+        content: `<div class="provider-detail">
+  <div class="provider-detail-title">KIE (Kling, Sora 2, Grok Imagine, Wan, Hailuo...)</div>
+  <div class="provider-row"><span class="what">Auth</span><span class="how">Authorization: Bearer {KIE_API_KEY}</span></div>
+  <div class="provider-row"><span class="what">Base URL</span><span class="how">https://api.kieai.com</span></div>
+  <div class="provider-row"><span class="what">Submit endpoint</span><span class="how">POST /api/v1/jobs/createTask</span></div>
+  <div class="provider-row"><span class="what">Poll endpoint</span><span class="how">GET /api/v1/jobs/taskInfo?taskId=</span></div>
+  <div class="provider-row"><span class="what">Success state path</span><span class="how">data.status === "succeed"</span></div>
+  <div class="provider-row"><span class="what">Result URL path</span><span class="how">data.resultJson.resultUrls[0]</span></div>
+  <div class="provider-row"><span class="what">File input</span><span class="how">Public HTTPS URL (user provides or we upload)</span></div>
+</div>`
+      },
+      {
+        title: 'Within KIE: model shapes differ',
+        content: `<div class="code"><span class="c">// Sora 2 — model ID in payload, images nested</span>
+{ <span class="k">model</span>: <span class="s">"sora-2-image-to-video"</span>,
+  <span class="k">input</span>: { <span class="k">image_urls</span>: [...], <span class="k">n_frames</span>: <span class="s">"10"</span> } }
+
+<span class="c">// Grok Imagine — different field, supports task_id ref</span>
+{ <span class="k">model</span>: <span class="s">"grok-imagine/image-to-video"</span>,
+  <span class="k">input</span>: { <span class="k">image_urls</span>: [...], <span class="k">duration</span>: <span class="s">"6"</span>,
+           <span class="k">resolution</span>: <span class="s">"720p"</span> } }
+
+<span class="c">// OR via task reference (Grok only)</span>
+{ <span class="k">model</span>: <span class="s">"grok-imagine/image-to-video"</span>,
+  <span class="k">input</span>: { <span class="k">task_id</span>: <span class="s">"e989621f..."</span>, <span class="k">index</span>: <span class="v">0</span> } }</div>`
+      },
+      {
+        title: 'Rule for adding a model',
+        content: `<div class="note-box" style="--c:#e5956b">
+<strong>Same provider, same API shape</strong> → JSON config only. Map the fields, done.<br/><br/>
+<strong>Same provider, new API shape</strong> → Extend the KIE bridge to handle the new input/output pattern. Usually a few lines.<br/><br/>
+<strong>New provider entirely</strong> → Implement the 3-method Provider interface. ~80 lines.
+</div>`
+      }
+    ]
+  },
+  5: {
+    color: '#e5956b',
+    title: 'Submit to API',
+    tag: 'tag-bridge',
+    tagLabel: 'bridge executes',
+    body: `The built payload is sent to the resolved endpoint via the provider bridge. For video generation, the API almost always returns immediately with a task ID — not the result. The actual generation happens asynchronously on the provider's servers.`,
+    sections: [
+      {
+        title: 'KIE request (Sora 2 I2V)',
+        content: `<div class="code"><span class="b">POST</span> https://api.kieai.com/api/v1/jobs/createTask
+Authorization: Bearer {KIE_API_KEY}
+
+{
+  <span class="k">"model"</span>: <span class="s">"sora-2-image-to-video"</span>,
+  <span class="k">"callBackUrl"</span>: <span class="s">"https://ark.app/api/callback"</span>,
+  <span class="k">"input"</span>: {
+    <span class="k">"prompt"</span>: <span class="s">"wide establishing shot..."</span>,
+    <span class="k">"image_urls"</span>: [<span class="s">"https://storage.ark/asset_456.jpg"</span>],
+    <span class="k">"aspect_ratio"</span>: <span class="s">"landscape"</span>,
+    <span class="k">"n_frames"</span>: <span class="s">"10"</span>,
+    <span class="k">"remove_watermark"</span>: <span class="v">true</span>
+  }
+}
+
+<span class="c">// immediate response — not the video</span>
+{ <span class="k">"code"</span>: <span class="v">200</span>, <span class="k">"data"</span>: { <span class="k">"taskId"</span>: <span class="s">"task_12345"</span> } }</div>`
+      }
+    ]
+  },
+  6: {
+    color: '#5ab9ea',
+    title: 'Poll Status',
+    tag: 'tag-bridge',
+    tagLabel: 'bridge handles loop',
+    body: `The bridge repeatedly queries the task status endpoint until the job reaches a terminal state (success or failure). The model config declares where to look in the response — no hardcoded paths.`,
+    sections: [
+      {
+        title: 'KIE polling',
+        content: `<div class="code"><span class="c">// every 3 seconds</span>
+<span class="b">GET</span> /api/v1/jobs/taskInfo?taskId=task_12345
+
+<span class="c">// response during processing</span>
+{ <span class="k">"data"</span>: { <span class="k">"status"</span>: <span class="s">"processing"</span> } }  <span class="c">← wait</span>
+
+<span class="c">// response on success</span>
+{ <span class="k">"data"</span>: {
+  <span class="k">"status"</span>: <span class="ok">"succeed"</span>,
+  <span class="k">"resultJson"</span>: {
+    <span class="k">"resultUrls"</span>: [<span class="s">"https://cdn.kie.../video.mp4"</span>]
+  }
+}}
+<span class="c">// model config: outputMapping.resultPath = "data.resultJson.resultUrls[0]"</span></div>`
+      },
+      {
+        title: 'Polling config in model JSON',
+        content: `<div class="code"><span class="k">"taskConfig"</span>: {
+  <span class="k">"statusEndpoint"</span>:  <span class="s">"/api/v1/jobs/taskInfo"</span>,
+  <span class="k">"statePath"</span>:       <span class="s">"data.status"</span>,
+  <span class="k">"successStates"</span>:  [<span class="s">"succeed"</span>],
+  <span class="k">"failureStates"</span>:  [<span class="s">"failed"</span>],
+  <span class="k">"intervalMs"</span>:     <span class="v">3000</span>
+}</div>`
+      }
+    ]
+  },
+  7: {
+    color: '#a8cc8c',
+    title: 'Save Asset',
+    tag: 'tag-json',
+    tagLabel: 'core data model',
+    body: `The output URL is downloaded and saved as an Asset record. The createdByJobId field links this asset back to the job — forming the lineage chain that answers "what made this?" and "what was made from this?"`,
+    sections: [
+      {
+        title: 'Asset schema',
+        content: `<div class="code">{
+  <span class="k">id</span>:             <span class="s">"asset_789"</span>,
+  <span class="k">type</span>:           <span class="s">"video"</span>,
+  <span class="k">url</span>:            <span class="s">"/storage/asset_789.mp4"</span>,
+  <span class="k">thumbnailUrl</span>:   <span class="s">"/storage/asset_789_thumb.jpg"</span>,
+  <span class="k">mimeType</span>:       <span class="s">"video/mp4"</span>,
+  <span class="k">sizeBytes</span>:      <span class="v">18432000</span>,
+  <span class="k">source</span>:         <span class="s">"generated"</span>,
+
+  <span class="c">// lineage — the key link</span>
+  <span class="k">createdByJobId</span>: <span class="s">"job_abc123"</span>,
+  <span class="k">createdAt</span>:      <span class="v">2024-03-27T14:23:11Z</span>,
+
+  <span class="k">metadata</span>: {
+    <span class="k">duration</span>: <span class="v">10</span>,
+    <span class="k">prompt</span>:   <span class="s">"wide establishing shot..."</span>
+  }
+}</div>`
+      },
+      {
+        title: 'Lineage traversal',
+        content: `<div class="code"><span class="c">// "What made this asset?"</span>
+asset.createdByJobId
+  → job.inputSnapshot.assetRefs
+  → input asset IDs
+  → their createdByJobId
+  → and so on up the chain
+
+<span class="c">// "What was made from this asset?"</span>
+query jobs WHERE
+  inputSnapshot.assetRefs contains assetId</div>`
+      }
+    ]
+  },
+  8: {
+    color: '#a8cc8c',
+    title: 'Update Job → Complete',
+    tag: 'tag-json',
+    tagLabel: 'core data model',
+    body: `The job record is updated with the result. The UI detects this change (via polling or websocket) and displays the asset in the grid. If the generation failed at any step, the job is marked failed instead with the error reason.`,
+    sections: [
+      {
+        title: 'Final job state',
+        content: `<div class="code"><span class="c">// success path</span>
+job.update({
+  <span class="k">status</span>:         <span class="ok">"completed"</span>,
+  <span class="k">outputAssetIds</span>: [<span class="s">"asset_789"</span>],
+  <span class="k">completedAt</span>:    <span class="v">2024-03-27T14:23:11Z</span>,
+  <span class="k">durationMs</span>:     <span class="v">191000</span>
+})
+
+<span class="c">// failure path</span>
+job.update({
+  <span class="k">status</span>:  <span class="e">"failed"</span>,
+  <span class="k">error</span>:   <span class="s">"Provider returned: insufficient credits"</span>,
+  <span class="k">failedAt</span>: <span class="v">2024-03-27T14:21:03Z</span>
+})</div>`
+      },
+      {
+        title: 'UI notification',
+        content: `<div class="note-box" style="--c:#a8cc8c">The UI polls for job status updates. When status changes from "pending" → "completed", the grid cell updates to show the video thumbnail. Failed jobs show an error state with a retry button — which calls <strong>deriveJob()</strong> to create a new job with the same inputs.</div>`
+      }
+    ]
+  }
+};
+
+function show(id) {
+  const data = steps[id];
+  if (!data) return;
+
+  // update active state
+  document.querySelectorAll('.node,.diamond-wrap,.loop-box,.bridge-box').forEach(el => {
+    el.classList.remove('active');
+  });
+  if (typeof id === 'number') {
+    document.querySelectorAll(`.node[data-step="${id}"],.loop-box`).forEach(el => {
+      if (id === 6) { if (el.classList.contains('loop-box')) el.classList.add('active'); }
+      else { if (el.dataset.step == id) el.classList.add('active'); }
+    });
+  } else if (id === 'bridge') {
+    document.querySelector('.bridge-box').classList.add('active');
+  } else if (id === 'decision') {
+    document.querySelector('.diamond-wrap').classList.add('active');
+  }
+
+  document.getElementById('detail-empty').style.display = 'none';
+  const content = document.getElementById('detail-content');
+  content.style.display = 'block';
+
+  let html = `
+    <div class="detail-step-num" style="color:${data.color}">${data.tag ? `<span class="tag ${data.tag}">${data.tagLabel}</span>` : ''}</div>
+    <div class="detail-title" style="color:${data.color}">${data.title}</div>
+    <div class="detail-body">${data.body}</div>
+    <hr class="divider">
+  `;
+
+  (data.sections || []).forEach(s => {
+    html += `
+      <div class="detail-section">
+        <div class="detail-section-title">${s.title}</div>
+        ${s.content}
+      </div>
+    `;
+  });
+
+  content.innerHTML = html;
+}
+</script>
+</body>
+</html>

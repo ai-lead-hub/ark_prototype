@@ -10,6 +10,8 @@ import demoData from "../data/sc03-demo.json";
 
 /* ── Types ── */
 
+export type AssetRole = "pinned" | "input" | "output";
+
 export type ShotCandidate = {
   id: string;
   extension: string;
@@ -23,6 +25,7 @@ export type ShotCandidate = {
   taskTypeId: string;
   thumbnailPath: string;
   previewPath: string;
+  role: AssetRole;
 };
 
 export type Shot = {
@@ -58,10 +61,32 @@ type ShotsContextValue = {
 
 const ShotsContext = createContext<ShotsContextValue | null>(null);
 
+/* ── Demo: inject pinned/input roles on some candidates ── */
+
+function augmentWithRoles(rawShots: typeof demoData.shots): Shot[] {
+  return rawShots.map((shot) => {
+    const candidates: ShotCandidate[] = shot.candidates.map((c, i) => ({
+      ...c,
+      role: "output" as AssetRole,
+    }));
+
+    // For demo: first candidate in each shot with 3+ candidates = pinned,
+    // second = input ref, rest = output
+    if (candidates.length >= 3) {
+      candidates[0].role = "pinned";
+      candidates[1].role = "input";
+    } else if (candidates.length === 2) {
+      candidates[0].role = "input";
+    }
+
+    return { ...shot, candidates } as Shot;
+  });
+}
+
 /* ── Provider ── */
 
 export function ShotsProvider({ children }: { children: ReactNode }) {
-  const shots = demoData.shots as Shot[];
+  const shots = useMemo(() => augmentWithRoles(demoData.shots), []);
   const assets = demoData.assets as KitsuAsset[];
   const [activeShotId, setActiveShotId] = useState<string | null>(
     shots[0]?.id ?? null
