@@ -96,7 +96,7 @@ export default function ElementCard({
     <div
       className={`group relative aspect-square overflow-hidden rounded-[22px] border transition ${isSelected
         ? "border-amber-400/60 bg-amber-500/8 ring-1 ring-amber-400/40"
-        : "border-white/8 bg-[#111317] hover:border-amber-400/28"
+        : "border-transparent bg-[#111317] hover:border-amber-400/28"
         } ${isSelectionMode ? "cursor-pointer" : ""}`}
       draggable={hasSheet}
       onDragStart={handleDragStart}

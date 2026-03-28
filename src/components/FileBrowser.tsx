@@ -240,7 +240,7 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
     if (entry.mime.startsWith("image/") || entry.mime.startsWith("video/")) {
       return "border-transparent bg-[linear-gradient(180deg,rgba(255,255,255,0.02),rgba(17,19,23,0.94))] hover:border-transparent";
     }
-    return "border-white/5 bg-slate-900/40 hover:bg-slate-800/60 hover:border-white/10";
+    return "border-transparent bg-slate-900/40 hover:bg-slate-800/60";
   }, []);
 
   const handleRename = async (entry: FileEntry) => {
@@ -1043,51 +1043,16 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
             </div>
 
             {/* Active shot */}
-            {activeShot && (() => {
-              const globalPinnedCandidates: import("../state/shots").ShotCandidate[] = orderedEntries
-                .filter(entry => Boolean(pins[entry.relPath]))
-                .map(entry => {
-                  const isVideoTile = entry.mime.startsWith("video/");
-                  const url = entry.id.startsWith("dummy-img")
-                    ? `https://picsum.photos/seed/${entry.id}/400/225`
-                    : entry.id.startsWith("dummy-vid")
-                    ? "https://www.w3schools.com/html/mov_bbb.mp4"
-                    : getFileUrl(connection, entry.relPath, { includeToken: true });
-                    
-                  return {
-                    id: `global-pin-${entry.id}`,
-                    extension: entry.ext,
-                    isVideo: isVideoTile,
-                    revision: 1,
-                    width: typeof entry.width === 'number' ? entry.width : 0,
-                    height: typeof entry.height === 'number' ? entry.height : 0,
-                    duration: typeof entry.duration === 'number' ? entry.duration : 0,
-                    originalName: entry.name,
-                    createdAt: new Date(entry.mtime).toISOString(),
-                    taskTypeId: "",
-                    thumbnailPath: url,
-                    previewPath: url,
-                    role: "pinned",
-                  };
-                });
-
-              return (
-                <ShotContainer
-                  shot={{
-                    ...activeShot,
-                    candidates: [
-                      ...globalPinnedCandidates,
-                      ...activeShot.candidates,
-                    ],
-                  }}
-                  isActive={true}
-                  onActivate={() => {}}
-                  onNavigate={navigateShot}
-                  demoQueuePhase={demoQueuePhase}
-                  demoQueueProgress={demoQueueProgress}
-                />
-              );
-            })()}
+            {activeShot && (
+              <ShotContainer
+                shot={activeShot}
+                isActive={true}
+                onActivate={() => {}}
+                onNavigate={navigateShot}
+                demoQueuePhase={demoQueuePhase}
+                demoQueueProgress={demoQueueProgress}
+              />
+            )}
 
             {/* Inactive shots */}
             {inactiveShots.map((shot) => (
@@ -1261,7 +1226,7 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
                     >
                       {/* Multi-select checkbox */}
                       {multiSelectMode && (
-                        <div className={`absolute top-1 left-1 z-20 h-5 w-5 rounded border-2 flex items-center justify-center transition ${selectedIds.has(entry.id) ? "bg-rose-500 border-rose-500" : "bg-black/50 border-white/50"}`}>
+                        <div className={`absolute top-1 left-1 z-20 h-5 w-5 rounded border-2 flex items-center justify-center transition ${selectedIds.has(entry.id) ? "bg-rose-500 border-rose-500" : "bg-black/50 border-slate-500/50"}`}>
                           {selectedIds.has(entry.id) && <span className="text-white text-xs font-bold">✓</span>}
                         </div>
                       )}

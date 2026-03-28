@@ -572,7 +572,11 @@ export default function CanvasBrowser({
                           className={`pointer-events-auto absolute overflow-hidden rounded-[14px] border transition-shadow hover:border-amber-400/30 ${
                             isPublished
                               ? "border-violet-400/40 shadow-[0_0_0_1px_rgba(139,92,246,0.2)]"
-                              : "border-white/6 shadow-[0_12px_40px_rgba(0,0,0,0.3)]"
+                              : c.role === "pinned"
+                              ? "border-indigo-500/60 shadow-[0_0_8px_rgba(99,102,241,0.15)]"
+                              : c.role === "input"
+                              ? "border-emerald-500/60 shadow-[0_0_8px_rgba(16,185,129,0.15)]"
+                              : "border-transparent shadow-[0_12px_40px_rgba(0,0,0,0.3)]"
                           } bg-[#111318]`}
                           style={{
                             left: cardX,
@@ -722,7 +726,7 @@ export default function CanvasBrowser({
                   className={`pointer-events-auto group absolute overflow-hidden rounded-[18px] border transition-shadow ${
                     isSelected
                       ? "border-amber-400/55 shadow-[0_0_0_1px_rgba(251,191,36,0.32),0_20px_70px_rgba(0,0,0,0.34)]"
-                      : "border-white/6 shadow-[0_18px_55px_rgba(0,0,0,0.34)]"
+                      : "border-transparent shadow-[0_18px_55px_rgba(0,0,0,0.34)]"
                   } ${interaction?.id === item.id ? "cursor-grabbing" : "cursor-grab"} bg-[#111318]`}
                   style={getCardStyle(layout)}
                   onPointerDown={(event) => {
@@ -917,10 +921,10 @@ export default function CanvasBrowser({
               )}
 
               <div
-                className="absolute bottom-2 right-2 z-10 h-4 w-4 rounded-[5px] border border-white/12 bg-black/30 opacity-0 transition-opacity group-hover:opacity-100"
+                className="absolute bottom-2 right-2 z-10 h-4 w-4 rounded-[5px] border border-amber-400/20 bg-black/30 opacity-0 transition-opacity group-hover:opacity-100"
                 onPointerDown={(event) => startInteraction(event, item.id, "resize")}
               >
-                <div className="absolute inset-[3px] border-b border-r border-white/55" />
+                <div className="absolute inset-[3px] border-b border-r border-amber-400/40" />
               </div>
                 </div>
               );
