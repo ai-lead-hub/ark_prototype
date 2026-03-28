@@ -750,7 +750,7 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
         </button>
       </div>
 
-      <div className=”flex flex-wrap gap-1 text-xs”>
+      <div className="flex flex-wrap gap-1 text-xs">
         <button
           type="button"
           onClick={() => toggleGroup("images")}
@@ -1085,7 +1085,7 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
                     </button>
                   );
                 })}
-              </div>}
+              </div>
 
             {visibleCount < filteredEntries.length && (
               <div className="p-4 flex justify-center">
