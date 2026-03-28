@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { Shot, ShotCandidate } from "../state/shots";
 
 type Props = {
@@ -11,12 +12,37 @@ type Props = {
   demoQueueProgress?: number;
 };
 
+function ImageLabOverlay({ mediaUrl, isVideo, onClose }: { mediaUrl: string; isVideo: boolean; onClose: () => void }) {
+  return (
+    <div 
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-md"
+      onClick={onClose}
+    >
+      <button 
+        type="button"
+        className="absolute top-4 right-4 z-[101] flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white/50 transition hover:bg-white/20 hover:text-white"
+        onClick={onClose}
+      >
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+
+      {isVideo ? (
+        <video src={mediaUrl} className="max-h-full max-w-full object-contain shadow-2xl" controls autoPlay loop onClick={(e) => e.stopPropagation()} />
+      ) : (
+        <img src={mediaUrl} className="max-h-full max-w-full object-contain shadow-2xl" onClick={(e) => e.stopPropagation()} />
+      )}
+    </div>
+  );
+}
+
 function CandidateTile({
   c,
   isPublished,
+  onClick,
 }: {
   c: ShotCandidate;
   isPublished: boolean;
+  onClick: () => void;
 }) {
   let borderClass = "border border-transparent hover:border-amber-400/30";
   if (c.role === "pinned") {
@@ -26,7 +52,10 @@ function CandidateTile({
   }
 
   return (
-    <div className={`group/tile relative aspect-video overflow-hidden rounded-[14px] bg-[#111318] transition ${borderClass}`}>
+    <div 
+      className={`group/tile relative aspect-video overflow-hidden rounded-[14px] bg-[#111318] transition cursor-pointer ${borderClass}`}
+      onClick={onClick}
+    >
       {c.isVideo ? (
         <video
           src={c.previewPath}
@@ -158,126 +187,125 @@ export default function ShotContainer({
   demoQueueProgress,
 }: Props) {
   const publishedId = shot.previewFileId;
+  const [fullscreenCandidate, setFullscreenCandidate] = useState<ShotCandidate | null>(null);
 
   return (
-    <div
-      className={`rounded-[20px] border transition-all ${
-        isActive
-          ? "border-amber-400/20 bg-[#0d0e12]"
-          : "border-white/[0.04] bg-[#0a0b0e] opacity-50 hover:opacity-70"
-      }`}
-    >
-      {/* Header */}
+    <>
       <div
-        className={`flex items-center gap-2 px-4 py-2.5 ${
-          !isActive ? "cursor-pointer" : ""
+        className={`rounded-[20px] border transition-all ${
+          isActive
+            ? "border-amber-400/20 bg-[#0d0e12]"
+            : "border-white/[0.04] bg-[#0a0b0e] opacity-50 hover:opacity-70"
         }`}
-        onClick={!isActive ? onActivate : undefined}
       >
-        {/* Nav arrows */}
-        <div className="flex flex-col gap-0.5">
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onNavigate("prev");
-            }}
-            className="flex h-5 w-5 items-center justify-center rounded text-slate-500 transition hover:bg-white/5 hover:text-white"
-            aria-label="Previous shot"
-          >
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6"/></svg>
-          </button>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onNavigate("next");
-            }}
-            className="flex h-5 w-5 items-center justify-center rounded text-slate-500 transition hover:bg-white/5 hover:text-white"
-            aria-label="Next shot"
-          >
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-          </button>
-        </div>
-
-        {/* Shot name */}
-        <div className="min-w-0 flex-1">
-          <span className="kv-mono text-sm font-semibold text-amber-200/90">
-            {shot.name}
-          </span>
-          {shot.directionNote && (
-            <span className="ml-2 text-xs text-slate-500">
-              — {shot.directionNote}
-            </span>
-          )}
-        </div>
-
-        {/* Tagged element avatars */}
-        {taggedElements.length > 0 && (
-          <div className="flex -space-x-1.5">
-            {taggedElements.slice(0, 5).map((el) => (
-              <div
-                key={el.id}
-                className="flex h-6 w-6 items-center justify-center rounded-full border border-[#1a1c22] bg-slate-700 text-[9px] font-bold text-white"
-                aria-label={el.name}
-              >
-                {el.thumbnailPath ? (
-                  <img
-                    src={el.thumbnailPath}
-                    alt={el.name}
-                    className="h-full w-full rounded-full object-cover"
-                  />
-                ) : (
-                  el.name.slice(0, 2).toUpperCase()
-                )}
-              </div>
-            ))}
+        {/* Header */}
+        <div
+          className={`flex items-center gap-2 px-4 py-2.5 ${
+            !isActive ? "cursor-pointer" : ""
+          }`}
+          onClick={!isActive ? onActivate : undefined}
+        >
+          {/* Nav arrows */}
+          <div className="flex flex-col gap-0.5">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onNavigate("prev");
+              }}
+              className="flex h-5 w-5 items-center justify-center rounded text-slate-500 transition hover:bg-white/5 hover:text-white"
+              aria-label="Previous shot"
+            >
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6"/></svg>
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onNavigate("next");
+              }}
+              className="flex h-5 w-5 items-center justify-center rounded text-slate-500 transition hover:bg-white/5 hover:text-white"
+              aria-label="Next shot"
+            >
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
           </div>
-        )}
 
-        {/* Candidate count */}
-        <span className="kv-mono text-[10px] text-slate-600">
-          {shot.candidates.length} candidate{shot.candidates.length !== 1 ? "s" : ""}
-        </span>
-      </div>
-
-      {/* Candidate grid */}
-      {(isActive || shot.candidates.length > 0) && (
-        <div className="px-3 pb-3">
-          <div className={`grid gap-2 ${isActive ? "grid-cols-3" : "grid-cols-6"}`}>
-            {isActive && demoQueuePhase === "processing" && (
-              <div className="group/tile relative aspect-video flex-col overflow-hidden rounded-[14px] border border-amber-400/20 bg-[#17191f]">
-                <div className="absolute inset-x-0 top-0 h-1 bg-white/5">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-orange-500 to-amber-400"
-                    style={{ width: `${demoQueueProgress ?? 0}%`, transition: "width 0.3s ease" }}
-                  />
-                </div>
-                <div className="flex h-full flex-col justify-between p-3">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <div className="kv-mono text-[10px] uppercase tracking-[0.16em] text-slate-500">Image job</div>
-                      <div className="text-sm font-semibold text-white">Generating output...</div>
-                    </div>
-                    <div className="kv-mono rounded-full bg-amber-500/12 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-200 animate-pulse">
-                      Processing
-                    </div>
-                  </div>
-                  <div className="flex-1 my-2 overflow-hidden rounded-[8px] bg-[radial-gradient(circle_at_35%_18%,rgba(249,115,22,0.14),transparent_0_28%),linear-gradient(135deg,rgba(44,48,58,0.92),rgba(14,15,19,0.96))]" />
-                  <div className="space-y-1">
-                    <div className="truncate text-[11px] text-slate-400">
-                      {(demoQueueProgress ?? 0) < 30 ? "Initializing..." : (demoQueueProgress ?? 0) < 80 ? "Rendering frame..." : "Finalizing..."}
-                    </div>
-                  </div>
-                </div>
-              </div>
+          {/* Shot name */}
+          <div className="min-w-0 flex-1">
+            <span className="kv-mono text-sm font-semibold text-amber-200/90">
+              {shot.name}
+            </span>
+            {shot.directionNote && (
+              <span className="ml-2 text-xs text-slate-500">
+                — {shot.directionNote}
+              </span>
             )}
-            
-            {isActive && demoQueuePhase === "completed" && (
-              <CandidateTile
-                key="demo-result"
-                isPublished={false}
-                c={{
+          </div>
+
+          {/* Tagged element avatars */}
+          {taggedElements.length > 0 && (
+            <div className="flex -space-x-1.5">
+              {taggedElements.slice(0, 5).map((el) => (
+                <div
+                  key={el.id}
+                  className="flex h-6 w-6 items-center justify-center rounded-full border border-[#1a1c22] bg-slate-700 text-[9px] font-bold text-white"
+                  aria-label={el.name}
+                >
+                  {el.thumbnailPath ? (
+                    <img
+                      src={el.thumbnailPath}
+                      alt={el.name}
+                      className="h-full w-full rounded-full object-cover"
+                    />
+                  ) : (
+                    el.name.slice(0, 2).toUpperCase()
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Candidate count */}
+          <span className="kv-mono text-[10px] text-slate-600">
+            {shot.candidates.length} candidate{shot.candidates.length !== 1 ? "s" : ""}
+          </span>
+        </div>
+
+        {/* Candidate grid */}
+        {(isActive || shot.candidates.length > 0) && (
+          <div className="px-3 pb-3">
+            <div className={`grid gap-2 ${isActive ? "grid-cols-3" : "grid-cols-6"}`}>
+              {isActive && demoQueuePhase === "processing" && (
+                <div className="group/tile relative aspect-video flex-col overflow-hidden rounded-[14px] border border-amber-400/20 bg-[#17191f]">
+                  <div className="absolute inset-x-0 top-0 h-1 bg-white/5">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-orange-500 to-amber-400"
+                      style={{ width: `${demoQueueProgress ?? 0}%`, transition: "width 0.3s ease" }}
+                    />
+                  </div>
+                  <div className="flex h-full flex-col justify-between p-3">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <div className="kv-mono text-[10px] uppercase tracking-[0.16em] text-slate-500">Image job</div>
+                        <div className="text-sm font-semibold text-white">Generating output...</div>
+                      </div>
+                      <div className="kv-mono rounded-full bg-amber-500/12 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-200 animate-pulse">
+                        Processing
+                      </div>
+                    </div>
+                    <div className="flex-1 my-2 overflow-hidden rounded-[8px] bg-[radial-gradient(circle_at_35%_18%,rgba(249,115,22,0.14),transparent_0_28%),linear-gradient(135deg,rgba(44,48,58,0.92),rgba(14,15,19,0.96))]" />
+                    <div className="space-y-1">
+                      <div className="truncate text-[11px] text-slate-400">
+                        {(demoQueueProgress ?? 0) < 30 ? "Initializing..." : (demoQueueProgress ?? 0) < 80 ? "Rendering frame..." : "Finalizing..."}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {isActive && demoQueuePhase === "completed" && (() => {
+                const dummyCandidate: ShotCandidate = {
                   id: "demo-result",
                   extension: "jpg",
                   isVideo: false,
@@ -291,22 +319,39 @@ export default function ShotContainer({
                   thumbnailPath: "https://picsum.photos/seed/demo-queue-result/640/360",
                   previewPath: "https://picsum.photos/seed/demo-queue-result/640/360",
                   role: "output",
-                }}
-              />
-            )}
+                };
+                return (
+                  <CandidateTile
+                    key="demo-result"
+                    isPublished={false}
+                    c={dummyCandidate}
+                    onClick={() => setFullscreenCandidate(dummyCandidate)}
+                  />
+                );
+              })()}
 
-            {(isActive ? shot.candidates : shot.candidates.slice(0, 6)).map(
-              (c) => (
-                <CandidateTile
-                  key={c.id}
-                  c={c}
-                  isPublished={c.id === publishedId}
-                />
-              )
-            )}
+              {(isActive ? shot.candidates : shot.candidates.slice(0, 6)).map(
+                (c) => (
+                  <CandidateTile
+                    key={c.id}
+                    c={c}
+                    isPublished={c.id === publishedId}
+                    onClick={() => setFullscreenCandidate(c)}
+                  />
+                )
+              )}
+            </div>
           </div>
-        </div>
+        )}
+      </div>
+
+      {fullscreenCandidate && (
+        <ImageLabOverlay
+          mediaUrl={fullscreenCandidate.previewPath}
+          isVideo={fullscreenCandidate.isVideo}
+          onClose={() => setFullscreenCandidate(null)}
+        />
       )}
-    </div>
+    </>
   );
 }
