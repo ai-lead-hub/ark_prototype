@@ -1304,45 +1304,6 @@ server.post("/elements", async (request, reply) => {
   }
 });
 
-// Delete element
-server.patch("/elements/:id", async (request, reply) => {
-  const { id } = request.params;
-  const { name } = request.body ?? {};
-
-  if (!id || !/^[a-f0-9-]+$/i.test(id)) {
-    return reply.code(400).send({ error: "Invalid element ID" });
-  }
-
-  if (typeof name !== "string" || !name.trim()) {
-    return reply.code(400).send({ error: "Name is required" });
-  }
-
-  try {
-    const elements = await loadElements();
-    const index = elements.findIndex((el) => el.id === id);
-
-    if (index === -1) {
-      return reply.code(404).send({ error: "Element not found" });
-    }
-
-    const existing = elements[index];
-    const updated = {
-      ...existing,
-      name: name.trim(),
-      updatedAt: Date.now(),
-    };
-
-    elements[index] = updated;
-    await saveElements(elements);
-
-    return reply.send({ element: updated });
-  } catch (error) {
-    request.log.error(error);
-    return reply.code(500).send({ error: error.message ?? "Failed to update element" });
-  }
-});
-
-// Delete element
 server.delete("/elements/:id", async (request, reply) => {
   const { id } = request.params;
 

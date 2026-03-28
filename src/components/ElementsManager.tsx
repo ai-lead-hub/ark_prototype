@@ -55,7 +55,6 @@ export default function ElementsManager() {
     closeManager,
     openForm,
     selectElement,
-    updateElement,
     deleteElement,
   } = useElements();
   const [demoElements, setDemoElements] = useState<Element[]>(DEMO_ELEMENTS);
@@ -78,26 +77,17 @@ export default function ElementsManager() {
   const showLoading = isLoading && !usingDemoElements;
   const showError = Boolean(error) && !usingDemoElements;
 
-  const handleEditElement = async (element: Element) => {
+  const handleEditElement = (element: Element) => {
     const nextName = prompt("Rename element", element.name)?.trim();
     if (!nextName || nextName === element.name) return;
 
-    if (usingDemoElements || element.id.startsWith("demo-element-")) {
-      setDemoElements((prev) =>
-        prev.map((entry) =>
-          entry.id === element.id
-            ? { ...entry, name: nextName, updatedAt: Date.now() }
-            : entry
-        )
-      );
-      return;
-    }
-
-    try {
-      await updateElement(element.id, { name: nextName });
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to update element");
-    }
+    setDemoElements((prev) =>
+      prev.map((entry) =>
+        entry.id === element.id
+          ? { ...entry, name: nextName, updatedAt: Date.now() }
+          : entry
+      )
+    );
   };
 
   const handleDeleteElement = async (element: Element) => {
@@ -201,7 +191,7 @@ export default function ElementsManager() {
                       isSelected
                       isSelectionMode={isSelectionMode && !usingDemoElements}
                       onSelect={selectElement}
-                      onEdit={handleEditElement}
+                      onEdit={usingDemoElements ? handleEditElement : undefined}
                       onDelete={handleDeleteElement}
                     />
                   ))}
@@ -232,7 +222,7 @@ export default function ElementsManager() {
                       isSelected={pinnedIds.has(element.id)}
                       isSelectionMode={isSelectionMode && !usingDemoElements}
                       onSelect={selectElement}
-                      onEdit={handleEditElement}
+                      onEdit={usingDemoElements ? handleEditElement : undefined}
                       onDelete={handleDeleteElement}
                     />
                   ))}

@@ -131,13 +131,15 @@ export default function ElementCard({
         </div>
 
         <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-          <button
-            type="button"
-            onClick={handleEdit}
-            className="flex h-7 w-7 items-center justify-center rounded-full border border-white/15 bg-black/55 text-slate-100 transition hover:border-white/30 hover:bg-black/70"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-          </button>
+          {onEdit && (
+            <button
+              type="button"
+              onClick={handleEdit}
+              className="flex h-7 w-7 items-center justify-center rounded-full border border-white/15 bg-black/55 text-slate-100 transition hover:border-white/30 hover:bg-black/70"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+            </button>
+          )}
           <button
             type="button"
             onClick={handleDelete}
