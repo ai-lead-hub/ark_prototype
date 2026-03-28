@@ -48,10 +48,19 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
     return [...dummies, ...catalogEntries];
   }, [catalogEntries]);
 
-  const { jobs } = useQueue();
-  const activeJobs = useMemo(() =>
-    jobs.filter(j => j.status === "pending" || j.status === "processing"),
-    [jobs]);
+  const { jobs, retryJob } = useQueue();
+  const queueTiles = useMemo(
+    () =>
+      [...jobs]
+        .filter((job) => job.status === "pending" || job.status === "processing" || job.status === "failed")
+        .sort((a, b) => {
+          const rank = { processing: 0, pending: 1, failed: 2 };
+          const statusDiff = rank[a.status] - rank[b.status];
+          if (statusDiff !== 0) return statusDiff;
+          return b.timestamp - a.timestamp;
+        }),
+    [jobs]
+  );
 
   const [published, setPublished] = useState<PublishedMap>({});
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -831,17 +840,81 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
         ) : (
           <div className="flex flex-col min-h-full">
               <div ref={gridContainerRef} className="grid grid-cols-3 gap-2 p-2">
-                {activeJobs.map((job) => (
+                {queueTiles.map((job) => (
                   <div
                     key={job.id}
-                    className="relative flex aspect-video flex-col overflow-hidden rounded-xl border border-white/10 bg-black/40 animate-pulse"
+                    className={`relative flex aspect-video flex-col overflow-hidden rounded-xl border ${
+                      job.status === "failed"
+                        ? "border-rose-500/40 bg-rose-950/20"
+                        : "border-sky-500/20 bg-slate-950/80"
+                    }`}
                   >
-                    <div className="flex h-full items-center justify-center">
-                      <Spinner size="lg" />
+                    <div className="absolute inset-x-0 top-0 z-10 h-1 bg-white/5">
+                      <div
+                        className={`h-full ${
+                          job.status === "failed"
+                            ? "w-full bg-rose-500/80"
+                            : "w-2/3 animate-pulse bg-sky-400/80"
+                        }`}
+                      />
                     </div>
-                    <div className="absolute inset-x-0 bottom-0 bg-black/60 p-2 backdrop-blur-sm">
-                      <div className="truncate text-xs text-slate-300 italic">
-                        {job.status === "processing" ? "Generating..." : "Queued..."}
+
+                    <div className="flex h-full flex-col justify-between gap-3 p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400">
+                            {job.type} job
+                          </div>
+                          <div className="truncate text-sm font-semibold text-white" title={job.name}>
+                            {job.name}
+                          </div>
+                        </div>
+
+                        <div
+                          className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${
+                            job.status === "failed"
+                              ? "bg-rose-500/15 text-rose-200"
+                              : "bg-sky-500/15 text-sky-200"
+                          }`}
+                        >
+                          {job.status === "processing" ? "Generating" : job.status}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-1 items-center justify-center">
+                        {job.status === "failed" ? (
+                          <div className="rounded-full border border-rose-400/30 bg-rose-500/10 px-4 py-2 text-xs font-medium text-rose-200">
+                            Generation failed
+                          </div>
+                        ) : (
+                          <Spinner size="lg" />
+                        )}
+                      </div>
+
+                      <div className="space-y-2 rounded-xl bg-black/40 p-2 backdrop-blur-sm">
+                        <div className="text-[11px] font-medium text-slate-300">
+                          {job.status === "failed" ? (job.error ?? "Job failed") : "Latest status"}
+                        </div>
+                        <div className="space-y-1">
+                          {job.logs.slice(-3).map((log, index) => (
+                            <div
+                              key={`${job.id}-log-${index}`}
+                              className="truncate text-[11px] text-slate-400"
+                              title={log}
+                            >
+                              {log}
+                            </div>
+                          ))}
+                        </div>
+                        {job.status === "failed" && (
+                          <button
+                            type="button"
+                            onClick={() => retryJob(job.id)}
+                            className="inline-flex rounded-lg border border-rose-400/30 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-100 transition hover:bg-rose-500/20"
+                          >
+                            Retry
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
