@@ -699,75 +699,84 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
 
   return (
     <div className="flex h-full flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-2 relative">
-        <ProjectBar />
-        <div className="flex-1 min-w-[100px]" />
-        <input
-          type="search"
-          value={q}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search files"
-          className="w-48 ml-auto rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
-        />
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setFilterOpen(!filterOpen)}
-            className={`${toolbarIconButtonBase} ${filterOpen ? "border-sky-400 text-sky-200" : ""}`}
-            title="Filter & Sort"
-          >
-            <span className="mr-1">≡</span> Filter
-          </button>
-          
-          {filterOpen && (
-            <div className="absolute right-0 top-full z-50 mt-1 w-48 rounded-xl border border-white/10 bg-slate-900 shadow-xl backdrop-blur-md p-2 flex flex-col gap-1">
-              <button
-                type="button"
-                onClick={() => toggleGroup("images")}
-                className={`flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm transition-colors ${isImagesActive ? "bg-sky-500/20 text-sky-300" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}
-              >
-                Images <span>{isImagesActive ? "✓" : ""}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => toggleGroup("videos")}
-                className={`flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm transition-colors ${isVideosActive ? "bg-sky-500/20 text-sky-300" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}
-              >
-                Videos <span>{isVideosActive ? "✓" : ""}</span>
-              </button>
-              <div className="my-1 h-px bg-white/10" />
-              <button
-                type="button"
-                onClick={() => setSortByName((v) => !v)}
-                className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm text-slate-300 hover:bg-white/5 hover:text-white transition-colors"
-                title={sortByName ? "Sorted A-Z" : "Sorted by recency"}
-              >
-                Sort: {sortByName ? "A→Z" : "Newest"} <span>🔃</span>
-              </button>
-              {filterExt.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setFilters([])}
-                  className="mt-1 w-full rounded-lg bg-rose-500/10 px-2 py-1.5 text-xs font-semibold text-rose-300 hover:bg-rose-500/20 transition-colors"
-                >
-                  Clear Filters
-                </button>
-              )}
-            </div>
-          )}
+      <div className="grid gap-2 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,26rem)_minmax(0,1fr)] xl:items-center">
+        <div className="flex min-w-0 flex-wrap items-center gap-2 xl:justify-self-start">
+          <ProjectBar mode="leading" />
         </div>
 
-        <button
-          type="button"
-          onClick={() => {
-            refreshTree();
-            setVisibleCount(30);
-          }}
-          className={toolbarIconButtonBase}
-          title="Refresh"
-        >
-          ↻
-        </button>
+        <div className="w-full xl:justify-self-center">
+          <input
+            type="search"
+            value={q}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search files"
+            className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
+          />
+        </div>
+
+        <div className="flex flex-wrap items-center justify-end gap-2 xl:justify-self-end">
+          <ProjectBar mode="utilities" />
+
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setFilterOpen(!filterOpen)}
+              className={`${toolbarIconButtonBase} ${filterOpen ? "border-sky-400 text-sky-200" : ""}`}
+              title="Filter & Sort"
+            >
+              <span className="mr-1">≡</span> Filter
+            </button>
+
+            {filterOpen && (
+              <div className="absolute right-0 top-full z-50 mt-1 flex w-48 flex-col gap-1 rounded-xl border border-white/10 bg-slate-900 p-2 shadow-xl backdrop-blur-md">
+                <button
+                  type="button"
+                  onClick={() => toggleGroup("images")}
+                  className={`flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm transition-colors ${isImagesActive ? "bg-sky-500/20 text-sky-300" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}
+                >
+                  Images <span>{isImagesActive ? "✓" : ""}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => toggleGroup("videos")}
+                  className={`flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm transition-colors ${isVideosActive ? "bg-sky-500/20 text-sky-300" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}
+                >
+                  Videos <span>{isVideosActive ? "✓" : ""}</span>
+                </button>
+                <div className="my-1 h-px bg-white/10" />
+                <button
+                  type="button"
+                  onClick={() => setSortByName((v) => !v)}
+                  className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm text-slate-300 transition-colors hover:bg-white/5 hover:text-white"
+                  title={sortByName ? "Sorted A-Z" : "Sorted by recency"}
+                >
+                  Sort: {sortByName ? "A→Z" : "Newest"} <span>🔃</span>
+                </button>
+                {filterExt.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setFilters([])}
+                    className="mt-1 w-full rounded-lg bg-rose-500/10 px-2 py-1.5 text-xs font-semibold text-rose-300 transition-colors hover:bg-rose-500/20"
+                  >
+                    Clear Filters
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              refreshTree();
+              setVisibleCount(30);
+            }}
+            className={toolbarIconButtonBase}
+            title="Refresh"
+          >
+            ↻
+          </button>
+        </div>
       </div>
 
       <div

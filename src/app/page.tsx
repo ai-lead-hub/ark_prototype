@@ -1,6 +1,5 @@
 import ControlsPane from "../components/ControlsPane";
 import FileBrowser from "../components/FileBrowser";
-import ProjectBar from "../components/ProjectBar";
 import ElementsManager from "../components/ElementsManager"; // Will be moved to a modal soon
 import { CatalogProvider } from "../state/catalog";
 import { QueueProvider } from "../state/queue";

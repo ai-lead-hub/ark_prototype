@@ -15,6 +15,10 @@ import { useRandomizeSeed } from "../lib/useRandomizeSeed";
 
 const STORAGE_KEY = "file-api-connection";
 
+interface ProjectBarProps {
+  mode?: "full" | "leading" | "utilities";
+}
+
 function loadSavedConnection(): WorkspaceConnection | null {
   if (typeof localStorage === "undefined") return null;
   try {
@@ -39,7 +43,7 @@ function persistConnection(connection: WorkspaceConnection | null) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(connection));
 }
 
-export default function ProjectBar() {
+export default function ProjectBar({ mode = "full" }: ProjectBarProps) {
   const {
     state: { connection },
     actions: { setConnection },
@@ -168,25 +172,40 @@ export default function ProjectBar() {
 
   const connectionStatusIcon = connection ? "🟢" : "🔴";
   const connectionLabel = connection ? connection.workspaceId : "Not connected";
+  const showLeading = mode === "full" || mode === "leading";
+  const showUtilities = mode === "full" || mode === "utilities";
 
   return (
     <>
-      {/* Left: Status */}
-      <div className="flex items-center gap-2 min-w-0 bg-white/5 border border-white/5 rounded-lg px-2 py-1">
-        <span className="text-xs" title={connection ? "Connected" : "Disconnected"}>
-          {connectionStatusIcon}
-        </span>
-        <span className="text-xs font-medium text-slate-300 truncate max-w-[150px]">
-          {connectionLabel}
-        </span>
-      </div>
+      {showLeading && (
+        <>
+          <div className="flex min-w-0 items-center gap-2 rounded-lg border border-white/5 bg-white/5 px-2 py-1">
+            <span className="text-xs" title={connection ? "Connected" : "Disconnected"}>
+              {connectionStatusIcon}
+            </span>
+            <span className="max-w-[150px] truncate text-xs font-medium text-slate-300">
+              {connectionLabel}
+            </span>
+          </div>
 
-      {/* Right: Actions */}
-      <div className="flex items-center gap-2">
-          <CreditTracker />
           <ElementsButton />
 
-          {/* Settings Button + Dropdown */}
+          <a
+            href="https://github.com/ai-scape/freepikv5/tree/main"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex h-7 w-7 items-center justify-center rounded-full border border-white/10 text-slate-400 transition hover:border-sky-400 hover:text-white"
+            title="Help & Documentation"
+          >
+            <span className="text-xs font-bold">?</span>
+          </a>
+        </>
+      )}
+
+      {showUtilities && (
+        <div className="flex items-center gap-2">
+          <CreditTracker />
+
           <div className="relative" ref={settingsRef}>
             <button
               type="button"
@@ -201,18 +220,16 @@ export default function ProjectBar() {
               ⚙️
             </button>
 
-            {/* Settings Dropdown */}
             {settingsOpen && (
-              <div className="absolute right-0 top-full mt-2 w-80 rounded-xl border border-white/10 bg-slate-900/95 shadow-2xl backdrop-blur-xl z-50 overflow-hidden">
-                {/* Header */}
-                <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 bg-white/5">
+              <div className="absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-xl border border-white/10 bg-slate-900/95 shadow-2xl backdrop-blur-xl">
+                <div className="flex items-center justify-between border-b border-white/10 bg-white/5 px-4 py-3">
                   <div className="flex items-center gap-2">
                     <span className="text-sm">⚙️</span>
-                    <h3 className="font-semibold text-sm text-white">Workspace Settings</h3>
+                    <h3 className="text-sm font-semibold text-white">Workspace Settings</h3>
                   </div>
                   <button
                     onClick={() => setSettingsOpen(false)}
-                    className="text-slate-400 hover:text-white transition"
+                    className="text-slate-400 transition hover:text-white"
                   >
                     ✕
                   </button>
@@ -228,7 +245,7 @@ export default function ProjectBar() {
                       value={apiBase}
                       onChange={(event) => setApiBase(event.target.value)}
                       placeholder="http://localhost:8787"
-                      className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 transition-all"
+                      className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs text-white outline-none transition-all focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
                     />
                   </div>
 
@@ -242,7 +259,7 @@ export default function ProjectBar() {
                       onChange={(event) => setWorkspaceId(event.target.value)}
                       list="workspace-options"
                       placeholder="workspace id"
-                      className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 transition-all"
+                      className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs text-white outline-none transition-all focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
                     />
                     <datalist id="workspace-options">
                       {workspaces.map((ws) => (
@@ -260,7 +277,7 @@ export default function ProjectBar() {
                       value={token}
                       onChange={(event) => setToken(event.target.value)}
                       placeholder="Optional"
-                      className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 transition-all"
+                      className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs text-white outline-none transition-all focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
                     />
                   </div>
 
@@ -269,7 +286,7 @@ export default function ProjectBar() {
                       type="button"
                       onClick={handleConnect}
                       disabled={busy}
-                      className="flex-1 rounded-lg border border-sky-500/50 bg-sky-500/20 px-3 py-1.5 font-semibold text-xs text-sky-200 transition hover:bg-sky-500/30 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="flex-1 rounded-lg border border-sky-500/50 bg-sky-500/20 px-3 py-1.5 text-xs font-semibold text-sky-200 transition hover:bg-sky-500/30 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {busy ? "..." : connection ? "Reconnect" : "Connect"}
                     </button>
@@ -277,7 +294,7 @@ export default function ProjectBar() {
                       type="button"
                       onClick={handleCreateWorkspace}
                       disabled={busy}
-                      className="rounded-lg border border-white/10 px-3 py-1.5 font-semibold text-xs text-slate-200 transition hover:border-sky-400 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-sky-400 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       New
                     </button>
@@ -286,7 +303,7 @@ export default function ProjectBar() {
                         <button
                           type="button"
                           onClick={handleDisconnect}
-                          className="rounded-lg border border-white/10 px-3 py-1.5 font-semibold text-xs text-slate-200 transition hover:border-amber-400 hover:text-amber-100"
+                          className="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-amber-400 hover:text-amber-100"
                         >
                           Disconnect
                         </button>
@@ -300,8 +317,7 @@ export default function ProjectBar() {
                     </div>
                   )}
 
-                  {/* Divider */}
-                  <div className="border-t border-white/10 pt-3 mt-1">
+                  <div className="mt-1 border-t border-white/10 pt-3">
                     <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
                       Preferences
                     </div>
@@ -314,17 +330,8 @@ export default function ProjectBar() {
               </div>
             )}
           </div>
-
-          <a
-            href="https://github.com/ai-scape/freepikv5/tree/main"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex h-7 w-7 items-center justify-center rounded-full border border-white/10 text-slate-400 transition hover:border-sky-400 hover:text-white"
-            title="Help & Documentation"
-          >
-            <span className="text-xs font-bold">?</span>
-          </a>
         </div>
+      )}
     </>
   );
 }
@@ -400,4 +407,3 @@ function RandomizeSeedToggle() {
     </label>
   );
 }
-
