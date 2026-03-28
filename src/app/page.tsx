@@ -1,15 +1,12 @@
-import { useState } from "react";
 import ControlsPane from "../components/ControlsPane";
 import FileBrowser from "../components/FileBrowser";
-import PreviewPane from "../components/PreviewPane";
 import ProjectBar from "../components/ProjectBar";
-import ElementsManager from "../components/ElementsManager";
+import ElementsManager from "../components/ElementsManager"; // Will be moved to a modal soon
 import { CatalogProvider } from "../state/catalog";
 import { QueueProvider } from "../state/queue";
 import { ElementsProvider, useElements } from "../state/elements";
 
 function MainLayout() {
-  const [isFullScreen, setIsFullScreen] = useState(false);
   const { isManagerOpen } = useElements();
 
   return (
@@ -17,37 +14,27 @@ function MainLayout() {
       <div className="flex-shrink-0">
         <ProjectBar />
       </div>
-      <div className="flex flex-1 gap-1.5 p-1.5 overflow-hidden bg-gradient-to-b from-slate-950 to-slate-900/50">
+      <div className="flex flex-1 gap-1.5 p-1.5 overflow-hidden bg-gradient-to-b from-slate-950 to-slate-900/50 relative">
         {/* Left - Controls */}
-        <aside className={`flex w-[420px] min-h-0 flex-col rounded-xl border border-white/5 bg-slate-900/60 backdrop-blur-sm ${isFullScreen ? "hidden" : ""}`}>
+        <aside className="flex w-[420px] min-h-0 flex-col rounded-xl border border-white/5 bg-slate-900/60 backdrop-blur-sm">
           <div className="flex-1 min-h-0 overflow-y-auto p-3">
             <ControlsPane />
           </div>
         </aside>
 
-        {/* Center - File Browser */}
-        <section className={`flex min-h-0 min-w-[420px] flex-[1.1] flex-col rounded-xl border border-white/5 bg-slate-900/50 backdrop-blur-sm ${isFullScreen ? "hidden" : ""}`}>
+        {/* Right - File Browser (Expands fully) */}
+        <section className="flex min-h-0 flex-1 flex-col rounded-xl border border-white/5 bg-slate-900/50 backdrop-blur-sm">
           <div className="flex-1 min-h-0 overflow-y-auto p-3">
-            <FileBrowser disableKeyboardNav={isFullScreen || isManagerOpen} />
+            <FileBrowser disableKeyboardNav={isManagerOpen} />
           </div>
         </section>
 
-        {/* Right - Preview Pane OR Elements Manager */}
-        <main
-          className={`flex min-h-0 flex-shrink-0 flex-col rounded-xl border border-white/5 backdrop-blur-sm ${isManagerOpen ? "bg-[#2a2a2a] border-amber-500/30" : "bg-slate-900/40"
-            } ${isFullScreen ? "flex-1 w-full" : "w-[420px]"}`}
-        >
-          {isManagerOpen ? (
+        {/* Temporary: ElementsManager acting as a basic overlay if needed before full Modal refactor */}
+        {isManagerOpen && (
+          <div className="absolute right-4 top-4 bottom-4 w-[420px] rounded-xl border border-amber-500/30 backdrop-blur-sm bg-[#2a2a2a] shadow-2xl z-50 flex flex-col">
             <ElementsManager />
-          ) : (
-            <div className="flex-1 min-h-0 overflow-y-auto p-3">
-              <PreviewPane
-                isFullScreen={isFullScreen}
-                onToggleFullScreen={() => setIsFullScreen(!isFullScreen)}
-              />
-            </div>
-          )}
-        </main>
+          </div>
+        )}
       </div>
     </div>
   );
