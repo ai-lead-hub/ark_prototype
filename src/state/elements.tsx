@@ -27,6 +27,7 @@ interface ElementsContextType {
     /** Selection mode - when true, clicking adds element to selection */
     isSelectionMode: boolean;
     toggleManager: () => void;
+    closeManager: () => void;
     openForm: () => void;
     closeForm: () => void;
     fetchElements: () => Promise<void>;
@@ -58,6 +59,12 @@ export function ElementsProvider({ children }: { children: ReactNode }) {
             }
             return !prev;
         });
+    }, []);
+
+    const closeManager = useCallback(() => {
+        setIsManagerOpen(false);
+        setIsFormOpen(false);
+        setIsSelectionMode(false);
     }, []);
 
     const openForm = useCallback(() => setIsFormOpen(true), []);
@@ -153,6 +160,7 @@ export function ElementsProvider({ children }: { children: ReactNode }) {
         selectedElements,
         isSelectionMode,
         toggleManager,
+        closeManager,
         openForm,
         closeForm,
         fetchElements,
