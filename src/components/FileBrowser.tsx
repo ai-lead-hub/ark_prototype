@@ -1083,6 +1083,8 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
                   isActive={true}
                   onActivate={() => {}}
                   onNavigate={navigateShot}
+                  demoQueuePhase={demoQueuePhase}
+                  demoQueueProgress={demoQueueProgress}
                 />
               );
             })()}
