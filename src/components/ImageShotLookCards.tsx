@@ -55,7 +55,7 @@ function Sel({
                 value={value}
                 onChange={(e) => onChange(e.target.value)}
                 disabled={disabled}
-                className={`mt-0.5 w-full rounded border border-white/10 bg-[#1e1e1e] px-2 py-1 text-[11px] text-white outline-none focus:border-sky-400 appearance-none cursor-pointer ${disabled ? "opacity-40 cursor-not-allowed" : ""}`}
+                className={`kv-input mt-0.5 w-full appearance-none rounded-xl px-2 py-1 text-[11px] text-white cursor-pointer ${disabled ? "opacity-40 cursor-not-allowed" : ""}`}
                 style={{
                     backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
                     backgroundRepeat: "no-repeat",
@@ -90,7 +90,7 @@ function SelGrouped({
             <select
                 value={value}
                 onChange={(e) => onChange(e.target.value)}
-                className="mt-0.5 w-full rounded border border-white/10 bg-[#1e1e1e] px-2 py-1 text-[11px] text-white outline-none focus:border-sky-400 appearance-none cursor-pointer"
+                className="kv-input mt-0.5 w-full appearance-none rounded-xl px-2 py-1 text-[11px] text-white cursor-pointer"
                 style={{
                     backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
                     backgroundRepeat: "no-repeat",
@@ -149,17 +149,17 @@ function Modal({
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
             onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
-            <div className="w-full max-w-sm rounded-xl border border-white/10 bg-[#2a2a2a] shadow-2xl overflow-hidden">
+            <div className="kv-panel w-full max-w-sm overflow-hidden rounded-[24px]">
                 <div className={`flex items-center justify-between px-3 py-2 bg-gradient-to-r ${accent}`}>
                     <span className="text-xs font-semibold text-white">{title}</span>
-                    <button type="button" onClick={onClose} className="flex h-5 w-5 items-center justify-center rounded bg-white/20 text-white text-xs hover:bg-white/30">×</button>
+                    <button type="button" onClick={onClose} className="kv-icon-button flex h-6 w-6 items-center justify-center rounded-full text-xs">×</button>
                 </div>
                 <div className="p-3 space-y-2">{children}</div>
-                <div className="flex justify-between px-3 py-2 border-t border-white/10 bg-[#222]">
+                <div className="kv-panel-soft flex justify-between px-3 py-2">
                     {hasValues ? (
-                        <button type="button" onClick={onClear} className="px-2 py-1 text-[10px] text-slate-400 bg-[#333] border border-white/10 rounded hover:text-white transition">Clear</button>
+                        <button type="button" onClick={onClear} className="kv-icon-button rounded-full px-2 py-1 text-[10px] text-slate-300 transition">Clear</button>
                     ) : <div />}
-                    <button type="button" onClick={onClose} className="px-3 py-1 text-[10px] font-semibold text-white rounded bg-gradient-to-r from-sky-600 to-indigo-600 hover:opacity-90 transition">Done</button>
+                    <button type="button" onClick={onClose} className="kv-cta rounded-full px-3 py-1 text-[10px] font-semibold transition hover:opacity-90">Done</button>
                 </div>
             </div>
         </div>,
@@ -222,10 +222,9 @@ export function ImageShotLookCards({ shotSettings, lookSettings, onShotChange, o
                 <button
                     type="button"
                     onClick={() => setOpenModal("shot")}
-                    title={shotHas ? shotSummary(shotSettings) : undefined}
-                    className={`flex flex-1 items-center gap-1.5 rounded-lg border px-2 py-1.5 text-left transition ${shotHas ? "border-emerald-500/20 bg-emerald-500/5 hover:border-emerald-500/40" : "border-white/10 bg-white/[0.03] hover:border-white/20"}`}
+                    className={`flex flex-1 items-center gap-1.5 rounded-[18px] border px-2 py-1.5 text-left transition ${shotHas ? "border-amber-500/20 bg-amber-500/5 hover:border-amber-500/40" : "border-white/10 bg-white/[0.03] hover:border-white/20"}`}
                 >
-                    <span className="text-sky-400 text-xs">📷</span>
+                    <span className="text-amber-400 text-xs">📷</span>
                     <div className="min-w-0 flex-1">
                         <div className="text-[8px] font-bold uppercase tracking-wider text-slate-500">Shot</div>
                         <div className={`truncate text-[10px] leading-tight ${shotHas ? "text-slate-200" : "text-slate-500 italic"}`}>{shotSummary(shotSettings)}</div>
@@ -234,10 +233,9 @@ export function ImageShotLookCards({ shotSettings, lookSettings, onShotChange, o
                 <button
                     type="button"
                     onClick={() => setOpenModal("look")}
-                    title={lookHas ? lookSummary(lookSettings) : undefined}
-                    className={`flex flex-1 items-center gap-1.5 rounded-lg border px-2 py-1.5 text-left transition ${lookHas ? "border-emerald-500/20 bg-emerald-500/5 hover:border-emerald-500/40" : "border-white/10 bg-white/[0.03] hover:border-white/20"}`}
+                    className={`flex flex-1 items-center gap-1.5 rounded-[18px] border px-2 py-1.5 text-left transition ${lookHas ? "border-amber-500/20 bg-amber-500/5 hover:border-amber-500/40" : "border-white/10 bg-white/[0.03] hover:border-white/20"}`}
                 >
-                    <span className="text-purple-400 text-xs">🎨</span>
+                    <span className="text-orange-300 text-xs">🎨</span>
                     <div className="min-w-0 flex-1">
                         <div className="text-[8px] font-bold uppercase tracking-wider text-slate-500">Look</div>
                         <div className={`truncate text-[10px] leading-tight ${lookHas ? "text-slate-200" : "text-slate-500 italic"}`}>{lookSummary(lookSettings)}</div>

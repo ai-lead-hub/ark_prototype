@@ -104,15 +104,15 @@ export default function ElementsManager() {
   };
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-[28px] bg-[radial-gradient(circle_at_top,rgba(14,165,233,0.12),transparent_22%),linear-gradient(180deg,rgba(15,23,42,0.98),rgba(2,6,23,0.98))]">
-      <div className="flex items-center justify-between gap-4 border-b border-white/10 px-5 py-4">
+    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-[28px] bg-[radial-gradient(circle_at_top,rgba(249,115,22,0.12),transparent_24%),linear-gradient(180deg,rgba(17,19,23,0.98),rgba(8,9,12,0.98))]">
+      <div className="flex items-center justify-between gap-4 px-5 py-4">
         <div className="min-w-0">
           <div className="flex items-center gap-3">
-            <h2 className="truncate text-lg font-semibold text-white">
+            <h2 className="kv-display truncate text-lg font-semibold text-white">
               {isFormOpen ? "Create a new element" : "Project elements"}
             </h2>
             {isSelectionMode && (
-              <span className="rounded-full border border-sky-400/30 bg-sky-500/10 px-3 py-1 text-xs font-medium text-sky-200">
+              <span className="kv-pill kv-mono rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.18em]">
                 Selection mode
               </span>
             )}
@@ -123,14 +123,16 @@ export default function ElementsManager() {
           {!isFormOpen && (
             <button
               onClick={openForm}
-              className="flex h-10 w-10 items-center justify-center rounded-xl border border-sky-400/30 bg-sky-500/10 text-sky-200 transition hover:bg-sky-500/20"
+              className="kv-icon-button flex h-10 w-10 items-center justify-center rounded-full border-amber-400/30 bg-amber-500/10 text-amber-200"
+              aria-label="Create a new element"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
             </button>
           )}
           <button
             onClick={closeManager}
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-400 transition hover:border-white/20 hover:bg-white/10 hover:text-white"
+            className="kv-icon-button flex h-10 w-10 items-center justify-center rounded-full"
+            aria-label="Close elements manager"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
           </button>
@@ -139,11 +141,11 @@ export default function ElementsManager() {
 
       <div className="flex min-h-0 flex-1 flex-col px-5 py-4">
         {isFormOpen ? (
-          <div className="min-h-0 overflow-y-auto rounded-[24px] border border-white/10 bg-black/25 p-5 custom-scrollbar">
+          <div className="kv-panel-soft custom-scrollbar min-h-0 overflow-y-auto rounded-[24px] p-5">
             <ElementForm />
           </div>
         ) : showLoading ? (
-          <div className="flex min-h-0 flex-1 items-center justify-center rounded-[24px] border border-white/10 bg-black/20 text-sm text-slate-400">
+          <div className="kv-panel-soft flex min-h-0 flex-1 items-center justify-center rounded-[24px] text-sm text-slate-400">
             <svg className="mr-2 h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -155,29 +157,34 @@ export default function ElementsManager() {
             {error}
           </div>
         ) : visibleElements.length === 0 ? (
-          <div className="flex min-h-0 flex-1 flex-col items-center justify-center rounded-[24px] border border-dashed border-white/15 bg-black/20 px-8 text-center">
+          <div className="kv-panel-soft flex min-h-0 flex-1 flex-col items-center justify-center rounded-[24px] px-8 text-center">
             <div className="flex h-16 w-16 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-500">
               <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
             </div>
-            <h4 className="mt-5 text-lg font-semibold text-white">No elements yet</h4>
+            <h4 className="kv-display mt-5 text-lg font-semibold text-white">No elements yet</h4>
             <p className="mt-2 max-w-md text-sm leading-6 text-slate-400">
               Start a cast library for this project by saving a character, prop, or look-dev pack with a clean
               frontal image and a few support angles.
             </p>
             <button
               onClick={openForm}
-              className="mt-6 rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-2 text-sm font-semibold text-sky-200 transition hover:bg-sky-500/20"
+              className="kv-cta mt-6 rounded-full px-4 py-2 text-sm font-semibold"
             >
               Create your first element
             </button>
           </div>
         ) : (
           <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto pr-1">
-            <div className="space-y-4">
-            <section className="rounded-[24px] border border-white/10 bg-black/20 p-4">
+            <div className="space-y-4 pb-1">
+            <section className="kv-panel-soft rounded-[24px] p-4">
               <div className="mb-4 flex items-center justify-between gap-3">
-                <div className="text-sm font-medium text-white">Pinned elements</div>
-                <div className="rounded-full bg-sky-500/10 px-3 py-1 text-xs font-medium text-sky-200">
+                <div>
+                  <div className="kv-display text-sm font-medium text-white">Pinned elements</div>
+                  <div className="kv-mono mt-1 text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                    Quick access
+                  </div>
+                </div>
+                <div className="kv-pill kv-mono rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.16em]">
                   {pinnedElements.length}
                 </div>
               </div>
@@ -197,16 +204,16 @@ export default function ElementsManager() {
                   ))}
                 </div>
               ) : (
-                <div className="rounded-2xl border border-dashed border-white/15 bg-black/20 px-4 py-5 text-sm text-slate-400">
+                <div className="rounded-2xl border border-white/8 bg-black/20 px-4 py-5 text-sm text-slate-400">
                   No pinned elements yet. As we wire the per-project pinning flow, pinned items will live here at the top.
                 </div>
               )}
             </section>
 
-            <section className="rounded-[24px] border border-white/10 bg-black/20 p-4">
+            <section className="kv-panel-soft rounded-[24px] p-4">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
-                  <div className="text-sm font-medium text-white">Elements library</div>
+                  <div className="kv-display text-sm font-medium text-white">Elements library</div>
                   <div className="mt-1 text-xs text-slate-400">
                     {libraryElements.length} element{libraryElements.length === 1 ? "" : "s"} in the remaining library
                   </div>

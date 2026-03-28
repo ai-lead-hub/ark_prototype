@@ -94,9 +94,9 @@ export default function ElementCard({
 
   return (
     <div
-      className={`group relative aspect-square overflow-hidden rounded-2xl border transition ${isSelected
-        ? "border-sky-400 bg-sky-500/10 ring-1 ring-sky-400/50"
-        : "border-white/10 bg-black/20 hover:border-white/30"
+      className={`group relative aspect-square overflow-hidden rounded-[22px] border transition ${isSelected
+        ? "border-amber-400/60 bg-amber-500/8 ring-1 ring-amber-400/40"
+        : "border-white/8 bg-[#111317] hover:border-amber-400/28"
         } ${isSelectionMode ? "cursor-pointer" : ""}`}
       draggable={hasSheet}
       onDragStart={handleDragStart}
@@ -119,12 +119,12 @@ export default function ElementCard({
       <div className="absolute inset-x-0 top-0 flex items-center justify-between p-2">
         <div className="flex items-center gap-1">
           {isSelected && (
-            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-sky-500 text-white">
+            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-amber-500 text-black">
               <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M14 4v5l4 4v2h-5v5l-2-1-2 1v-5H4v-2l4-4V4z"/></svg>
             </div>
           )}
           {hasSheet && (
-            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-black/55 text-slate-100">
+            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-black/55 text-amber-100">
               <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2" /><line x1="3" x2="21" y1="9" y2="9" /><line x1="9" x2="9" y1="21" y2="9" /></svg>
             </div>
           )}
@@ -135,7 +135,8 @@ export default function ElementCard({
             <button
               type="button"
               onClick={handleEdit}
-              className="flex h-7 w-7 items-center justify-center rounded-full border border-white/15 bg-black/55 text-slate-100 transition hover:border-white/30 hover:bg-black/70"
+              className="flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-black/55 text-slate-100 transition hover:border-amber-400/30 hover:bg-black/70 hover:text-amber-100"
+              aria-label={`Edit ${element.name}`}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
             </button>
@@ -145,13 +146,14 @@ export default function ElementCard({
             onClick={handleDelete}
             disabled={isDeleting}
             className="flex h-7 w-7 items-center justify-center rounded-full border border-rose-400/25 bg-black/55 text-rose-100 transition hover:bg-rose-500/25 disabled:opacity-50"
+            aria-label={`Delete ${element.name}`}
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /></svg>
           </button>
         </div>
       </div>
 
-      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/70 to-transparent p-2.5">
+      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/92 via-black/68 to-transparent p-2.5">
         <div className="mb-2">
           <p className="truncate text-sm font-semibold text-white">{element.name}</p>
           <div className="mt-1 flex items-center gap-2 text-[11px] text-slate-300">
@@ -171,6 +173,7 @@ export default function ElementCard({
                 deselectElement(element.id);
               }}
               className="flex h-8 w-8 items-center justify-center rounded-full border border-red-500/35 bg-red-500/15 text-red-100 transition hover:bg-red-500/25"
+              aria-label={`Unpin ${element.name}`}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M14 4v5l4 4v2h-5v5l-2-1-2 1v-5H4v-2l4-4V4z"/></svg>
             </button>
@@ -181,7 +184,8 @@ export default function ElementCard({
                 e.stopPropagation();
                 onSelect(element);
               }}
-              className="flex h-8 w-8 items-center justify-center rounded-full border border-sky-500/35 bg-sky-500/15 text-sky-100 transition hover:bg-sky-500/25"
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-amber-500/35 bg-amber-500/15 text-amber-100 transition hover:bg-amber-500/25"
+              aria-label={`Pin ${element.name}`}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M14 4v5l4 4v2h-5v5l-2-1-2 1v-5H4v-2l4-4V4z"/></svg>
             </button>

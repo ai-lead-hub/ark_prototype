@@ -9,16 +9,16 @@ function MainLayout() {
   const { isManagerOpen } = useElements();
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-slate-950 text-slate-100">
-      <div className="relative flex flex-1 gap-1.5 overflow-hidden bg-gradient-to-b from-slate-950 to-slate-900/50 p-1.5">
-        <aside className="flex w-[420px] min-h-0 flex-col rounded-xl border border-white/5 bg-slate-900/60 backdrop-blur-sm">
-          <div className="flex-1 min-h-0 overflow-y-auto p-3">
+    <div className="kv-shell flex h-dvh flex-col overflow-hidden text-slate-100">
+      <div className="relative flex flex-1 gap-3 overflow-hidden px-3 py-3">
+        <aside className="kv-panel flex w-[398px] min-h-0 flex-col rounded-[28px]">
+          <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4">
             <ControlsPane />
           </div>
         </aside>
 
-        <section className="flex min-h-0 flex-1 flex-col rounded-xl border border-white/5 bg-slate-900/50 backdrop-blur-sm">
-          <div className="flex-1 min-h-0 overflow-y-auto p-3">
+        <section className="kv-panel flex min-h-0 flex-1 flex-col rounded-[28px]">
+          <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4">
             <FileBrowser disableKeyboardNav={isManagerOpen} />
           </div>
         </section>

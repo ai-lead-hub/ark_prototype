@@ -18,11 +18,11 @@ export default function ElementsModal() {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/82 p-4 backdrop-blur-md"
       onClick={closeManager}
     >
       <div
-        className="flex h-[min(78vh,680px)] w-[min(84vw,980px)] overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/95 shadow-[0_30px_120px_rgba(0,0,0,0.65)]"
+        className="kv-panel flex h-[min(72vh,620px)] w-[min(78vw,920px)] overflow-hidden rounded-[28px]"
         onClick={(event) => event.stopPropagation()}
       >
         <ElementsManager />

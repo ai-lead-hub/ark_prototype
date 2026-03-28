@@ -130,11 +130,11 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
   const [hoverPlayVideos] = useHoverPlayVideos();
 
   const iconButtonBase =
-    "rounded-md border border-white/10 bg-black/60 p-1 text-xs text-slate-100 transition-opacity";
+    "kv-icon-button rounded-full p-1 text-xs transition-opacity";
   const iconButtonHidden = "opacity-0 group-hover:opacity-100";
   const iconButtonVisible = "opacity-100";
   const toolbarIconButtonBase =
-    "inline-flex h-9 min-w-9 px-2 items-center justify-center rounded-lg border border-white/10 bg-black/40 text-sm font-medium text-slate-200 transition hover:border-sky-400 hover:text-sky-200 whitespace-nowrap";
+    "kv-icon-button inline-flex h-10 min-w-10 items-center justify-center gap-2 rounded-full px-3 text-sm font-medium whitespace-nowrap";
 
   const workspaceKey = useMemo(() => {
     if (!connection) return "";
@@ -777,9 +777,9 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
         <div className="flex flex-wrap items-center gap-2 relative">
           <ProjectBar />
         </div>
-        <div className="rounded-lg border border-dashed border-white/20 bg-gradient-to-br from-sky-500/5 to-indigo-500/5 p-6 text-sm">
-          <div className="mb-2 text-base font-semibold text-sky-200">
-            📂 No Workspace Connected
+        <div className="kv-panel-soft rounded-[24px] p-6 text-sm">
+          <div className="kv-display mb-2 text-base font-semibold text-amber-200">
+            No Workspace Connected
           </div>
           <div className="text-slate-300">
             Click <strong>"Connect"</strong> at the top to link your workspace API and start browsing files.
@@ -802,41 +802,41 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
             value={q}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search files"
-            className="w-52 rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 xl:w-60"
+            className="kv-input w-52 rounded-full px-4 py-2.5 text-sm xl:w-60"
           />
 
           <div className="relative">
             <button
               type="button"
               onClick={() => setFilterOpen(!filterOpen)}
-              className={`${toolbarIconButtonBase} ${filterOpen ? "border-sky-400 text-sky-200" : ""}`}
-              title="Filter & Sort"
+              className={`${toolbarIconButtonBase} ${filterOpen ? "border-amber-400/50 bg-amber-500/10 text-amber-200" : ""}`}
+              aria-label="Open filters and sort options"
             >
-              <span className="mr-1">≡</span> Filter
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M7 12h10" /><path d="M10 18h4" /></svg>
+              <span className="kv-mono text-[10px] uppercase tracking-[0.16em]">Filter</span>
             </button>
 
             {filterOpen && (
-              <div className="absolute right-0 top-full z-50 mt-1 flex w-48 flex-col gap-1 rounded-xl border border-white/10 bg-slate-900 p-2 shadow-xl backdrop-blur-md">
+              <div className="kv-panel absolute right-0 top-full z-50 mt-2 flex w-52 flex-col gap-1 rounded-[22px] p-2">
                 <button
                   type="button"
                   onClick={() => toggleGroup("images")}
-                  className={`flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm transition-colors ${isImagesActive ? "bg-sky-500/20 text-sky-300" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}
+                  className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm transition-colors ${isImagesActive ? "bg-amber-500/12 text-amber-200" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}
                 >
                   Images <span>{isImagesActive ? "✓" : ""}</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => toggleGroup("videos")}
-                  className={`flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm transition-colors ${isVideosActive ? "bg-sky-500/20 text-sky-300" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}
+                  className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm transition-colors ${isVideosActive ? "bg-amber-500/12 text-amber-200" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}
                 >
                   Videos <span>{isVideosActive ? "✓" : ""}</span>
                 </button>
-                <div className="my-1 h-px bg-white/10" />
+                <div className="my-1 h-px bg-white/6" />
                 <button
                   type="button"
                   onClick={() => setSortByName((v) => !v)}
-                  className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm text-slate-300 transition-colors hover:bg-white/5 hover:text-white"
-                  title={sortByName ? "Sorted A-Z" : "Sorted by recency"}
+                  className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm text-slate-300 transition-colors hover:bg-white/5 hover:text-white"
                 >
                   Sort: {sortByName ? "A→Z" : "Newest"} <span>🔃</span>
                 </button>
@@ -844,7 +844,7 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
                   <button
                     type="button"
                     onClick={() => setFilters([])}
-                    className="mt-1 w-full rounded-lg bg-rose-500/10 px-2 py-1.5 text-xs font-semibold text-rose-300 transition-colors hover:bg-rose-500/20"
+                    className="mt-1 w-full rounded-xl bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-300 transition-colors hover:bg-rose-500/20"
                   >
                     Clear Filters
                   </button>
@@ -860,9 +860,10 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
               setVisibleCount(30);
             }}
             className={toolbarIconButtonBase}
-            title="Refresh"
+            aria-label="Refresh files"
           >
-            ↻
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2v6h-6" /><path d="M3 12a9 9 0 0 1 15.55-6.36L21 8" /><path d="M3 22v-6h6" /><path d="M21 12a9 9 0 0 1-15.55 6.36L3 16" /></svg>
+            <span className="kv-mono text-[10px] uppercase tracking-[0.16em]">Refresh</span>
           </button>
         </div>
 
@@ -872,9 +873,9 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
       </div>
 
       <div
-        className={`relative flex-1 overflow-auto rounded-lg border transition-colors ${isDragging
-          ? "border-sky-400 bg-sky-500/10"
-          : "border-white/10 bg-black/20"
+        className={`kv-grid-surface relative flex-1 overflow-auto rounded-[24px] border transition-colors ${isDragging
+          ? "border-amber-400/45 bg-amber-500/10"
+          : "border-white/6"
           }`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -882,14 +883,14 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
       >
         {isDragging && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-            <div className="rounded-xl border border-sky-500/30 bg-black/80 p-6 text-center shadow-2xl">
+            <div className="kv-panel rounded-[24px] p-6 text-center">
               <div className="mb-2 text-4xl">📥</div>
-              <div className="text-lg font-semibold text-sky-200">Drop files to upload</div>
+              <div className="kv-display text-lg font-semibold text-amber-200">Drop files to upload</div>
             </div>
           </div>
         )}
         {uploadStatus && (
-          <div className="absolute top-2 right-2 z-20 rounded-md bg-sky-600 px-3 py-1 text-xs font-semibold text-white shadow-lg">
+          <div className="kv-panel absolute right-2 top-2 z-20 rounded-full px-3 py-1 text-xs font-semibold text-amber-100">
             {uploadStatus}
           </div>
         )}
@@ -907,7 +908,7 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
           <div className="flex h-full items-center justify-center p-8">
             <div className="max-w-sm text-center">
               <div className="mb-3 text-4xl">🎨</div>
-              <div className="mb-2 text-base font-semibold text-white">
+              <div className="kv-display mb-2 text-base font-semibold text-white">
                 No Files Yet
               </div>
               <div className="text-sm text-slate-300">
@@ -926,10 +927,10 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
                 {visibleQueueTiles.map((job) => (
                   <div
                     key={job.id}
-                    className={`relative flex aspect-video flex-col overflow-hidden rounded-xl border ${
+                    className={`relative flex aspect-video flex-col overflow-hidden rounded-[22px] border ${
                       job.status === "failed"
-                        ? "border-rose-500/40 bg-rose-950/20"
-                        : "border-sky-500/20 bg-slate-950/80"
+                        ? "border-rose-500/40 bg-rose-950/12"
+                        : "border-amber-400/16 bg-[#17191f]"
                     }`}
                   >
                     <div className="absolute inset-x-0 top-0 z-10 h-1 bg-white/5">
@@ -937,7 +938,7 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
                         className={`h-full rounded-full ${
                           job.status === "failed"
                             ? "bg-rose-500/80"
-                            : "bg-sky-400/80"
+                            : "bg-gradient-to-r from-orange-500 to-amber-400"
                         }`}
                         style={{
                           width: `${job.status === "failed"
@@ -952,36 +953,36 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
                     <div className="flex h-full flex-col justify-between gap-3 p-3">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <div className="text-[11px] text-slate-400">{`${job.type} job`}</div>
+                          <div className="kv-mono text-[10px] uppercase tracking-[0.16em] text-slate-500">{`${job.type} job`}</div>
                           <div className="truncate text-sm font-semibold text-white">
                             {job.name}
                           </div>
                         </div>
 
                         <div
-                          className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${
+                          className={`kv-mono shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${
                             job.status === "failed"
                               ? "bg-rose-500/15 text-rose-200"
-                              : "bg-sky-500/15 text-sky-200"
+                              : "bg-amber-500/12 text-amber-200"
                           }`}
                         >
                           {job.status === "processing" ? "Generating" : job.status}
                         </div>
                       </div>
 
-                      <div className="flex flex-1 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-black/30">
+                      <div className="flex flex-1 items-center justify-center overflow-hidden rounded-[18px] border border-white/8 bg-black/25">
                         {job.status === "failed" ? (
                           <div className="flex h-full w-full flex-col items-center justify-center bg-rose-500/10 px-4 text-center">
                             <div className="text-sm font-medium text-rose-200">Generation failed</div>
                             <div className="mt-1 text-xs text-rose-200/80">Error preview space</div>
                           </div>
                         ) : (
-                          <div className="h-full w-full bg-[linear-gradient(135deg,rgba(51,65,85,0.45),rgba(15,23,42,0.82))]" />
+                          <div className="h-full w-full bg-[radial-gradient(circle_at_35%_18%,rgba(249,115,22,0.14),transparent_0_28%),linear-gradient(135deg,rgba(44,48,58,0.92),rgba(14,15,19,0.96))]" />
                         )}
                       </div>
 
-                      <div className="space-y-2 rounded-xl bg-black/40 p-2">
-                        <div className="text-[11px] font-medium text-slate-300">
+                      <div className="space-y-2 rounded-[18px] bg-black/30 p-2.5">
+                        <div className="kv-mono text-[10px] uppercase tracking-[0.16em] text-slate-400">
                           {job.status === "failed" ? (job.error ?? "Job failed") : "Latest status"}
                         </div>
                         <div className="space-y-1">
@@ -999,7 +1000,7 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
                             type="button"
                             onClick={() => retryJob(job.id)}
                             disabled={job.id === "queue-preview-tile"}
-                            className="inline-flex rounded-lg border border-rose-400/30 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-100 transition hover:bg-rose-500/20"
+                            className="inline-flex rounded-full border border-rose-400/30 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-100 transition hover:bg-rose-500/20"
                           >
                             Retry
                           </button>
@@ -1009,7 +1010,7 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
                   </div>
                 ))}
                 {showDemoCompletedTile && (
-                  <div className="relative flex aspect-video flex-col overflow-hidden rounded-xl border border-emerald-500/30 bg-black/20">
+                  <div className="relative flex aspect-video flex-col overflow-hidden rounded-[22px] border border-amber-400/18 bg-[#15171d]">
                     <div className="flex-1 overflow-hidden">
                       <img
                         src="https://picsum.photos/seed/demo-queue-result/640/360"
@@ -1017,7 +1018,7 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
                         className="h-full w-full object-cover"
                       />
                     </div>
-                    <div className="absolute right-2 top-2 rounded-full bg-emerald-500/90 px-2 py-1 text-[10px] font-semibold text-white">
+                    <div className="absolute right-2 top-2 rounded-full bg-amber-500 px-2 py-1 text-[10px] font-semibold text-black">
                       New
                     </div>
                     <div className="absolute inset-x-0 bottom-0 bg-black/60 p-2 backdrop-blur-sm">

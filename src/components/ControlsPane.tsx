@@ -2811,10 +2811,10 @@ export default function ControlsPane() {
   };
 
   return (
-    <form ref={formRef} className="flex h-full flex-col text-sm" onSubmit={handleGenerate}>
-      <div className="flex-1 space-y-3 pb-32">
+    <form ref={formRef} className="flex h-full flex-col text-sm text-slate-200" onSubmit={handleGenerate}>
+      <div className="flex-1 space-y-4 pb-32">
         <div className="space-y-3">
-          <div className="flex rounded-lg bg-white/5 p-1">
+          <div className="kv-panel-soft flex rounded-full p-1">
             {(["image", "video", "special"] as const).map((tab) => (
               <button
                 key={tab}
@@ -2833,9 +2833,9 @@ export default function ControlsPane() {
                     setModelKey(`special:${SPECIAL_MODELS[0].id}`);
                   }
                 }}
-                className={`flex-1 rounded-md py-1.5 text-xs font-semibold capitalize transition-all ${activeTab === tab
-                  ? "bg-slate-600 text-white shadow-sm"
-                  : "text-slate-400 hover:text-slate-200"
+                className={`kv-mono flex-1 rounded-full py-2 text-[10px] font-semibold uppercase tracking-[0.18em] transition-all ${activeTab === tab
+                  ? "bg-gradient-to-r from-orange-600 to-amber-400 text-black shadow-[0_10px_28px_rgba(249,115,22,0.22)]"
+                  : "text-slate-500 hover:text-slate-200"
                   } ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
               >
                 {tab}
@@ -2843,7 +2843,7 @@ export default function ControlsPane() {
             ))}
           </div>
 
-          <div className="space-y-1">
+          <div className="space-y-1.5">
 
             <select
               value={modelKey}
@@ -2851,7 +2851,7 @@ export default function ControlsPane() {
               onChange={(event) => {
                 setModelKey(event.target.value);
               }}
-              className={`w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
+              className={`kv-input kv-display w-full rounded-[20px] px-3 py-3 text-sm ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
             >
               {activeTab === "video" && (
                 <optgroup label="Video Pipelines">
@@ -2890,18 +2890,18 @@ export default function ControlsPane() {
         {modelKind === "image" ? (
           <div className="space-y-4">
             {/* 1. Reference Uploads (Top) */}
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                <label className="kv-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
                   {selectedImage?.requireReference ? "Reference Image *" : "Reference Images (optional)"}
                 </label>
-                <span className="text-[10px] text-slate-500">Max {imageReferenceLimit}</span>
+                <span className="kv-mono text-[10px] uppercase tracking-[0.16em] text-slate-500">Max {imageReferenceLimit}</span>
               </div>
 
               <div
-                className={`relative flex min-h-[60px] flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-gradient-to-br from-white/10 to-transparent p-2 transition ${isReferenceDragActive
-                  ? "border-sky-400 shadow-lg shadow-sky-500/20"
-                  : "hover:border-white/20"
+                className={`kv-panel-soft relative flex min-h-[60px] flex-wrap items-center gap-2 rounded-[22px] p-2 transition ${isReferenceDragActive
+                  ? "border-amber-400/45 shadow-[0_0_28px_rgba(249,115,22,0.16)]"
+                  : "hover:border-amber-400/18"
                   } ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
                 onDragEnter={(event) => {
                   if (isSubmitting || isExpanding) return;
@@ -2998,9 +2998,9 @@ export default function ControlsPane() {
                 {referenceUploads.length < imageReferenceLimit && (
                   <button
                     type="button"
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-dashed border-white/20 bg-white/5 text-slate-400 transition hover:border-sky-400 hover:text-sky-200"
+                    className="kv-icon-button flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-300"
                     onClick={() => referenceInputRef.current?.click()}
-                    title="Add image"
+                    aria-label="Add image reference"
                     disabled={isSubmitting || isExpanding}
                   >
                     <svg
@@ -3065,7 +3065,7 @@ export default function ControlsPane() {
                         elementsState.toggleManager();
                       }
                     }}
-                    className="text-xs text-sky-400 hover:text-sky-300"
+                    className="kv-mono text-[10px] uppercase tracking-[0.16em] text-amber-300 hover:text-amber-200"
                   >
                     + Add from Elements
                   </button>
@@ -3116,7 +3116,7 @@ export default function ControlsPane() {
             )}
 
             {/* 2. Prompt */}
-            <div className="space-y-1">
+            <div className="space-y-1.5">
 
               <div className="relative">
                 <textarea
@@ -3195,7 +3195,7 @@ export default function ControlsPane() {
                   placeholder="Type @ to reference uploaded images (e.g., @img1)..."
                   rows={6}
                   disabled={isSubmitting || isExpanding}
-                  className={`w-full rounded-2xl border border-white/10 bg-black/40 px-3 py-3 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 pb-10 ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""} ${appendImageCameraSettings && activeTab === "image" ? "border-orange-500/40" : ""}`}
+                  className={`kv-input w-full rounded-[24px] px-4 py-3 pb-10 text-sm ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""} ${appendImageCameraSettings && activeTab === "image" ? "border-orange-500/40" : ""}`}
                 />
 
                 {/* Camera mode prompt preview indicator */}
@@ -3204,8 +3204,8 @@ export default function ControlsPane() {
                     {/* Orange tint overlay (non-interactive) */}
                     <div className="absolute inset-0 rounded-2xl bg-orange-500/[0.06] pointer-events-none" />
                     {/* Hover-reveal preview badge */}
-                    <div className="group/cam absolute top-1.5 right-1.5 z-10">
-                      <div className="flex h-5 items-center gap-1 rounded-full bg-orange-500/20 border border-orange-500/30 px-2 cursor-help">
+                    <div className="group/cam absolute right-2 top-2 z-10">
+                      <div className="flex h-6 items-center gap-1 rounded-full border border-orange-500/20 bg-orange-500/12 px-2 cursor-help">
                         <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-orange-400">
                           <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
                           <circle cx="12" cy="13" r="3" />
@@ -3213,8 +3213,8 @@ export default function ControlsPane() {
                         <span className="text-[9px] font-medium text-orange-300">Preview</span>
                       </div>
                       <div className="absolute top-full right-0 mt-1 hidden group-hover/cam:block">
-                        <div className="w-[320px] max-h-[200px] overflow-y-auto rounded-lg border border-orange-500/30 bg-slate-900/95 p-2.5 text-[11px] text-orange-200 shadow-xl backdrop-blur-sm whitespace-pre-wrap leading-relaxed">
-                          <div className="mb-1 text-[9px] font-bold uppercase tracking-wider text-orange-400">Full Prompt Sent to API</div>
+                        <div className="kv-panel w-[320px] max-h-[200px] overflow-y-auto rounded-[20px] p-2.5 text-[11px] text-orange-200 whitespace-pre-wrap leading-relaxed">
+                          <div className="kv-mono mb-1 text-[9px] font-bold uppercase tracking-[0.18em] text-orange-400">Full Prompt Sent to API</div>
                           {cameraPromptPreview}
                         </div>
                       </div>
@@ -3234,7 +3234,7 @@ export default function ControlsPane() {
                   }));
 
                   return (
-                    <div className="absolute left-3 top-full mt-1 z-50 rounded-lg border border-white/20 bg-slate-900 shadow-xl overflow-hidden max-w-[280px]">
+                    <div className="kv-panel absolute left-3 top-full z-50 mt-2 max-w-[280px] overflow-hidden rounded-[20px]">
                       {options.map((opt, idx) => (
                         <button
                           key={opt.label}
@@ -3254,10 +3254,10 @@ export default function ControlsPane() {
                               setShowAutocomplete(false);
                             }
                           }}
-                          className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition ${idx === autocompleteIndex ? "bg-sky-500/30 text-white" : "text-slate-300 hover:bg-white/10"}`}
+                          className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition ${idx === autocompleteIndex ? "bg-amber-500/18 text-white" : "text-slate-300 hover:bg-white/5"}`}
                         >
                           <img src={opt.preview} alt={opt.name} className="h-6 w-6 rounded object-cover" />
-                          <span className="font-medium text-sky-300">{opt.label}</span>
+                          <span className="font-medium text-amber-300">{opt.label}</span>
                           <span className="truncate text-xs text-slate-500">{opt.name}</span>
                         </button>
                       ))}
@@ -3266,9 +3266,8 @@ export default function ControlsPane() {
                 })()}
                 <div className="absolute bottom-2 left-2 flex gap-1">
                   <label
-                    title={appendImageCameraSettings ? "Appending Camera Settings (Click to disable)" : "Camera Settings Disabled (Click to append)"}
-                    className={`flex h-7 items-center justify-center gap-1.5 rounded-md border px-2 cursor-pointer transition ${appendImageCameraSettings
-                      ? "border-sky-500/30 bg-sky-500/10 text-sky-200 hover:bg-sky-500/20"
+                    className={`flex h-7 items-center justify-center gap-1.5 rounded-full border px-2 cursor-pointer transition ${appendImageCameraSettings
+                      ? "border-amber-500/30 bg-amber-500/10 text-amber-200 hover:bg-amber-500/16"
                       : "border-slate-500/30 bg-black/40 text-slate-400 hover:bg-black/60"
                       } ${isExpanding || isSubmitting ? "opacity-50 pointer-events-none" : ""}`}
                   >
@@ -3284,7 +3283,7 @@ export default function ControlsPane() {
                         disabled={isExpanding || isSubmitting}
                         className="sr-only"
                       />
-                      <div className={`h-3.5 w-7 rounded-full transition ${appendImageCameraSettings ? "bg-sky-500" : "bg-slate-600"}`} />
+                      <div className={`h-3.5 w-7 rounded-full transition ${appendImageCameraSettings ? "bg-amber-500" : "bg-slate-600"}`} />
                       <div className={`absolute left-0.5 h-2.5 w-2.5 rounded-full bg-white transition-transform ${appendImageCameraSettings ? "translate-x-3.5" : ""}`} />
                     </div>
                   </label>
@@ -3294,8 +3293,8 @@ export default function ControlsPane() {
                     type="button"
                     onClick={undo}
                     disabled={historyIndex <= 0 || isSubmitting || isExpanding}
-                    className="flex h-7 w-7 items-center justify-center rounded-md border border-rose-500/30 bg-rose-500/20 text-rose-200 transition hover:bg-rose-500/30 hover:text-white disabled:opacity-30 disabled:hover:bg-rose-500/20"
-                    title="Undo"
+                    className="kv-icon-button flex h-7 w-7 items-center justify-center rounded-full border-rose-500/30 bg-rose-500/18 text-rose-200 disabled:opacity-30 disabled:hover:bg-rose-500/18"
+                    aria-label="Undo prompt change"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6" /><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" /></svg>
                   </button>
@@ -3303,8 +3302,8 @@ export default function ControlsPane() {
                     type="button"
                     onClick={redo}
                     disabled={historyIndex >= history.length - 1 || isSubmitting || isExpanding}
-                    className="flex h-7 w-7 items-center justify-center rounded-md border border-rose-500/30 bg-rose-500/20 text-rose-200 transition hover:bg-rose-500/30 hover:text-white disabled:opacity-30 disabled:hover:bg-rose-500/20"
-                    title="Redo"
+                    className="kv-icon-button flex h-7 w-7 items-center justify-center rounded-full border-rose-500/30 bg-rose-500/18 text-rose-200 disabled:opacity-30 disabled:hover:bg-rose-500/18"
+                    aria-label="Redo prompt change"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 7v6h-6" /><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13" /></svg>
                   </button>
@@ -3318,15 +3317,12 @@ export default function ControlsPane() {
                     })}
                     disabled={isExpanding}
                     className={`flex h-7 items-center justify-center rounded-md border transition disabled:opacity-50 ${imagePromptMode === "photoreal"
-                      ? "border-emerald-500/30 bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/40 hover:text-white w-7"
+                      ? "border-amber-500/30 bg-amber-500/14 text-amber-200 hover:bg-amber-500/24 hover:text-white w-7"
                       : imagePromptMode === "editing"
-                        ? "border-cyan-500/30 bg-cyan-500/20 text-cyan-200 hover:bg-cyan-500/40 hover:text-white w-7"
-                        : "border-amber-500/30 bg-amber-500/20 text-amber-200 hover:bg-amber-500/40 hover:text-white px-1.5 gap-1"
+                        ? "border-orange-500/30 bg-orange-500/14 text-orange-200 hover:bg-orange-500/24 hover:text-white w-7"
+                        : "border-yellow-500/30 bg-yellow-500/14 text-yellow-200 hover:bg-yellow-500/24 hover:text-white px-1.5 gap-1"
                       }`}
-                    title={`Current Mode: ${imagePromptMode === "photoreal" ? "Photorealistic (Camera Aware)"
-                      : imagePromptMode === "editing" ? "Editing (Angle/Modify)"
-                        : "Grid Gen (Cinematic Storyboard)"
-                      }`}
+                    aria-label="Cycle image prompt mode"
                   >
                     {imagePromptMode === "photoreal" ? (
                       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" /><circle cx="12" cy="13" r="3" /></svg>
@@ -3341,8 +3337,8 @@ export default function ControlsPane() {
                     type="button"
                     onClick={() => handleExpandPrompt("natural")}
                     disabled={isExpanding || isSubmitting || !prompt.trim()}
-                    className="flex h-7 w-7 items-center justify-center rounded-md border border-indigo-500/30 bg-indigo-500/20 text-indigo-200 transition hover:bg-indigo-500/40 hover:text-white disabled:opacity-50"
-                    title="Expand with Natural Language"
+                    className="kv-icon-button flex h-7 w-7 items-center justify-center rounded-full border-amber-500/30 bg-amber-500/14 text-amber-200 disabled:opacity-50"
+                    aria-label="Expand with natural language"
                   >
                     {isExpanding ? (
                       <Spinner size="sm" />
@@ -3368,14 +3364,14 @@ export default function ControlsPane() {
                   }}
                   placeholder="Refine prompt (e.g. 'make it darker', 'add rain')..."
                   disabled={isSubmitting || isExpanding || isAltering}
-                  className={`flex-1 rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 placeholder:text-slate-600 ${isSubmitting || isExpanding || isAltering ? "opacity-50 cursor-not-allowed" : ""}`}
+                  className={`kv-input flex-1 rounded-full px-3 py-2 text-sm placeholder:text-slate-600 ${isSubmitting || isExpanding || isAltering ? "opacity-50 cursor-not-allowed" : ""}`}
                 />
                 <button
                   type="button"
                   onClick={() => void handleAlter()}
                   disabled={!prompt.trim() || !alterInstruction.trim() || isSubmitting || isExpanding || isAltering}
-                  className="flex items-center justify-center rounded-lg border border-white/10 bg-white/5 px-3 text-slate-300 transition hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
-                  title="Apply Alteration"
+                  className="kv-icon-button flex items-center justify-center rounded-full px-3 text-slate-300 disabled:cursor-not-allowed disabled:opacity-30"
+                  aria-label="Apply prompt alteration"
                 >
                   {isAltering ? (
                     <Spinner size="sm" />
@@ -5098,14 +5094,14 @@ export default function ControlsPane() {
                   }}
                   placeholder="Alter: e.g. 'make it more cinematic'"
                   disabled={isAltering || isSubmitting || !prompt.trim()}
-                  className={`flex-1 rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 ${isAltering || isSubmitting || !prompt.trim() ? "opacity-50 cursor-not-allowed" : ""}`}
+                  className={`kv-input flex-1 rounded-full px-3 py-2 text-sm ${isAltering || isSubmitting || !prompt.trim() ? "opacity-50 cursor-not-allowed" : ""}`}
                 />
                 <button
                   type="button"
                   onClick={() => void handleAlter()}
                   disabled={isAltering || isSubmitting || !alterInstruction.trim() || !prompt.trim()}
-                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-violet-500/30 bg-violet-500/20 text-violet-200 transition hover:bg-violet-500/40 hover:text-white disabled:opacity-50"
-                  title="Apply alteration"
+                  className="kv-icon-button flex h-9 w-9 items-center justify-center rounded-full border-amber-500/30 bg-amber-500/14 text-amber-200 disabled:opacity-50"
+                  aria-label="Apply alteration"
                 >
                   {isAltering ? (
                     <Spinner size="sm" />
@@ -5122,12 +5118,12 @@ export default function ControlsPane() {
 
       </div >
 
-      <div className="sticky bottom-0 left-0 right-0 mt-auto space-y-2 border-t border-white/10 bg-slate-950/95 p-3 shadow-[0_-6px_25px_rgba(0,0,0,0.7)] backdrop-blur">
+      <div className="kv-glass sticky bottom-0 left-0 right-0 mt-auto space-y-2 rounded-[24px] p-3 shadow-[0_-6px_25px_rgba(0,0,0,0.45)]">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <button
             type="submit"
             disabled={!canGenerate}
-            className="rounded-xl bg-gradient-to-r from-sky-500 via-blue-500 to-indigo-500 px-5 py-2 text-sm font-bold text-white shadow-lg shadow-sky-500/30 transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-sky-500/40 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+            className="kv-cta rounded-full px-5 py-2 text-sm font-bold transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
           >
             {generateBlockReason}
           </button>
@@ -5136,19 +5132,14 @@ export default function ControlsPane() {
             <span
               className={`rounded-lg border px-3 py-2 text-center text-xs font-semibold ${startFrame.preview || startFrame.url
                 ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
-                : "border-sky-500/30 bg-sky-500/10 text-sky-200"
+                : "border-amber-500/30 bg-amber-500/10 text-amber-200"
                 }`}
-              title={
-                startFrame.preview || startFrame.url
-                  ? "Image-to-Video: Using start frame"
-                  : "Text-to-Video: No start frame"
-              }
             >
               {startFrame.preview || startFrame.url ? "I2V" : "T2V"}
             </span>
           )}
           {pricingLabel ? (
-            <span className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-center text-sm font-semibold text-amber-200">
+            <span className="kv-pill rounded-full px-3 py-2 text-center text-sm font-semibold">
               {pricingLabel}
             </span>
           ) : null}
@@ -5157,7 +5148,7 @@ export default function ControlsPane() {
         {/* Floating Status Toast */}
         {status && (
           <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 animate-in fade-in slide-in-from-bottom-2 duration-200">
-            <div className="rounded-full border border-white/20 bg-slate-900/95 px-4 py-2 text-xs font-medium text-slate-200 shadow-lg backdrop-blur-sm">
+            <div className="kv-panel rounded-full px-4 py-2 text-xs font-medium text-slate-200">
               {status}
             </div>
           </div>

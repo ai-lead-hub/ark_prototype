@@ -1,15 +1,67 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Space+Grotesk:wght@500;600;700&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
   color-scheme: dark;
+  --kv-bg: #07080b;
+  --kv-bg-soft: #101216;
+  --kv-surface: rgba(17, 19, 23, 0.92);
+  --kv-surface-low: rgba(22, 24, 30, 0.82);
+  --kv-surface-high: rgba(32, 35, 43, 0.92);
+  --kv-surface-bright: rgba(42, 46, 56, 0.75);
+  --kv-outline: rgba(247, 147, 26, 0.14);
+  --kv-outline-strong: rgba(247, 147, 26, 0.28);
+  --kv-text: #f8fafc;
+  --kv-muted: #8b96a7;
+  --kv-accent: #f59e0b;
+  --kv-accent-strong: #f97316;
+  --kv-accent-soft: rgba(245, 158, 11, 0.16);
+  --kv-accent-glow: rgba(249, 115, 22, 0.22);
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
 }
 
 body {
-  @apply min-h-screen font-sans antialiased text-slate-100 bg-slate-950;
-  /* Removed complex gradients for a cleaner, utilitarian look */
-  background-image: linear-gradient(to bottom, #020617, #0f172a);
+  @apply min-h-screen antialiased;
+  font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+  color: var(--kv-text);
+  background:
+    radial-gradient(circle at 18% 16%, rgba(249, 115, 22, 0.12), transparent 0 24%),
+    radial-gradient(circle at 72% 12%, rgba(245, 158, 11, 0.08), transparent 0 18%),
+    linear-gradient(180deg, #111317 0%, #090a0e 100%);
+  position: relative;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.14;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 50px 50px;
+  mask-image: radial-gradient(circle at 42% 28%, black 0%, rgba(0, 0, 0, 0.92) 35%, transparent 82%);
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 24% 22%, rgba(249, 115, 22, 0.12), transparent 0 20%),
+    radial-gradient(circle at 68% 14%, rgba(245, 158, 11, 0.08), transparent 0 16%);
+  filter: blur(36px);
+  opacity: 0.9;
 }
 
 ::-webkit-scrollbar {
@@ -22,63 +74,145 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.2);
+  background: rgba(247, 147, 26, 0.24);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.4);
+  background: rgba(247, 147, 26, 0.4);
 }
 
 a {
   @apply transition-colors;
 }
 
-.glass-surface {
-  @apply border border-white/5 bg-slate-900/80 shadow-sm;
-}
-
-.divider-gradient {
-  position: relative;
-}
-
-.divider-gradient::after {
-  content: "";
-  position: absolute;
-  inset: auto 0 -1px 0;
-  height: 1px;
-  background: rgba(255, 255, 255, 0.05);
-}
-
 .fade-mask {
   mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.12), #000 18%, #000 82%, rgba(0, 0, 0, 0));
 }
 
-/* Popup/Modal consistency */
-.popup-container {
-  @apply overflow-hidden rounded-xl border border-white/10 bg-slate-900/95 shadow-2xl backdrop-blur-xl;
+.custom-scrollbar {
+  scrollbar-color: rgba(247, 147, 26, 0.32) transparent;
 }
 
-.popup-header {
-  @apply flex items-center justify-between border-b border-white/10 px-4 py-3 bg-white/5;
+.kv-shell {
+  background:
+    linear-gradient(180deg, rgba(17, 19, 23, 0.96), rgba(10, 11, 14, 0.96)),
+    rgba(17, 19, 23, 0.96);
 }
 
-/* Panel styling */
-.panel-container {
-  @apply rounded-xl border border-white/5 bg-slate-900/40;
+.kv-panel {
+  background: var(--kv-surface);
+  border: 1px solid var(--kv-outline);
+  box-shadow:
+    0 28px 80px rgba(0, 0, 0, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(22px);
 }
 
-/* Accent borders for focus */
-.accent-border-sky {
-  @apply border-sky-500/50 ring-1 ring-sky-500/30;
+.kv-panel-soft {
+  background: var(--kv-surface-low);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
 }
 
-/* Subtle glow effects */
-.glow-sky {
-  box-shadow: 0 0 20px -5px rgba(14, 165, 233, 0.3);
+.kv-panel-raised {
+  background: var(--kv-surface-high);
+  border: 1px solid var(--kv-outline);
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.32),
+    0 0 0 1px rgba(247, 147, 26, 0.04) inset;
 }
 
-.glow-violet {
-  box-shadow: 0 0 20px -5px rgba(139, 92, 246, 0.3);
+.kv-glass {
+  background: rgba(31, 34, 41, 0.62);
+  border: 1px solid rgba(247, 147, 26, 0.12);
+  backdrop-filter: blur(18px);
 }
 
+.kv-grid-surface {
+  background:
+    linear-gradient(rgba(245, 158, 11, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(245, 158, 11, 0.035) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(10, 11, 14, 0.94), rgba(7, 8, 11, 0.98));
+  background-size: 40px 40px, 40px 40px, auto;
+}
+
+.kv-mono {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+}
+
+.kv-display {
+  font-family: "Space Grotesk", "Inter", ui-sans-serif, sans-serif;
+}
+
+.kv-input {
+  background: rgba(9, 10, 14, 0.72);
+  border: 1px solid rgba(247, 147, 26, 0.12);
+  color: var(--kv-text);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+}
+
+.kv-input::placeholder {
+  color: #687487;
+}
+
+.kv-input:focus {
+  outline: none;
+  border-color: rgba(245, 158, 11, 0.45);
+  box-shadow:
+    0 0 0 1px rgba(245, 158, 11, 0.18),
+    0 0 24px rgba(249, 115, 22, 0.1);
+}
+
+.kv-icon-button {
+  background: rgba(22, 24, 30, 0.92);
+  border: 1px solid rgba(247, 147, 26, 0.12);
+  color: #d8dee8;
+  transition:
+    border-color 160ms ease,
+    color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.kv-icon-button:hover {
+  border-color: rgba(245, 158, 11, 0.34);
+  color: white;
+  background: rgba(36, 39, 47, 0.92);
+}
+
+.kv-icon-button:focus-visible {
+  outline: none;
+  border-color: rgba(245, 158, 11, 0.45);
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.18);
+}
+
+.kv-pill {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.16);
+  color: #f3c481;
+}
+
+.kv-ghost-pill {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: #b0b8c5;
+}
+
+.kv-cta {
+  background-image: linear-gradient(90deg, #ea580c 0%, #f59e0b 100%);
+  color: #120c05;
+  box-shadow: 0 12px 40px rgba(249, 115, 22, 0.26);
+}
+
+.kv-cta:hover {
+  box-shadow: 0 16px 44px rgba(249, 115, 22, 0.32);
+}
+
+.kv-status {
+  color: var(--kv-muted);
+}
+
+.kv-outline {
+  border: 1px solid rgba(247, 147, 26, 0.12);
+}

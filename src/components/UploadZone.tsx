@@ -74,9 +74,9 @@ export function UploadZone({
 
     return (
         <div
-            className={`relative overflow-hidden rounded-2xl border bg-gradient-to-br from-white/10 to-transparent transition-all ${isDragActive
-                ? "border-sky-400 shadow-lg shadow-sky-500/20"
-                : "border-white/10 hover:border-white/20"
+            className={`kv-panel-soft relative overflow-hidden rounded-[22px] transition-all ${isDragActive
+                ? "border-amber-400/45 shadow-[0_0_28px_rgba(249,115,22,0.16)]"
+                : "hover:border-amber-400/18"
                 }`}
             onDragEnter={(e) => {
                 e.preventDefault();
@@ -141,11 +141,11 @@ export function UploadZone({
                         {/* Status Overlay (Uploading / Ready) */}
                         <div className="absolute bottom-2 right-2 pointer-events-none">
                             {slot.uploading ? (
-                                <div className="flex items-center gap-1 rounded-md bg-black/60 px-2 py-1 text-[10px] font-medium text-sky-300 backdrop-blur-md">
+                                <div className="flex items-center gap-1 rounded-md bg-black/60 px-2 py-1 text-[10px] font-medium text-amber-300 backdrop-blur-md">
                                     <Spinner size="sm" /> Uploading
                                 </div>
                             ) : slot.url ? (
-                                <div className="rounded-md bg-emerald-500/80 px-2 py-1 text-[10px] font-bold text-white backdrop-blur-md shadow-sm">
+                                <div className="rounded-md bg-amber-500 px-2 py-1 text-[10px] font-bold text-black backdrop-blur-md shadow-sm">
                                     READY
                                 </div>
                             ) : null}
@@ -162,7 +162,7 @@ export function UploadZone({
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" /></svg>
                         </div>
                         <div className="text-[10px] text-slate-400">
-                            <span className="font-medium text-slate-300">Click</span> or drag
+                            <span className="font-medium text-slate-200">Click</span> or drag
                         </div>
                         <button
                             type="button"
