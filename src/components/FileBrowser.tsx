@@ -699,23 +699,19 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
 
   return (
     <div className="flex h-full flex-col gap-2">
-      <div className="grid gap-2 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,26rem)_minmax(0,1fr)] xl:items-center">
-        <div className="flex min-w-0 flex-wrap items-center gap-2 xl:justify-self-start">
+      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 overflow-x-auto pb-1">
+        <div className="flex shrink-0 items-center gap-2">
           <ProjectBar mode="leading" />
         </div>
 
-        <div className="w-full xl:justify-self-center">
+        <div className="flex min-w-0 items-center justify-center gap-2">
           <input
             type="search"
             value={q}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search files"
-            className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
+            className="w-52 rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 xl:w-60"
           />
-        </div>
-
-        <div className="flex flex-wrap items-center justify-end gap-2 xl:justify-self-end">
-          <ProjectBar mode="utilities" />
 
           <div className="relative">
             <button
@@ -776,6 +772,10 @@ export default function FileBrowser({ disableKeyboardNav }: FileBrowserProps) {
           >
             ↻
           </button>
+        </div>
+
+        <div className="flex shrink-0 items-center justify-end gap-2">
+          <ProjectBar mode="utilities" />
         </div>
       </div>
 
