@@ -1,7 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import type { FileEntry } from "../lib/api/files";
-import type { Shot } from "../state/shots";
+import type { Shot, ShotCandidate } from "../state/shots";
+import VideoPlayer from "./VideoPlayer";
+import ImageEditor from "./ImageEditor";
 
 const MIN_CARD_WIDTH = 220;
 const MIN_CARD_HEIGHT = 138;
@@ -212,6 +215,23 @@ export default function CanvasBrowser({
   const playingVideoRef = useRef<HTMLVideoElement | null>(null);
   const snapPreviewRef = useRef<SnapPreview | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
+
+  // Fullscreen viewer state for storyboard candidate double-click
+  const [fullscreenCandidate, setFullscreenCandidate] = useState<{ candidate: ShotCandidate; shot: Shot } | null>(null);
+
+  const fsShot = fullscreenCandidate?.shot;
+  const fsCand = fullscreenCandidate?.candidate;
+  const fsIdx = fsShot && fsCand ? fsShot.candidates.findIndex((c) => c.id === fsCand.id) : -1;
+  const fsHasPrev = fsIdx > 0;
+  const fsHasNext = fsShot ? fsIdx >= 0 && fsIdx < fsShot.candidates.length - 1 : false;
+
+  const navigateFullscreen = useCallback((dir: "prev" | "next") => {
+    if (!fsShot || fsIdx === -1) return;
+    const next = dir === "next" ? fsIdx + 1 : fsIdx - 1;
+    if (next >= 0 && next < fsShot.candidates.length) {
+      setFullscreenCandidate({ candidate: fsShot.candidates[next], shot: fsShot });
+    }
+  }, [fsShot, fsIdx]);
 
   const tileMetaIconChip =
     "flex h-7 w-7 items-center justify-center rounded-full bg-[#b7ae9d]/42 text-white/92 shadow-[0_8px_18px_rgba(0,0,0,0.12)] backdrop-blur-[10px]";
@@ -489,6 +509,7 @@ export default function CanvasBrowser({
   /* ── Storyboard: shots vertical, candidates horizontal ── */
   if (isStoryboard) {
     return (
+      <>
       <div className="relative h-full overflow-hidden overscroll-none px-4 py-4">
         {/* Zoom controls */}
         <div
@@ -560,8 +581,8 @@ export default function CanvasBrowser({
                       </div>
                     </div>
 
-                    {/* Candidate cards */}
-                    {shot.candidates.map((c, colIdx) => {
+                    {/* Candidate cards (outputs only) */}
+                    {[...shot.candidates.filter((c) => c.role === "output")].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()).map((c, colIdx) => {
                       const cardX = SB_ORIGIN_X + colIdx * (SB_CARD_WIDTH + SB_COL_GAP);
                       const isPublished = c.id === shot.previewFileId;
 
@@ -569,7 +590,7 @@ export default function CanvasBrowser({
                         <div
                           key={c.id}
                           data-canvas-card="true"
-                          className={`pointer-events-auto absolute overflow-hidden rounded-[14px] border transition-shadow hover:border-amber-400/30 ${
+                          className={`pointer-events-auto absolute cursor-pointer overflow-hidden rounded-[14px] border transition-shadow hover:border-amber-400/30 ${
                             isPublished
                               ? "border-violet-400/40 shadow-[0_0_0_1px_rgba(139,92,246,0.2)]"
                               : c.role === "pinned"
@@ -584,6 +605,7 @@ export default function CanvasBrowser({
                             width: SB_CARD_WIDTH,
                             height: SB_CARD_HEIGHT,
                           }}
+                          onDoubleClick={() => setFullscreenCandidate({ candidate: c, shot })}
                         >
                           <div className="absolute inset-0">
                             {c.isVideo ? (
@@ -635,11 +657,36 @@ export default function CanvasBrowser({
           </div>
         </div>
       </div>
+
+      {fullscreenCandidate && createPortal(
+        fsCand!.isVideo ? (
+          <VideoPlayer
+            videoUrl={fsCand!.previewPath}
+            videoName={fsCand!.originalName}
+            onSave={async () => {}}
+            onClose={() => setFullscreenCandidate(null)}
+            onPrevious={fsHasPrev ? () => navigateFullscreen("prev") : undefined}
+            onNext={fsHasNext ? () => navigateFullscreen("next") : undefined}
+          />
+        ) : (
+          <ImageEditor
+            imageUrl={fsCand!.previewPath}
+            imageName={fsCand!.originalName}
+            onSave={async () => {}}
+            onClose={() => setFullscreenCandidate(null)}
+            onPrevious={fsHasPrev ? () => navigateFullscreen("prev") : undefined}
+            onNext={fsHasNext ? () => navigateFullscreen("next") : undefined}
+          />
+        ),
+        document.body,
+      )}
+      </>
     );
   }
 
   /* ── Freeform canvas (original behavior) ── */
   return (
+    <>
     <div className="relative h-full overflow-hidden overscroll-none px-4 py-4">
       <div
         data-canvas-control="true"
@@ -933,5 +980,29 @@ export default function CanvasBrowser({
         </div>
       </div>
     </div>
+
+    {fullscreenCandidate && createPortal(
+      fsCand!.isVideo ? (
+        <VideoPlayer
+          videoUrl={fsCand!.previewPath}
+          videoName={fsCand!.originalName}
+          onSave={async () => {}}
+          onClose={() => setFullscreenCandidate(null)}
+          onPrevious={fsHasPrev ? () => navigateFullscreen("prev") : undefined}
+          onNext={fsHasNext ? () => navigateFullscreen("next") : undefined}
+        />
+      ) : (
+        <ImageEditor
+          imageUrl={fsCand!.previewPath}
+          imageName={fsCand!.originalName}
+          onSave={async () => {}}
+          onClose={() => setFullscreenCandidate(null)}
+          onPrevious={fsHasPrev ? () => navigateFullscreen("prev") : undefined}
+          onNext={fsHasNext ? () => navigateFullscreen("next") : undefined}
+        />
+      ),
+      document.body,
+    )}
+    </>
   );
 }

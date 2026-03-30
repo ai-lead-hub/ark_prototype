@@ -214,7 +214,7 @@ export default function ControlsPane() {
     "modelKey",
     DEFAULT_MODEL_KEY
   );
-  const [activeTab, setActiveTab] = usePersistentState<"image" | "video" | "special">(
+  const [activeTab, setActiveTab] = usePersistentState<"image" | "video" | "special" | "audio" | "chat">(
     "activeTab",
     DEFAULT_MODEL_KEY.startsWith("image:") ? "image" : "video"
   );
@@ -1861,16 +1861,7 @@ export default function ControlsPane() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]); // Only react to tab changes
 
-  // Sync activeTab with modelKey to ensure consistency
-  useEffect(() => {
-    if (modelKey.startsWith("video:") && activeTab !== "video") {
-      setActiveTab("video");
-    } else if (modelKey.startsWith("image:") && activeTab !== "image") {
-      setActiveTab("image");
-    } else if (modelKey.startsWith("special:") && activeTab !== "special") {
-      setActiveTab("special");
-    }
-  }, [modelKey, activeTab, setActiveTab]);
+  // Tab/model sync is handled by handleTabSwitch and action handlers — no effect needed
 
   const handleExpandPrompt = async (type: "natural") => {
     if (!prompt.trim()) {
@@ -2810,38 +2801,172 @@ export default function ControlsPane() {
     }
   };
 
+  const generationTabs = [
+    { id: "image" as const, label: "Image", icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+    )},
+    { id: "video" as const, label: "Video", icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+    )},
+    { id: "special" as const, label: "Tools", icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+    )},
+    { id: "audio" as const, label: "Audio", icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+    )},
+    { id: "chat" as const, label: "Chat", icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    )},
+  ];
+
+  const handleTabSwitch = (tab: typeof activeTab) => {
+    setActiveTab(tab);
+    if (tab === "image" || tab === "video" || tab === "special") {
+      const remembered = lastModelPerTab.current[tab];
+      if (remembered && remembered.startsWith(`${tab}:`)) {
+        setModelKey(remembered);
+      } else if (tab === "image" && IMAGE_MODELS.length) {
+        setModelKey(`image:${IMAGE_MODELS[0].id}`);
+      } else if (tab === "video" && MODEL_SPECS.length) {
+        setModelKey(`video:${MODEL_SPECS[0].id}`);
+      } else if (tab === "special" && SPECIAL_MODELS.length) {
+        setModelKey(`special:${SPECIAL_MODELS[0].id}`);
+      }
+    }
+  };
+
   return (
-    <form ref={formRef} className="flex h-full flex-col text-sm text-slate-200" onSubmit={handleGenerate}>
+    <div className="flex h-full gap-2 text-sm text-slate-200">
+      {/* Vertical icon tabs */}
+      <div className="flex flex-col items-center gap-1 pt-1">
+        {generationTabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            title={tab.label}
+            disabled={(tab.id === "image" || tab.id === "video" || tab.id === "special") && (isSubmitting || isExpanding)}
+            onClick={() => handleTabSwitch(tab.id)}
+            className={`flex h-9 w-9 items-center justify-center rounded-xl transition-all ${
+              activeTab === tab.id
+                ? "bg-gradient-to-br from-orange-600 to-amber-400 text-black shadow-[0_4px_16px_rgba(249,115,22,0.3)]"
+                : "text-slate-500 hover:bg-white/5 hover:text-slate-200"
+            } ${(tab.id === "image" || tab.id === "video" || tab.id === "special") && (isSubmitting || isExpanding) ? "opacity-50 cursor-not-allowed" : ""}`}
+          >
+            {tab.icon}
+          </button>
+        ))}
+      </div>
+
+      {/* Audio placeholder */}
+      {activeTab === "audio" && (
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 rounded-2xl border border-white/5 bg-white/[0.02] p-6">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/5">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-500"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+          </div>
+          <div className="text-center">
+            <div className="text-sm font-medium text-slate-300">Audio Generation</div>
+            <div className="mt-1 text-xs text-slate-500">Sound effects, music, and voice synthesis coming soon.</div>
+          </div>
+          <div className="mt-2 w-full space-y-2">
+            <div className="h-10 rounded-xl bg-white/[0.03] border border-white/5" />
+            <div className="h-24 rounded-xl bg-white/[0.03] border border-white/5" />
+            <div className="h-10 rounded-xl bg-white/[0.03] border border-white/5" />
+          </div>
+        </div>
+      )}
+
+      {/* Chat tab */}
+      {activeTab === "chat" && (
+        <div className="flex min-h-0 flex-1 flex-col rounded-2xl border border-white/5 bg-white/[0.02]">
+          {/* System prompt / gem selector */}
+          <div className="flex items-center gap-2 border-b border-white/5 px-3 py-2">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-500"><path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3z"/></svg>
+            <select className="kv-input flex-1 rounded-lg bg-transparent px-2 py-1.5 text-xs text-slate-300">
+              <option>General Assistant</option>
+              <option>Creative Director</option>
+              <option>Shot Breakdown</option>
+              <option>Prompt Engineer</option>
+              <option>Storyboard Advisor</option>
+            </select>
+          </div>
+
+          {/* Messages area */}
+          <div className="custom-scrollbar flex-1 space-y-3 overflow-y-auto p-3">
+            {/* User message */}
+            <div className="flex gap-2 justify-end">
+              <div className="rounded-2xl rounded-tr-md bg-amber-500/10 px-3 py-2 text-xs text-slate-200 max-w-[85%]">
+                Write me a cinematic prompt for a scarecrow walking through a misty cornfield at dawn
+              </div>
+              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[10px] font-bold text-amber-300">U</div>
+            </div>
+
+            {/* AI response with generated prompt */}
+            <div className="flex gap-2">
+              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-violet-500/20 text-[10px] font-bold text-violet-300">AI</div>
+              <div className="space-y-2 max-w-[85%]">
+                <div className="rounded-2xl rounded-tl-md bg-white/[0.04] px-3 py-2 text-xs text-slate-300">
+                  Here&apos;s a cinematic prompt for that scene:
+                </div>
+
+                {/* Prompt code block */}
+                <div className="rounded-xl border border-white/8 bg-black/30 overflow-hidden">
+                  <div className="flex items-center justify-between border-b border-white/5 px-3 py-1.5">
+                    <span className="text-[9px] uppercase tracking-wider text-slate-500 font-semibold">Generated Prompt</span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        className="flex items-center gap-1 rounded-md px-2 py-1 text-[10px] text-slate-400 transition hover:bg-white/5 hover:text-slate-200"
+                        onClick={() => { navigator.clipboard.writeText("A weathered scarecrow with tattered burlap clothing slowly walks through endless rows of golden corn, thick morning mist curling around its legs. Dawn light breaks through the fog in volumetric god rays, casting long amber shadows. Cinematic shallow depth of field, anamorphic lens flare, 35mm film grain. Atmospheric, eerie, hauntingly beautiful. Camera slowly tracks alongside at eye level."); }}
+                      >
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        Copy
+                      </button>
+                      <button
+                        type="button"
+                        className="flex items-center gap-1 rounded-md bg-amber-500/10 px-2 py-1 text-[10px] text-amber-300 transition hover:bg-amber-500/20"
+                        onClick={() => {}}
+                      >
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                        Inject
+                      </button>
+                    </div>
+                  </div>
+                  <div className="p-3 text-[11px] leading-relaxed text-slate-300 font-mono">
+                    A weathered scarecrow with tattered burlap clothing slowly walks through endless rows of golden corn, thick morning mist curling around its legs. Dawn light breaks through the fog in volumetric god rays, casting long amber shadows. Cinematic shallow depth of field, anamorphic lens flare, 35mm film grain. Atmospheric, eerie, hauntingly beautiful. Camera slowly tracks alongside at eye level.
+                  </div>
+                </div>
+
+                <div className="rounded-2xl rounded-tl-md bg-white/[0.04] px-3 py-2 text-xs text-slate-300">
+                  I focused on volumetric lighting and film texture to sell the cinematic quality. You can click <strong className="text-amber-300">Inject</strong> to send it straight to the image prompt, or <strong className="text-slate-200">Copy</strong> to use it elsewhere.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Input */}
+          <div className="border-t border-white/5 p-2">
+            <div className="flex items-end gap-2">
+              <textarea
+                placeholder="Ask anything..."
+                rows={1}
+                className="kv-input custom-scrollbar flex-1 resize-none rounded-xl bg-white/[0.03] px-3 py-2 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-amber-400/30"
+              />
+              <button
+                type="button"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-r from-orange-600 to-amber-400 text-black transition hover:shadow-[0_4px_16px_rgba(249,115,22,0.3)]"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Generation controls (image/video/special) */}
+      {(activeTab === "image" || activeTab === "video" || activeTab === "special") && (
+      <form ref={formRef} className="flex min-h-0 flex-1 flex-col" onSubmit={handleGenerate}>
       <div className="custom-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
         <div className="space-y-3">
-          <div className="kv-panel-soft flex rounded-full p-1">
-            {(["image", "video", "special"] as const).map((tab) => (
-              <button
-                key={tab}
-                type="button"
-                disabled={isSubmitting || isExpanding}
-                onClick={() => {
-                  setActiveTab(tab);
-                  const remembered = lastModelPerTab.current[tab];
-                  if (remembered && remembered.startsWith(`${tab}:`)) {
-                    setModelKey(remembered);
-                  } else if (tab === "image" && IMAGE_MODELS.length) {
-                    setModelKey(`image:${IMAGE_MODELS[0].id}`);
-                  } else if (tab === "video" && MODEL_SPECS.length) {
-                    setModelKey(`video:${MODEL_SPECS[0].id}`);
-                  } else if (tab === "special" && SPECIAL_MODELS.length) {
-                    setModelKey(`special:${SPECIAL_MODELS[0].id}`);
-                  }
-                }}
-                className={`kv-mono flex-1 rounded-full py-2 text-[10px] font-semibold uppercase tracking-[0.18em] transition-all ${activeTab === tab
-                  ? "bg-gradient-to-r from-orange-600 to-amber-400 text-black shadow-[0_10px_28px_rgba(249,115,22,0.22)]"
-                  : "text-slate-500 hover:text-slate-200"
-                  } ${isSubmitting || isExpanding ? "opacity-50 cursor-not-allowed" : ""}`}
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
 
           <div className="space-y-1.5">
 
@@ -5162,5 +5287,7 @@ export default function ControlsPane() {
         )}
       </div>
     </form >
+      )}
+    </div>
   );
 }

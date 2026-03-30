@@ -1,39 +1,23 @@
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import type { Shot, ShotCandidate } from "../state/shots";
+import VideoPlayer from "./VideoPlayer";
+import ImageEditor from "./ImageEditor";
 
 type Props = {
   shot: Shot;
   isActive: boolean;
   onActivate: () => void;
   onNavigate: (dir: "prev" | "next") => void;
+  /** All shots for the dropdown selector */
+  allShots?: Shot[];
+  /** Callback when a shot is selected from the dropdown */
+  onSelectShot?: (id: string) => void;
   /** Element avatars to show next to shot name */
   taggedElements?: { id: string; name: string; thumbnailPath?: string }[];
   demoQueuePhase?: string;
   demoQueueProgress?: number;
 };
-
-function ImageLabOverlay({ mediaUrl, isVideo, onClose }: { mediaUrl: string; isVideo: boolean; onClose: () => void }) {
-  return (
-    <div 
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-md"
-      onClick={onClose}
-    >
-      <button 
-        type="button"
-        className="absolute top-4 right-4 z-[101] flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white/50 transition hover:bg-white/20 hover:text-white"
-        onClick={onClose}
-      >
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-      </button>
-
-      {isVideo ? (
-        <video src={mediaUrl} className="max-h-full max-w-full object-contain shadow-2xl" controls autoPlay loop onClick={(e) => e.stopPropagation()} />
-      ) : (
-        <img src={mediaUrl} className="max-h-full max-w-full object-contain shadow-2xl" onClick={(e) => e.stopPropagation()} />
-      )}
-    </div>
-  );
-}
 
 function CandidateTile({
   c,
@@ -79,6 +63,15 @@ function CandidateTile({
         />
       )}
 
+      {/* Center play indicator for videos */}
+      {c.isVideo && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none transition-opacity group-hover/tile:opacity-0">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white/90 backdrop-blur-sm">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          </div>
+        </div>
+      )}
+
       {/* Darkening vignette for hover controls */}
       <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-transparent to-black/80 opacity-0 transition-opacity duration-200 group-hover/tile:opacity-100 pointer-events-none" />
 
@@ -94,6 +87,7 @@ function CandidateTile({
         <button
           type="button"
           aria-label="Select"
+          onClick={(e) => e.stopPropagation()}
           className="flex h-5 w-5 items-center justify-center rounded-full border border-slate-500/40 bg-black/40 text-transparent transition hover:border-slate-300 hover:text-white"
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
@@ -105,6 +99,7 @@ function CandidateTile({
         <button
           type="button"
           aria-label="Pin"
+          onClick={(e) => e.stopPropagation()}
           className="flex h-6 w-6 items-center justify-center rounded-full bg-black/50 text-white/80 transition hover:bg-yellow-500 hover:text-black backdrop-blur-sm"
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>
@@ -112,6 +107,7 @@ function CandidateTile({
         <button
           type="button"
           aria-label="More"
+          onClick={(e) => e.stopPropagation()}
           className="flex h-6 w-6 items-center justify-center rounded-full bg-black/50 text-white/80 transition hover:bg-white/20 hover:text-white backdrop-blur-sm"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
@@ -130,6 +126,7 @@ function CandidateTile({
         <button
           type="button"
           aria-label="Retry"
+          onClick={(e) => e.stopPropagation()}
           className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-black/50 text-white/80 transition hover:bg-white/20 hover:text-white backdrop-blur-sm"
         >
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
@@ -137,6 +134,7 @@ function CandidateTile({
         <button
           type="button"
           aria-label="Copy Prompt"
+          onClick={(e) => e.stopPropagation()}
           className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-black/50 text-white/80 transition hover:bg-white/20 hover:text-white backdrop-blur-sm"
         >
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
@@ -144,23 +142,11 @@ function CandidateTile({
         <button
           type="button"
           aria-label="Use as Reference"
-          className="flex h-6 px-2 flex-shrink-0 items-center justify-center rounded-full bg-black/50 text-[10px] font-semibold text-white/80 transition hover:bg-white/20 hover:text-white backdrop-blur-sm"
+          onClick={(e) => e.stopPropagation()}
+          className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-black/50 text-white/80 transition hover:bg-white/20 hover:text-white backdrop-blur-sm"
         >
-          <svg width="11" height="11" className="mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-          Ref
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
         </button>
-      </div>
-
-      {/* Legacy properties (revision & duration, pushed up slightly so it doesn't collide with actions) */}
-      <div className="absolute bottom-9 left-2 flex items-center gap-1 opacity-0 transition-opacity group-hover/tile:opacity-100 pointer-events-none">
-        <span className="rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-medium text-white/90 backdrop-blur-sm">
-          r{c.revision}
-        </span>
-        {c.isVideo && c.duration > 0 && (
-          <span className="rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-medium text-white/90 backdrop-blur-sm">
-            {Math.round(c.duration)}s
-          </span>
-        )}
       </div>
 
       {/* Bottom Right: Download */}
@@ -168,6 +154,7 @@ function CandidateTile({
         <button
           type="button"
           aria-label="Download"
+          onClick={(e) => e.stopPropagation()}
           className="flex h-6 w-6 items-center justify-center rounded-full bg-black/50 text-white/80 transition hover:bg-white/20 hover:text-white backdrop-blur-sm"
         >
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -182,12 +169,43 @@ export default function ShotContainer({
   isActive,
   onActivate,
   onNavigate,
+  allShots = [],
+  onSelectShot,
   taggedElements = [],
   demoQueuePhase,
   demoQueueProgress,
 }: Props) {
   const publishedId = shot.previewFileId;
   const [fullscreenCandidate, setFullscreenCandidate] = useState<ShotCandidate | null>(null);
+  const [showShotPicker, setShowShotPicker] = useState(false);
+
+  const navigateCandidate = useCallback((dir: "prev" | "next") => {
+    if (!fullscreenCandidate) return;
+    const idx = shot.candidates.findIndex((c) => c.id === fullscreenCandidate.id);
+    if (idx === -1) return;
+    const next = dir === "next" ? idx + 1 : idx - 1;
+    if (next >= 0 && next < shot.candidates.length) {
+      setFullscreenCandidate(shot.candidates[next]);
+    }
+  }, [fullscreenCandidate, shot.candidates]);
+
+  const fullscreenIdx = fullscreenCandidate
+    ? shot.candidates.findIndex((c) => c.id === fullscreenCandidate.id)
+    : -1;
+  const hasPrev = fullscreenIdx > 0;
+  const hasNext = fullscreenIdx >= 0 && fullscreenIdx < shot.candidates.length - 1;
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showShotPicker) return;
+    const handleClick = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setShowShotPicker(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [showShotPicker]);
 
   return (
     <>
@@ -231,15 +249,51 @@ export default function ShotContainer({
             </button>
           </div>
 
-          {/* Shot name */}
-          <div className="min-w-0 flex-1">
-            <span className="kv-mono text-sm font-semibold text-amber-200/90">
-              {shot.name}
-            </span>
+          {/* Shot name with dropdown picker */}
+          <div className="relative min-w-0 flex-1" ref={pickerRef}>
+            <button
+              type="button"
+              className="flex items-center gap-1.5 rounded-md px-1.5 py-0.5 transition hover:bg-white/5"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (allShots.length > 1) setShowShotPicker((v) => !v);
+              }}
+            >
+              <span className="kv-mono text-sm font-semibold text-amber-200/90">
+                {shot.name}
+              </span>
+              {allShots.length > 1 && (
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-500"><path d="m6 9 6 6 6-6"/></svg>
+              )}
+            </button>
             {shot.directionNote && (
-              <span className="ml-2 text-xs text-slate-500">
+              <span className="ml-1 text-xs text-slate-500">
                 — {shot.directionNote}
               </span>
+            )}
+
+            {showShotPicker && (
+              <div className="absolute left-0 top-full z-50 mt-1 max-h-64 w-56 overflow-y-auto rounded-xl border border-white/10 bg-[#15171c] py-1 shadow-2xl">
+                {allShots.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition hover:bg-white/5 ${
+                      s.id === shot.id ? "text-amber-200" : "text-slate-300"
+                    }`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectShot?.(s.id);
+                      setShowShotPicker(false);
+                    }}
+                  >
+                    <span className="kv-mono font-semibold">{s.name}</span>
+                    {s.id === shot.id && (
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="ml-auto text-amber-400"><polyline points="20 6 9 17 4 12"/></svg>
+                    )}
+                  </button>
+                ))}
+              </div>
             )}
           </div>
 
@@ -275,104 +329,69 @@ export default function ShotContainer({
         {/* Candidate grid — grouped by role when active */}
         {(isActive || shot.candidates.length > 0) && (
           <div className="px-3 pb-3">
-            {isActive ? (() => {
-              const pinned = shot.candidates.filter((c) => c.role === "pinned");
-              const inputs = shot.candidates.filter((c) => c.role === "input");
-              const outputs = shot.candidates.filter((c) => c.role === "output");
+            {isActive ? (
+              <div className="grid grid-cols-3 gap-2">
+                {/* Pinned and input candidates come first (already sorted from provider) */}
+                {shot.candidates.filter((c) => c.role !== "output").map((c) => (
+                  <CandidateTile key={c.id} c={c} isPublished={c.id === publishedId} onClick={() => setFullscreenCandidate(c)} />
+                ))}
 
-              return (
-                <div className="space-y-3">
-                  {pinned.length > 0 && (
-                    <div>
-                      <div className="mb-1.5 flex items-center gap-2">
-                        <span className="kv-mono text-[9px] uppercase tracking-[0.18em] text-indigo-400/80">Pinned</span>
-                        <div className="h-px flex-1 bg-indigo-500/10" />
-                      </div>
-                      <div className="grid grid-cols-3 gap-2">
-                        {pinned.map((c) => (
-                          <CandidateTile key={c.id} c={c} isPublished={c.id === publishedId} onClick={() => setFullscreenCandidate(c)} />
-                        ))}
-                      </div>
+                {/* Demo queue tile */}
+                {demoQueuePhase === "processing" && (
+                  <div className="group/tile relative aspect-video flex-col overflow-hidden rounded-[14px] border border-amber-400/20 bg-[#17191f]">
+                    <div className="absolute inset-x-0 top-0 h-1 bg-white/5">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-orange-500 to-amber-400"
+                        style={{ width: `${demoQueueProgress ?? 0}%`, transition: "width 0.3s ease" }}
+                      />
                     </div>
-                  )}
-
-                  {inputs.length > 0 && (
-                    <div>
-                      <div className="mb-1.5 flex items-center gap-2">
-                        <span className="kv-mono text-[9px] uppercase tracking-[0.18em] text-emerald-400/80">Input References</span>
-                        <div className="h-px flex-1 bg-emerald-500/10" />
-                      </div>
-                      <div className="grid grid-cols-3 gap-2">
-                        {inputs.map((c) => (
-                          <CandidateTile key={c.id} c={c} isPublished={c.id === publishedId} onClick={() => setFullscreenCandidate(c)} />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div>
-                    <div className="mb-1.5 flex items-center gap-2">
-                      <span className="kv-mono text-[9px] uppercase tracking-[0.18em] text-slate-500">Outputs</span>
-                      <div className="h-px flex-1 bg-slate-500/10" />
-                    </div>
-                    <div className="grid grid-cols-3 gap-2">
-                      {isActive && demoQueuePhase === "processing" && (
-                        <div className="group/tile relative aspect-video flex-col overflow-hidden rounded-[14px] border border-amber-400/20 bg-[#17191f]">
-                          <div className="absolute inset-x-0 top-0 h-1 bg-white/5">
-                            <div
-                              className="h-full rounded-full bg-gradient-to-r from-orange-500 to-amber-400"
-                              style={{ width: `${demoQueueProgress ?? 0}%`, transition: "width 0.3s ease" }}
-                            />
-                          </div>
-                          <div className="flex h-full flex-col justify-between p-3">
-                            <div className="flex justify-between items-start">
-                              <div>
-                                <div className="kv-mono text-[10px] uppercase tracking-[0.16em] text-slate-500">Image job</div>
-                                <div className="text-sm font-semibold text-white">Generating...</div>
-                              </div>
-                              <div className="kv-mono rounded-full bg-amber-500/12 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-200 animate-pulse">
-                                Processing
-                              </div>
-                            </div>
-                            <div className="flex-1 my-2 overflow-hidden rounded-[8px] bg-[radial-gradient(circle_at_35%_18%,rgba(249,115,22,0.14),transparent_0_28%),linear-gradient(135deg,rgba(44,48,58,0.92),rgba(14,15,19,0.96))]" />
-                            <div className="truncate text-[11px] text-slate-400">
-                              {(demoQueueProgress ?? 0) < 30 ? "Initializing..." : (demoQueueProgress ?? 0) < 80 ? "Rendering frame..." : "Finalizing..."}
-                            </div>
-                          </div>
+                    <div className="flex h-full flex-col justify-between p-3">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <div className="kv-mono text-[10px] uppercase tracking-[0.16em] text-slate-500">Image job</div>
+                          <div className="text-sm font-semibold text-white">Generating...</div>
                         </div>
-                      )}
-
-                      {isActive && demoQueuePhase === "completed" && (() => {
-                        const dummyCandidate: ShotCandidate = {
-                          id: "demo-result",
-                          extension: "jpg",
-                          isVideo: false,
-                          revision: 1,
-                          width: 640,
-                          height: 360,
-                          duration: 0,
-                          originalName: "demo_generated.jpg",
-                          createdAt: new Date().toISOString(),
-                          taskTypeId: "",
-                          thumbnailPath: "https://picsum.photos/seed/demo-queue-result/640/360",
-                          previewPath: "https://picsum.photos/seed/demo-queue-result/640/360",
-                          role: "output",
-                        };
-                        return (
-                          <CandidateTile key="demo-result" isPublished={false} c={dummyCandidate} onClick={() => setFullscreenCandidate(dummyCandidate)} />
-                        );
-                      })()}
-
-                      {outputs.map((c) => (
-                        <CandidateTile key={c.id} c={c} isPublished={c.id === publishedId} onClick={() => setFullscreenCandidate(c)} />
-                      ))}
+                        <div className="kv-mono rounded-full bg-amber-500/12 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-200 animate-pulse">
+                          Processing
+                        </div>
+                      </div>
+                      <div className="flex-1 my-2 overflow-hidden rounded-[8px] bg-[radial-gradient(circle_at_35%_18%,rgba(249,115,22,0.14),transparent_0_28%),linear-gradient(135deg,rgba(44,48,58,0.92),rgba(14,15,19,0.96))]" />
+                      <div className="truncate text-[11px] text-slate-400">
+                        {(demoQueueProgress ?? 0) < 30 ? "Initializing..." : (demoQueueProgress ?? 0) < 80 ? "Rendering frame..." : "Finalizing..."}
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })() : (
-              <div className="grid grid-cols-6 gap-2">
-                {shot.candidates.slice(0, 6).map((c) => (
+                )}
+
+                {demoQueuePhase === "completed" && (() => {
+                  const dummyCandidate: ShotCandidate = {
+                    id: "demo-result",
+                    extension: "jpg",
+                    isVideo: false,
+                    revision: 1,
+                    width: 640,
+                    height: 360,
+                    duration: 0,
+                    originalName: "demo_generated.jpg",
+                    createdAt: new Date().toISOString(),
+                    taskTypeId: "",
+                    thumbnailPath: "https://picsum.photos/seed/demo-queue-result/640/360",
+                    previewPath: "https://picsum.photos/seed/demo-queue-result/640/360",
+                    role: "output",
+                  };
+                  return (
+                    <CandidateTile key="demo-result" isPublished={false} c={dummyCandidate} onClick={() => setFullscreenCandidate(dummyCandidate)} />
+                  );
+                })()}
+
+                {/* Output candidates */}
+                {shot.candidates.filter((c) => c.role === "output").map((c) => (
+                  <CandidateTile key={c.id} c={c} isPublished={c.id === publishedId} onClick={() => setFullscreenCandidate(c)} />
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-2">
+                {shot.candidates.filter((c) => c.role !== "pinned").map((c) => (
                   <CandidateTile key={c.id} c={c} isPublished={c.id === publishedId} onClick={() => setFullscreenCandidate(c)} />
                 ))}
               </div>
@@ -381,12 +400,27 @@ export default function ShotContainer({
         )}
       </div>
 
-      {fullscreenCandidate && (
-        <ImageLabOverlay
-          mediaUrl={fullscreenCandidate.previewPath}
-          isVideo={fullscreenCandidate.isVideo}
-          onClose={() => setFullscreenCandidate(null)}
-        />
+      {fullscreenCandidate && createPortal(
+        fullscreenCandidate.isVideo ? (
+          <VideoPlayer
+            videoUrl={fullscreenCandidate.previewPath}
+            videoName={fullscreenCandidate.originalName}
+            onSave={async () => {}}
+            onClose={() => setFullscreenCandidate(null)}
+            onPrevious={hasPrev ? () => navigateCandidate("prev") : undefined}
+            onNext={hasNext ? () => navigateCandidate("next") : undefined}
+          />
+        ) : (
+          <ImageEditor
+            imageUrl={fullscreenCandidate.previewPath}
+            imageName={fullscreenCandidate.originalName}
+            onSave={async () => {}}
+            onClose={() => setFullscreenCandidate(null)}
+            onPrevious={hasPrev ? () => navigateCandidate("prev") : undefined}
+            onNext={hasNext ? () => navigateCandidate("next") : undefined}
+          />
+        ),
+        document.body,
       )}
     </>
   );

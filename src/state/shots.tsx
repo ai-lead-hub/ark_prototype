@@ -3,6 +3,7 @@ import {
   useContext,
   useState,
   useCallback,
+  useEffect,
   useMemo,
   type ReactNode,
 } from "react";
@@ -47,6 +48,11 @@ export type KitsuAsset = {
   thumbnailPath?: string;
 };
 
+export type Scene = {
+  id: string;
+  name: string;
+};
+
 type ShotsContextValue = {
   projectName: string;
   sceneName: string;
@@ -57,40 +63,83 @@ type ShotsContextValue = {
   navigateShot: (dir: "prev" | "next") => void;
   activeShot: Shot | null;
   inactiveShots: Shot[];
+  allScenes: Scene[];
+  activeSceneId: string;
+  setActiveScene: (id: string) => void;
 };
 
 const ShotsContext = createContext<ShotsContextValue | null>(null);
 
-/* ── Demo: inject pinned/input roles on some candidates ── */
+/* ── Demo: inject global pinned refs + per-shot input refs ── */
 
 function augmentWithRoles(rawShots: typeof demoData.shots): Shot[] {
-  return rawShots.map((shot) => {
-    const candidates: ShotCandidate[] = shot.candidates.map((c, i) => ({
-      ...c,
-      role: "output" as AssetRole,
-    }));
+  // Pick 2 candidates from the first shot as global pins (appear in every shot)
+  const globalPins: ShotCandidate[] = [];
+  if (rawShots.length > 0 && rawShots[0].candidates.length >= 2) {
+    globalPins.push(
+      { ...rawShots[0].candidates[0], role: "pinned" as AssetRole, id: `pin-${rawShots[0].candidates[0].id}` },
+      { ...rawShots[0].candidates[1], role: "pinned" as AssetRole, id: `pin-${rawShots[0].candidates[1].id}` },
+    );
+  }
 
-    // For demo: first candidate in each shot with 3+ candidates = pinned,
-    // second = input ref, rest = output
-    if (candidates.length >= 3) {
-      candidates[0].role = "pinned";
-      candidates[1].role = "input";
-    } else if (candidates.length === 2) {
+  return rawShots.map((shot, shotIdx) => {
+    const demoVideoPath = "/kitsu-previews/demo-video.mp4";
+    const candidates: ShotCandidate[] = shot.candidates.map((c, cIdx) => {
+      const makeVideo = shotIdx % 3 === 0 && cIdx >= 2 && cIdx % 4 === 2;
+      return {
+        ...c,
+        role: "output" as AssetRole,
+        isVideo: makeVideo,
+        ...(makeVideo ? { previewPath: demoVideoPath, thumbnailPath: c.thumbnailPath, extension: "mp4", duration: 5 } : {}),
+      };
+    });
+
+    // Mark first candidate of each shot (if it has 2+) as an input reference
+    if (candidates.length >= 2) {
       candidates[0].role = "input";
     }
 
-    return { ...shot, candidates } as Shot;
+    // Prepend global pins to every shot
+    return { ...shot, candidates: [...globalPins, ...candidates] } as Shot;
   });
 }
+
+/* ── Demo scenes ── */
+
+const DEMO_SCENES: Scene[] = [
+  { id: "sc01", name: "SC01" },
+  { id: "sc02", name: "SC02" },
+  { id: demoData.scene.id, name: demoData.scene.name },
+  { id: "sc04", name: "SC04" },
+  { id: "sc05", name: "SC05" },
+];
 
 /* ── Provider ── */
 
 export function ShotsProvider({ children }: { children: ReactNode }) {
-  const shots = useMemo(() => augmentWithRoles(demoData.shots), []);
+  const [activeSceneId, setActiveSceneId] = useState(demoData.scene.id);
+  const shots = useMemo(() => {
+    // Only the real scene (SC03) has demo data; others show empty
+    if (activeSceneId === demoData.scene.id) {
+      return augmentWithRoles(demoData.shots);
+    }
+    return [];
+  }, [activeSceneId]);
   const assets = demoData.assets as KitsuAsset[];
   const [activeShotId, setActiveShotId] = useState<string | null>(
     shots[0]?.id ?? null
   );
+
+  const activeScene = DEMO_SCENES.find((s) => s.id === activeSceneId) ?? DEMO_SCENES[0];
+
+  const setActiveScene = useCallback((id: string) => {
+    setActiveSceneId(id);
+  }, []);
+
+  // Auto-select first shot when scene changes
+  useEffect(() => {
+    setActiveShotId(shots[0]?.id ?? null);
+  }, [shots]);
 
   const setActiveShot = useCallback((id: string) => {
     setActiveShotId(id);
@@ -121,7 +170,7 @@ export function ShotsProvider({ children }: { children: ReactNode }) {
   const value = useMemo<ShotsContextValue>(
     () => ({
       projectName: demoData.project.name,
-      sceneName: demoData.scene.name,
+      sceneName: activeScene.name,
       shots,
       assets,
       activeShotId,
@@ -129,8 +178,11 @@ export function ShotsProvider({ children }: { children: ReactNode }) {
       navigateShot,
       activeShot,
       inactiveShots,
+      allScenes: DEMO_SCENES,
+      activeSceneId,
+      setActiveScene,
     }),
-    [shots, assets, activeShotId, setActiveShot, navigateShot, activeShot, inactiveShots]
+    [shots, assets, activeShotId, setActiveShot, navigateShot, activeShot, inactiveShots, activeScene, activeSceneId, setActiveScene]
   );
 
   return (
