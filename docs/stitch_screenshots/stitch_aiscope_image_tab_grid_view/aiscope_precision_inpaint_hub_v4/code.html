@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>AiScope Image Lab — Inpaint Mode</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "tertiary": "#e9c400",
+              "surface-container-lowest": "#0c0e12",
+              "secondary-fixed-dim": "#ffb599",
+              "on-primary": "#4b2800",
+              "on-error-container": "#ffdad6",
+              "secondary-container": "#f66018",
+              "secondary-fixed": "#ffdbce",
+              "on-tertiary-fixed-variant": "#544600",
+              "on-tertiary": "#3a3000",
+              "outline": "#a38d7b",
+              "on-secondary-fixed-variant": "#7f2b00",
+              "on-error": "#690005",
+              "surface-dim": "#111317",
+              "primary-fixed-dim": "#ffb874",
+              "on-primary-fixed": "#2d1600",
+              "surface-container-high": "#282a2e",
+              "background": "#030304",
+              "surface-variant": "#333539",
+              "primary": "#ffb874",
+              "on-secondary-container": "#4f1700",
+              "surface-bright": "#37393e",
+              "on-surface": "#e2e2e8",
+              "inverse-surface": "#e2e2e8",
+              "on-tertiary-container": "#4c3e00",
+              "on-primary-container": "#603500",
+              "on-surface-variant": "#dbc2ae",
+              "surface": "#111317",
+              "outline-variant": "#554335",
+              "on-tertiary-fixed": "#221b00",
+              "surface-tint": "#ffb874",
+              "primary-fixed": "#ffdcbf",
+              "inverse-on-surface": "#2f3035",
+              "tertiary-fixed-dim": "#e9c400",
+              "on-secondary": "#5a1c00",
+              "on-secondary-fixed": "#370e00",
+              "tertiary-container": "#caa900",
+              "on-primary-fixed-variant": "#6b3b00",
+              "surface-container-highest": "#333539",
+              "surface-container-low": "#1a1c20",
+              "tertiary-fixed": "#ffe170",
+              "error-container": "#93000a",
+              "error": "#ffb4ab",
+              "secondary": "#ffb599",
+              "primary-container": "#f7931a",
+              "surface-container": "#1e2024",
+              "inverse-primary": "#8c4f00",
+              "on-background": "#e2e2e8",
+              "electric-cyan": "#0C9EEA"
+            },
+            fontFamily: {
+              "headline": ["Space Grotesk"],
+              "body": ["Inter"],
+              "label": ["JetBrains Mono"]
+            },
+            borderRadius: {"DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .kinetic-grid {
+            background-image: 
+                linear-gradient(to right, rgba(247, 147, 26, 0.03) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(247, 147, 26, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            mask-image: radial-gradient(circle at center, black, transparent 80%);
+        }
+        .atmospheric-blur {
+            filter: blur(120px);
+            background: radial-gradient(circle, rgba(234, 88, 12, 0.08) 0%, transparent 70%);
+        }
+        .mask-overlay {
+            background: radial-gradient(circle at center, rgba(12, 158, 234, 0.25) 0%, transparent 70%);
+            mix-blend-mode: screen;
+        }
+        .glass-pill {
+            background: rgba(30, 32, 36, 0.7);
+            backdrop-filter: blur(40px);
+            border: 1px solid rgba(219, 194, 174, 0.1);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.05);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body overflow-hidden selection:bg-primary-container selection:text-on-primary-container">
+<!-- Kinetic Vault Environment -->
+<div class="fixed inset-0 kinetic-grid z-0"></div>
+<div class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] atmospheric-blur z-0"></div>
+<!-- Top AppBar -->
+<header class="fixed top-0 left-0 right-0 h-16 flex justify-between items-center px-6 z-50">
+<div class="flex items-center gap-4">
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container-highest transition-colors active:scale-95">
+<span class="material-symbols-outlined text-on-surface">arrow_back</span>
+</button>
+<div class="h-4 w-[1px] bg-outline-variant/30"></div>
+<h1 class="font-headline font-bold text-sm tracking-tight uppercase text-primary-container">Image Lab</h1>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex flex-col items-end">
+<span class="font-headline font-bold text-xs uppercase tracking-wider text-on-surface-variant">Campaign Q1</span>
+<div class="flex items-center gap-1.5 mt-0.5">
+<span class="material-symbols-outlined text-[14px] text-tertiary">toll</span>
+<span class="font-label text-[11px] font-bold text-tertiary">142.8</span>
+</div>
+</div>
+</div>
+</header>
+<!-- SideNavBar (Left Tool Rail) -->
+<nav class="fixed left-4 top-1/2 -translate-y-1/2 w-14 bg-surface-container-low/40 backdrop-blur-xl border border-outline-variant/10 rounded-2xl flex flex-col items-center py-6 gap-6 z-50 shadow-2xl">
+<button class="p-2 text-slate-500 hover:text-white hover:bg-surface-container-high rounded-xl transition-all" title="Annotate">
+<span class="material-symbols-outlined">edit</span>
+</button>
+<button class="p-2 text-slate-500 hover:text-white hover:bg-surface-container-high rounded-xl transition-all" title="Crop">
+<span class="material-symbols-outlined">crop</span>
+</button>
+<button class="p-2 bg-electric-cyan/10 text-electric-cyan rounded-xl shadow-[0_0_15px_rgba(12,158,234,0.3)] transition-all border border-electric-cyan/20" title="Inpaint">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">brush</span>
+</button>
+<button class="p-2 text-slate-500 hover:text-white hover:bg-surface-container-high rounded-xl transition-all" title="Prompt">
+<span class="material-symbols-outlined">terminal</span>
+</button>
+<button class="p-2 text-slate-500 hover:text-white hover:bg-surface-container-high rounded-xl transition-all" title="Vary">
+<span class="material-symbols-outlined">auto_awesome</span>
+</button>
+<button class="p-2 text-slate-500 hover:text-white hover:bg-surface-container-high rounded-xl transition-all" title="Upscale">
+<span class="material-symbols-outlined">zoom_out_map</span>
+</button>
+</nav>
+<!-- Central Canvas Area -->
+<main class="fixed inset-0 flex items-center justify-center p-20 z-10">
+<div class="relative group">
+<!-- Main Image -->
+<div class="relative max-w-5xl max-h-[768px] rounded-2xl overflow-hidden shadow-[0_40px_100px_rgba(0,0,0,0.8)] border border-outline-variant/20">
+<img alt="Cinematic AI rendering" class="w-full h-full object-contain bg-surface-container-lowest" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAm4-f9BEzAoc5oAqZ7ATO_gJvOL0AViHALOK3KEsPb-RSan8ulD1OEx114E2vZtU4JCSgt0JN92kroiZiUGttRG7MyRWXS5ZLFZfngjDIPf93Z5Mh4FOpG7WpQSSyfi0E3JjMNeuKcxm71Cs3Sb4DcQPYRu40SdN1dRHPAY_IT2tUzx0nUAA4TVQZdYhkNhLdYBlaFsCpfbVV-eN7fCXUAAbQo74Ou4xvmgYLDg8DqIGLdOsaBtHGG0u7P3xln28-AXKrzU6apLfWm"/>
+<!-- Translucent Mask Overlay -->
+<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 mask-overlay rounded-full blur-xl pointer-events-none"></div>
+<!-- Brush Cursor -->
+<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 border-2 border-electric-cyan/50 rounded-full flex items-center justify-center cursor-none pointer-events-none">
+<div class="w-1 h-1 bg-electric-cyan rounded-full"></div>
+</div>
+</div>
+<!-- Floating Image Metadata -->
+<div class="absolute -bottom-10 left-0 flex items-center gap-4 px-2">
+<div class="flex items-center gap-2">
+<span class="font-label text-[10px] uppercase text-on-surface-variant/60 tracking-widest">Resolution</span>
+<span class="font-label text-[10px] text-on-surface-variant font-bold">2048 x 2048</span>
+</div>
+<div class="w-[1px] h-3 bg-outline-variant/30"></div>
+<div class="flex items-center gap-2">
+<span class="font-label text-[10px] uppercase text-on-surface-variant/60 tracking-widest">Seed</span>
+<span class="font-label text-[10px] text-on-surface-variant font-bold">849201174</span>
+</div>
+</div>
+</div>
+</main>
+<!-- Contextual Bottom Bar: High-Fidelity Redesign -->
+<div class="fixed bottom-10 left-1/2 -translate-x-1/2 w-full max-w-5xl px-6 z-50">
+<div class="glass-pill rounded-2xl p-2.5 flex items-center gap-4">
+<!-- Section 1: Mode Toggle (Segmented Controller) -->
+<div class="relative group/mode shrink-0">
+<button class="flex items-center gap-2 px-4 py-2 bg-electric-cyan/10 hover:bg-electric-cyan/20 border border-electric-cyan/20 rounded-xl transition-all text-left">
+<span class="material-symbols-outlined text-[18px] text-electric-cyan" style="font-variation-settings: 'FILL' 1;">brush</span>
+<div class="flex flex-col">
+<span class="text-[8px] font-black text-electric-cyan/70 uppercase tracking-widest leading-none">Mode</span>
+<span class="text-[11px] font-bold text-on-surface tracking-tight uppercase">Inpaint</span>
+</div>
+<span class="material-symbols-outlined text-[14px] text-on-surface-variant/40 ml-1">expand_more</span>
+</button>
+</div>
+<!-- Divider -->
+<div class="w-[1px] h-8 bg-outline-variant/20 shrink-0"></div>
+<!-- Section 2: Model Selection (Descriptive Card) -->
+<div class="relative group/model">
+<button class="flex items-center gap-2 px-4 py-2 bg-surface-container-high/40 hover:bg-surface-container-high rounded-xl border border-outline-variant/10 transition-all text-left h-10">
+<span class="material-symbols-outlined text-[18px] text-primary">bolt</span>
+<div class="flex flex-col">
+<span class="text-[8px] font-black text-on-surface-variant/40 uppercase tracking-widest leading-none">Model</span>
+<span class="text-[11px] font-bold text-on-surface tracking-tight uppercase">Flux Inpaint v1.2</span>
+</div>
+<span class="material-symbols-outlined text-[14px] text-on-surface-variant/40 ml-1">expand_more</span>
+</button>
+<!-- Dropdown Menu -->
+<div class="absolute bottom-full left-0 mb-4 opacity-0 scale-95 pointer-events-none group-hover/model:opacity-100 group-hover/model:scale-100 group-hover/model:pointer-events-auto transition-all origin-bottom-left">
+<div class="bg-surface-container-highest border border-outline-variant/20 rounded-xl p-2 shadow-2xl min-w-[200px]">
+<div class="px-3 py-2 text-[9px] font-black text-on-surface-variant/40 uppercase tracking-widest border-b border-outline-variant/10 mb-1">Choose Engine</div>
+<button class="flex items-center gap-2 px-4 py-2 bg-surface-container-high/40 hover:bg-surface-container-high rounded-xl border border-outline-variant/10 transition-all text-left h-full">
+<span class="material-symbols-outlined text-[18px] text-primary">bolt</span>
+<span class="text-[11px] font-bold text-on-surface tracking-tight">Flux Inpaint v1.2</span>
+<span class="material-symbols-outlined text-[14px] text-on-surface-variant/40 ml-1">expand_more</span>
+</button>
+<button class="flex items-center gap-2 px-4 py-2 bg-surface-container-high/40 hover:bg-surface-container-high rounded-xl border border-outline-variant/10 transition-all text-left h-full">
+<span class="material-symbols-outlined text-[18px] text-primary">bolt</span>
+<span class="text-[11px] font-bold text-on-surface tracking-tight">Flux Inpaint v1.2</span>
+<span class="material-symbols-outlined text-[14px] text-on-surface-variant/40 ml-1">expand_more</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Section 3: Reference Image Slot -->
+<div class="relative group/ref shrink-0">
+<button class="w-10 h-10 flex flex-col items-center justify-center rounded-xl border border-dashed border-outline-variant/30 hover:border-electric-cyan/50 hover:bg-electric-cyan/5 transition-all text-on-surface-variant/40 hover:text-electric-cyan" title="Upload Reference"><span class="material-symbols-outlined text-[18px]">add_photo_alternate</span></button>
+<!-- Tooltip -->
+<div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 opacity-0 translate-y-2 pointer-events-none group-hover/ref:opacity-100 group-hover/ref:translate-y-0 transition-all">
+<div class="bg-surface-container-highest text-on-surface text-[10px] font-bold px-3 py-1.5 rounded-lg whitespace-nowrap shadow-xl border border-outline-variant/20">
+Drop Reference Image
+</div>
+</div>
+</div>
+<!-- Divider -->
+<div class="w-[1px] h-8 bg-outline-variant/20 shrink-0"></div>
+<!-- Section 4: Prompt Area Integrated -->
+<div class="relative group/size">
+<button class="w-10 h-10 flex items-center justify-center bg-background/30 hover:bg-surface-container-high rounded-xl border border-outline-variant/10 transition-all text-on-surface-variant hover:text-electric-cyan">
+<span class="material-symbols-outlined text-[20px]">brush</span>
+</button>
+<!-- Slider Dropdown -->
+<div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 opacity-0 scale-95 pointer-events-none group-hover/size:opacity-100 group-hover/size:scale-100 group-hover/size:pointer-events-auto transition-all origin-bottom">
+<div class="bg-surface-container-highest border border-outline-variant/20 rounded-xl p-3 shadow-2xl flex flex-col items-center gap-3">
+<span class="text-[10px] font-bold text-electric-cyan">24px</span>
+<div class="w-1.5 h-24 bg-background/50 rounded-full relative">
+<div class="absolute bottom-0 left-0 right-0 bg-electric-cyan rounded-full" style="height: 40%"></div>
+<div class="absolute bottom-[40%] left-1/2 -translate-x-1/2 w-3 h-3 bg-white rounded-full shadow-lg border-2 border-electric-cyan"></div>
+</div>
+<span class="material-symbols-outlined text-[14px] text-on-surface-variant/40">format_size</span>
+</div>
+</div>
+</div>
+<div class="w-[1px] h-8 bg-outline-variant/20 shrink-0"></div><div class="flex-1 flex items-center gap-3 bg-background/30 rounded-xl px-4 border border-outline-variant/10 focus-within:border-electric-cyan/30 transition-colors h-10">
+<span class="hidden">terminal</span>
+<input class="flex-1 bg-transparent border-none focus:ring-0 text-sm font-body text-on-surface placeholder:text-on-surface-variant/30 h-10" placeholder="Describe the area to fill or modify..." type="text"/>
+<button class="group relative overflow-hidden bg-gradient-to-r from-electric-cyan to-blue-600 text-white px-6 py-2 rounded-lg font-label text-[10px] font-black uppercase tracking-[0.1em] flex items-center gap-2 shadow-[0_0_20px_rgba(12,158,234,0.4)] transition-all hover:scale-[1.02] active:scale-95 shrink-0">
+<span class="relative z-10">GENERATE</span>
+<span class="material-symbols-outlined text-[16px] relative z-10 transition-transform group-hover:rotate-12">auto_fix_high</span>
+<div class="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+</button>
+</div>
+</div>
+</div>
+<!-- UI Overlay: Edited Versions Panel -->
+<div class="fixed top-20 right-8 z-20 w-52 flex flex-col gap-4">
+<div class="bg-surface-container-low/40 backdrop-blur-md p-4 rounded-xl border border-outline-variant/10">
+<div class="flex justify-between items-center mb-4">
+<span class="font-headline text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Edited Versions</span>
+<span class="material-symbols-outlined text-[14px] text-on-surface-variant">history</span>
+</div>
+<div class="space-y-1.5">
+<!-- Version Item: Active v3 -->
+<div class="group flex items-center justify-between p-2 bg-electric-cyan/10 border border-electric-cyan/30 rounded-lg cursor-pointer transition-all hover:bg-electric-cyan/20">
+<span class="font-label text-[11px] text-electric-cyan font-bold tracking-tight">VERSION_03</span>
+<div class="flex items-center gap-1">
+<button class="w-6 h-6 flex items-center justify-center rounded bg-electric-cyan/20 text-electric-cyan hover:bg-electric-cyan/40" title="Save">
+<span class="material-symbols-outlined text-[14px]">save</span>
+</button>
+<button class="w-6 h-6 flex items-center justify-center rounded bg-electric-cyan/20 text-electric-cyan hover:bg-electric-cyan/40" title="Compare">
+<span class="material-symbols-outlined text-[14px] font-bold">compare</span>
+</button>
+</div>
+</div>
+<!-- Version Item: v2 -->
+<div class="group flex items-center justify-between p-2 hover:bg-surface-container-highest/50 border border-transparent hover:border-outline-variant/20 rounded-lg cursor-pointer transition-all">
+<span class="font-label text-[11px] text-on-surface-variant/80 font-bold tracking-tight">VERSION_02</span>
+<div class="flex items-center gap-1">
+<button class="w-6 h-6 flex items-center justify-center rounded text-on-surface-variant/40 hover:text-on-surface-variant hover:bg-surface-container-highest" title="Save"><span class="material-symbols-outlined text-[14px]">save</span></button>
+<button class="w-6 h-6 flex items-center justify-center rounded text-on-surface-variant/40 hover:text-on-surface-variant hover:bg-surface-container-highest" title="Compare"><span class="material-symbols-outlined text-[14px]">compare</span></button>
+</div>
+</div>
+<!-- Version Item: v1 -->
+<div class="group flex items-center justify-between p-2 hover:bg-surface-container-highest/50 border border-transparent hover:border-outline-variant/20 rounded-lg cursor-pointer transition-all">
+<span class="font-label text-[11px] text-on-surface-variant/80 font-bold tracking-tight">VERSION_01</span>
+<div class="flex items-center gap-1">
+<button class="w-6 h-6 flex items-center justify-center rounded text-on-surface-variant/40 hover:text-on-surface-variant hover:bg-surface-container-highest" title="Save"><span class="material-symbols-outlined text-[14px]">save</span></button>
+<button class="w-6 h-6 flex items-center justify-center rounded text-on-surface-variant/40 hover:text-on-surface-variant hover:bg-surface-container-highest" title="Compare"><span class="material-symbols-outlined text-[14px]">compare</span></button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Bottom Right Workspace Actions -->
+<div class="fixed bottom-6 right-6 z-20">
+<button class="p-2 text-on-surface-variant/40 hover:text-primary-container transition-colors">
+<span class="material-symbols-outlined text-[20px]">info</span>
+</button>
+</div>
+</body></html>

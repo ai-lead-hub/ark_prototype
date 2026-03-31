@@ -1,0 +1,28 @@
+# Image Lab: Backend Implementation Logic & Versioning Workflow
+
+## Overview
+The Image Lab operates on an incremental, version-based non-destructive editing model. Every action taken within the specialized tool modes (Annotate, Crop, Inpaint, etc.) triggers a state-managed processing flow that updates the version history.
+
+## 1. Edit & Processing Cycle
+- **Action Trigger**: When a user initiates an edit (e.g., clicks 'GENERATE' in Inpaint mode), the system creates a **Temporary Version** in the version bar.
+- **Asynchronous Processing**: The UI displays a processing state on the new version entry.
+- **Result Display**: Once complete, the processed version replaces the placeholder and is automatically selected/displayed in the main workspace.
+
+## 2. Selection & Contextual Inheritance
+- **Active Context**: Future edits are always performed on the *currently selected version*.
+- **Branching**: If a user selects an older version (e.g., V1) and performs a new edit, the system creates a new branch/version (V4) derived from V1.
+- **Incremental Stacking**: Users can incrementally refine an image by moving through different modes (e.g., Crop V1 → Inpaint V2 → Upscale V3), with each version inheriting the state of its parent.
+
+## 3. Workspace Persistence (The 'Green' State)
+- **Saving/Exporting**: Clicking the 'Save' icon on a version row "promotes" that version to the main Workspace.
+- **Visual Feedback**: A saved version must be highlighted with a **Green accent (#4ADE80)** in the version list to indicate its permanent status.
+- **Exit Logic**: On exiting the Image Lab, all versions *not* explicitly saved to the workspace are discarded. Saved versions remain available in the project's generation history.
+
+## 4. UI-Backend Mapping
+- Each version object must store:
+  - `id`: Unique identifier.
+  - `parent_id`: ID of the version it was derived from.
+  - `mode`: The tool mode used to create it.
+  - `parameters`: JSON blob of all tool settings used.
+  - `asset_url`: Path to the rendered image.
+  - `is_saved`: Boolean state for workspace persistence.

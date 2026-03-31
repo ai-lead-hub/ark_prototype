@@ -1,48 +1,97 @@
-# Ark — Sprint 1: Local Sandbox (Production Spec)
+# Ark — Sprint 1: Single User Production (Production Spec)
 
-**Goal:** A single-user production tool where an artist creates a project, defines scenes/shots, generates AI images/videos per shot, manages references and elements, and uses an AI chat assistant — all backed by S3 storage and a Django API.
+**Goal:** An initial single-user production tool where an artist creates a project, defines scenes/shots, generates AI images/videos per shot, manages references and elements, and uses an AI chat assistant. Built as a collaborative-ready base — all decisions are made with the explicit intent of adding full multi-user collaborative features in Sprint 2, without refactoring.
 
-**Sprint 1 is a local sandbox.** One user, one workspace, no collaboration. The global board, canvas/whiteboard, Kitsu integration, multi-user, real-time sync, audio generation, and comments are all Sprint 2. However, every data model and API is designed so Sprint 2 can be added without schema migrations or breaking changes.
+**Sprint 1 = single user, collaboration ready.** One user, one workspace initially. All data models, APIs, and database design are built from day one to support Sprint 2 collaborative features (global board, canvas/whiteboard, Kitsu integration, multi-user, real-time sync, audio generation, comments) with zero schema migrations or breaking changes. Nothing is built as a sandbox throwaway — everything is production grade.
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────┐         ┌──────────────┐         ┌─────────┐
-│  Next.js    │  REST   │  Django API  │         │   S3    │
-│  Frontend   │◄───────►│  Backend     │◄───────►│  Bucket │
-│  (Vercel)   │  JSON   │  (Railway)   │  boto3  │  (AWS)  │
-└─────────────┘         └──────────────┘         └─────────┘
+┌─────────────┐         ┌──────────────┐         ┌───────────────┐
+│  Frontend   │  REST   │  Backend     │         │ Object Storage│
+│  (Next.js)  │◄───────►│  (Django)    │◄───────►│  Bucket       │
+│             │  JSON   │              │         │               │
+└─────────────┘         └──────────────┘         └───────────────┘
 ```
 
 - **Next.js frontend** — all UI, no server-side logic. Calls the Django API for everything.
-- **Django backend** — REST API. Handles auth, project CRUD, file management, generation job dispatch, S3 operations.
-- **S3** — stores all files. Images, videos, project manifests.
+- **Django backend** — REST API. Handles auth, project CRUD, file management, generation job dispatch, object storage operations.
+- **Object Storage** — stores all files. Images, videos, project manifests, generation outputs.
 
-No websockets in Sprint 1 — the frontend polls for updates. In Sprint 2, Django Channels + Redis will replace polling with real-time WebSocket pushes.
+**Hosting & infrastructure decisions deferred:** Deployment platform, cloud provider, and hosting specifics will be decided at a later date. This spec is completely provider-agnostic.
+
+**Sprint 1 operation:** Frontend polls backend API for job status updates. In Sprint 2, real-time WebSocket support will be added.
+
+No additional external services in Sprint 1. Generation jobs are handled directly by the Django backend process queue.
 
 ---
 
-## S3 Folder Structure
+## Database
 
-S3 is a flat file store. Every file lives in exactly ONE location on S3 — where it was originally created or uploaded. Files are **never copied** between shots. Instead, the database tracks role assignments (output, input, pinned) that link files to shots.
+**Production Database:** PostgreSQL 16. Production grade from day 1. No SQLite, no throwaway prototype database.
+
+- All models, indexes, and constraints are defined exactly as they will run in production
+- Recursive CTE support used for version history tree queries, element traversal, and asset lineage
+- JSONB column type used for all unstructured data:
+  - `model_settings`
+  - `prompt_tags`
+  - `cinematographer_settings`
+  - `hexcodes`
+- All foreign keys are properly indexed
+- Full transaction safety on all operations
+
+No additional external services in Sprint 1. Simple in-memory queue for generation jobs.
+
+---
+
+### Prompt Tags System
+
+Prompt tags are pre-defined modifier values that are:
+- Stored as separate structured JSON fields in the database
+- Shown as separate UI controls in the generation pane
+- Automatically appended or merged with the user's prompt when sending to the model
+- **Never stored inline within the prompt text**
+
+Prompt tags are separate from model parameters.
+
+**Prompt tag types:**
+| Tag type | Description |
+|----------|-------------|
+| **Cinematographer** | Camera, lighting, and style settings. Shown as 3-tab modal. Automatically appended as natural language description to the end of the prompt. |
+| **Hexcodes** | Color palette presets. Up to 5 hex color values stored as an array. Rendered as swatches in the UI. Injected as a color guide into the prompt. |
+| **Reference tags** | `@img1`, `@Element1` references. Resolved to actual assets at generation time. |
+
+---
+
+### Model Settings (separate, not prompt tags)
+
+Model settings are **not prompt tags**. They are passed directly as native parameters to the model API, and are never injected into the prompt text. These are:
+- CFG scale
+- Steps
+- Seed
+- Resolution
+- Aspect ratio
+- Motion strength
+- All other model-native parameters
+
+Model settings are stored separately as `model_settings` JSON field. They are never merged into the prompt.
+
+---
+
+## Object Storage Folder Structure
+
+Object Storage is a flat file store. Every file lives in exactly ONE location on Object Storage — where it was originally created or uploaded. Files are **never copied** between shots. Instead, the database tracks role assignments (output, input, pinned) that link files to shots.
 
 ```
 {project_id}/
-    ├── assets/                              # Uploaded project resources
-    │     ├── characters/
-    │     │     └── scarecrow_main.png
-    │     ├── locations/
-    │     │     └── cornfield_dawn.jpg
-    │     └── props/
-    │           └── lantern_rusty.png
-    │
-    ├── elements/                             # Structured character elements
+    ├── elements/                             # All project elements (characters, locations, props)
     │     └── {element_id}/
-    │           ├── frontal.png              # Primary face/body reference
-    │           ├── ref_01.png               # Additional reference angles
-    │           └── meta.json                # Name, description, tags
+    │           ├── frontal.png              # Primary reference image
+    │           ├── ref_01.png               # Additional reference angles (optional)
+    │           ├── angle_sheet.png          # Auto-generated angle sheet fallback
+    │           └── meta.json                # Name, description, category, tags
     │
     ├── generations/                          # ALL generated files (flat)
     │     ├── 1711892400_ayush_kling_a3f2.mp4
@@ -54,7 +103,7 @@ S3 is a flat file store. Every file lives in exactly ONE location on S3 — wher
 
 ### Core principle: Tag, don't copy
 
-A file's physical location on S3 never changes after creation. When an artist uses SH02's output as a reference in SH05, we **don't** copy the file. Instead, we create a `FileAssignment` record in the database:
+A file's physical location on Object Storage never changes after creation. When an artist uses SH02's output as a reference in SH05, we **don't** copy the file. Instead, we create a `FileAssignment` record in the database:
 
 ```
 FileAssignment(file=file_xyz, shot=sh05, role="input", assigned_by=ayush)
@@ -68,7 +117,7 @@ The same file can have many assignments:
 
 ### Soft-delete: hide, never destroy
 
-Files are **never physically deleted** from S3 until the project is archived. Instead:
+Files are **never physically deleted** from Object Storage until the project is archived. Instead:
 - A `deleted_at` timestamp is set on the File record.
 - All normal queries filter `WHERE deleted_at IS NULL`.
 - Deleted files disappear from the grid, board, and all views.
@@ -79,10 +128,10 @@ Files are **never physically deleted** from S3 until the project is archived. In
 
 | Old (copy-based) | New (tag-based) |
 |---|---|
-| Copying a ref duplicates the file on S3 | Zero duplication — one file, many tags |
+| Copying a ref duplicates the file on Object Storage | Zero duplication — one file, many tags |
 | Deleting a source breaks copies' provenance | Nothing ever breaks — file always exists |
 | Each shot folder is self-contained but bloated | Shots are lightweight — just assignment records |
-| S3 storage grows with every ref usage | S3 only grows with new generations/uploads |
+| Object Storage storage grows with every ref usage | Object Storage only grows with new generations/uploads |
 | Hard to track "where is this file used?" | Query all assignments for any file instantly |
 
 ---
@@ -91,7 +140,7 @@ Files are **never physically deleted** from S3 until the project is archived. In
 
 ### manifest.json
 
-Lives on S3. The Django backend reads/writes it. Serves as a portable snapshot of the project state.
+Lives on Object Storage. The Django backend reads/writes it. Serves as a portable snapshot of the project state.
 
 ```json
 {
@@ -139,8 +188,7 @@ Lives on S3. The Django backend reads/writes it. Serves as a portable snapshot o
         "duration": 5,
         "resolution": "1080p",
         "seed": 42,
-        "guidance": 7.5,
-        "camera_movement": "Slow tracking right"
+        "guidance": 7.5
       },
       "refs_used": ["file_def456"],
       "elements_used": [
@@ -183,14 +231,14 @@ Lives on S3. The Django backend reads/writes it. Serves as a portable snapshot o
 ```
 
 **Key differences from a copy-based model:**
-- `files` contains each file exactly once, keyed by file ID, with its S3 location and generation metadata.
+- `files` contains each file exactly once, keyed by file ID, with its Object Storage location and generation metadata.
 - `assignments` is the join table — it maps files to shots with a role. One file can appear in many assignments.
-- `refs_used` on a file now references other file IDs (not S3 paths), since files are never copied.
+- `refs_used` on a file now references other file IDs (not Object Storage paths), since files are never copied.
 - `deleted_at` is tracked per file — `null` means active, a timestamp means soft-deleted.
 
 ### Django models
 
-The key insight: **File** stores what a file IS (metadata, S3 location). **FileAssignment** stores where a file is USED (which shot, what role). One file → many assignments.
+The key insight: **File** stores what a file IS (metadata, Object Storage location). **FileAssignment** stores where a file is USED (which shot, what role). One file → many assignments.
 
 ```python
 class Project(models.Model):
@@ -201,9 +249,9 @@ class Project(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     # Sprint 2: kitsu_id = models.CharField(max_length=100, blank=True, null=True, unique=True)
 
-class Scene(models.Model):
+class Sequence(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4)
-    project = models.ForeignKey(Project, related_name="scenes", on_delete=models.CASCADE)
+    project = models.ForeignKey(Project, related_name="sequences", on_delete=models.CASCADE)
     name = models.CharField(max_length=100)
     order = models.IntegerField(default=0)
     tags = models.JSONField(default=list, blank=True)  # ["exterior", "night"]
@@ -211,7 +259,7 @@ class Scene(models.Model):
 
 class Shot(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4)
-    scene = models.ForeignKey(Scene, related_name="shots", on_delete=models.CASCADE)
+    sequence = models.ForeignKey(Sequence, related_name="shots", on_delete=models.CASCADE)
     name = models.CharField(max_length=100)
     order = models.IntegerField(default=0)
     direction_note = models.TextField(blank=True, default="")
@@ -221,7 +269,7 @@ class Shot(models.Model):
     # Sprint 2: kitsu_id
 
 class File(models.Model):
-    """A single file on S3. Never duplicated, never physically deleted until project archive.
+    """A single file on Object Storage. Never duplicated, never physically deleted until project archive.
     One File can be assigned to many shots with different roles."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4)
     project = models.ForeignKey(Project, related_name="files", on_delete=models.CASCADE)
@@ -296,33 +344,27 @@ class FileAssignment(models.Model):
             models.Index(fields=["file"]),
         ]
 
-class ProjectAsset(models.Model):
-    """Project-level shared assets (characters, locations, props).
-    These also get a File record — the asset is metadata on top of it."""
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
-    project = models.ForeignKey(Project, related_name="assets", on_delete=models.CASCADE)
-    file = models.OneToOneField(File, on_delete=models.CASCADE, related_name="asset_meta")
-    name = models.CharField(max_length=255)
-    category = models.CharField(max_length=50)  # "characters" | "locations" | "props"
-    uploaded_by = models.ForeignKey(User, on_delete=models.CASCADE)
-    created_at = models.DateTimeField(auto_now_add=True)
-
 class Element(models.Model):
-    """Structured character/object with frontal image + reference images.
-    Used by models like Kling 3.0 for face/character consistency.
-    Images are File records — never duplicated."""
+    """Unified element for characters, locations, and props.
+    All project assets use the same Element form and structure.
+    Frontal image is required. Additional reference images are optional.
+    For models that don't support native element APIs (e.g. non-Kling),
+    an auto-generated angle sheet is used as a single reference fallback."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4)
     project = models.ForeignKey(Project, related_name="elements", on_delete=models.CASCADE)
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True, default="")
+    category = models.CharField(max_length=50)  # "characters" | "locations" | "props"
     frontal_image = models.ForeignKey(File, on_delete=models.CASCADE, related_name="+")
-    reference_images = models.ManyToManyField(File, blank=True, related_name="+")  # up to 3
+    reference_images = models.ManyToManyField(File, blank=True, related_name="+")  # optional, up to 3
+    angle_sheet = models.ForeignKey(File, null=True, blank=True,
+                                     on_delete=models.SET_NULL, related_name="+")  # auto-generated composite
     tags = models.JSONField(default=list, blank=True)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
 
 class GenerationJob(models.Model):
-    """Tracks async generation jobs dispatched to Celery."""
+    """Tracks async generation jobs dispatched to backend worker queue."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4)
     shot = models.ForeignKey(Shot, related_name="jobs", on_delete=models.CASCADE)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
@@ -341,16 +383,6 @@ class GenerationJob(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-class PromptHistory(models.Model):
-    """Per-user prompt history, stored server-side for persistence across devices."""
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    tab = models.CharField(max_length=10)  # "image" | "video" | "special"
-    prompt = models.TextField()
-    model_id = models.CharField(max_length=100)
-    cinematographer_settings = models.JSONField(default=dict, blank=True)
-    model_settings = models.JSONField(default=dict, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
 ```
 
 ---
@@ -408,19 +440,12 @@ POST   /api/shots/{shot_id}/assignments/            # Tag a file to a shot with 
 DELETE /api/assignments/{assignment_id}/             # Remove a tag (file stays, just unlinked)
 ```
 
-### Project Assets
+### Elements (Characters, Locations, Props)
 ```
-GET    /api/projects/{id}/assets/                   # List all project assets
-GET    /api/projects/{id}/assets/?category=characters
-POST   /api/projects/{id}/assets/upload/            # Upload asset
-DELETE /api/projects/{id}/assets/{asset_id}/
-```
-
-### Elements
-```
-GET    /api/projects/{id}/elements/                 # List elements
-POST   /api/projects/{id}/elements/                 # Create element (frontal + refs)
-PUT    /api/elements/{element_id}/                  # Update name, description, add refs
+GET    /api/projects/{id}/elements/                 # List all elements
+GET    /api/projects/{id}/elements/?category=characters  # Filter by category
+POST   /api/projects/{id}/elements/                 # Create element (frontal + optional refs)
+PUT    /api/elements/{element_id}/                  # Update name, description, category, add refs
 DELETE /api/elements/{element_id}/
 ```
 
@@ -429,24 +454,41 @@ DELETE /api/elements/{element_id}/
 POST   /api/generate/                   # Submit generation job
 GET    /api/generate/{job_id}/          # Poll job status
 GET    /api/generate/?shot={shot_id}    # List jobs for a shot
-POST   /api/generate/{job_id}/retry/    # Retry with same params (new seed)
 ```
 
-### Prompt History
+---
+
+### Prompt History (no separate table)
+
+⚠️ **No separate PromptHistory model required.** All prompt + prompt tag metadata already exists on every File record.
+
+When a user clicks:
+- ✅ **Reuse Prompt**
+- ✅ **Undo / Redo**
+- ✅ **Retry**
+
+The frontend simply reads:
 ```
-GET    /api/prompts/?tab=image&limit=50   # Get recent prompts for a tab
-POST   /api/prompts/                      # Save a prompt entry
+File record fields:
+  prompt                    -> raw user prompt text
+  prompt_tags               -> all prompt tags (cinematographer, hexcodes, etc)
+  model_settings            -> CFG, steps, seed, resolution
+  model_id                  -> which model was used
 ```
+
+Every generation already stores the full exact state that created it. There is no need to duplicate this data into a separate history table. Recent prompts are just the most recent File records filtered by user.
+
+No additional API endpoints required. All history is already present.
 
 ### Chat (AI Prompt Assistant)
 ```
 POST   /api/chat/
 ```
 
-### S3 Presigned URLs
+### Object Storage Presigned URLs
 ```
 GET    /api/files/{file_id}/url/        # Get presigned download URL (expires 1hr)
-POST   /api/files/upload-url/           # Get presigned upload URL for direct-to-S3
+POST   /api/files/upload-url/           # Get presigned upload URL for direct-to-Object Storage
 ```
 
 ---
@@ -517,9 +559,22 @@ class ProjectListView(generics.ListCreateAPIView):
 
 ---
 
+### Sprint 1 Scope
+
+⚠️ **EXPLICIT SPRINT 1 FOCUS:**
+For Sprint 1 we are **only building the Image and Video generation tabs**. All other tabs, modes, and features are deferred to later sprints:
+- ✅ **IN SCOPE:** Image tab, Video tab
+- ❌ **NOT IN SCOPE:** Audio tab, 3D tab, Special tab, Audio generation, Chat, Canvas, Board, Kitsu integration, multi-user
+
+All features documented in this spec refer exclusively to the Image and Video generation workflows.
+
+---
+
 ### Feature 2: Create Project Flow
 
-**What it does:** Modal where you name a project and define scenes with shot counts.
+**What it does:** Modal where you name a project and define the production hierarchy.
+
+⚠️ **Film optimized structure with Kitsu compatibility:** This matches film production workflow, and maps directly to Kitsu structure without modification. No structural changes required for Sprint 2 Kitsu integration.
 
 ```
 ┌─────────────────────────────────────────────┐
@@ -530,13 +585,13 @@ class ProjectListView(generics.ListCreateAPIView):
 │  │ Scarecrow                           │    │
 │  └─────────────────────────────────────┘    │
 │                                             │
-│  Scenes                                     │
+│  Sequences                                  │
 │  ┌─────────────────────────────────────┐    │
-│  │ SC01  Opening         8 shots  [x]  │    │
-│  │ SC02  Chase           12 shots [x]  │    │
-│  │ SC03  Confrontation   6 shots  [x]  │    │
+│  │ SQ01  Opening         8 shots  [x]  │    │
+│  │ SQ02  Chase           12 shots [x]  │    │
+│  │ SQ03  Confrontation   6 shots  [x]  │    │
 │  │                                     │    │
-│  │ [+ Add Scene]                       │    │
+│  │ [+ Add Sequence]                    │    │
 │  └─────────────────────────────────────┘    │
 │                                             │
 │  ── or ──                                   │
@@ -546,27 +601,34 @@ class ProjectListView(generics.ListCreateAPIView):
 └─────────────────────────────────────────────┘
 ```
 
-**Scene row fields:**
+**Hierarchy (film production):**
+`Project → Sequence → Shot`
+
+Episodes are intentionally omitted for film workflow. This maps directly to Kitsu's `Project → Sequence → Shot` when importing film projects. For TV projects, episode support will be added as an optional toggle later.
+
+**Sequence row fields:**
 | Field | Type | Default | Notes |
 |-------|------|---------|-------|
-| Name | text input | SC01, SC02... auto-increment | Editable |
+| Name | text input | SQ01, SQ02... auto-increment | Editable |
 | Description | text input | empty | Optional subtitle |
 | Shot count | number input | 8 | Min 1, max 200 |
-| Delete [x] | button | — | Removes row. Min 1 scene required. |
+| Delete [x] | button | — | Removes row. Min 1 sequence required. |
 
 **Buttons:**
-- **[+ Add Scene]** — appends a new row with auto-incremented name.
+- **[+ Add Sequence]** — appends a new row with auto-incremented name.
 - **[Import from Kitsu]** — disabled/grayed in Sprint 1, shows "Coming in Sprint 2" tooltip. Renders the button so the UI space is reserved.
 - **[Cancel]** — closes modal, no changes.
-- **[Create Project]** — validates (name required, >= 1 scene), calls `POST /api/projects/`, on success navigates to workspace.
+- **[Create Project]** — validates (name required, >= 1 sequence), calls `POST /api/projects/`, on success navigates to workspace.
 
 **Backend on create:**
-1. Creates Project record with `s3_prefix`
-2. Creates S3 folder: `{project_id}/assets/characters/`, `assets/locations/`, `assets/props/`, `elements/`
-3. For each scene: creates Scene record, creates `{project_id}/scenes/{scene_id}/` folder
-4. For each shot in each scene: creates Shot record, creates `outputs/` and `refs/` subfolders
-5. Writes initial `manifest.json` to S3
-6. Returns project with nested scenes/shots
+1. Creates Project record with object storage prefix
+2. Creates Object Storage folder: `{project_id}/assets/characters/`, `assets/locations/`, `assets/props/`, `elements/`
+3. For each sequence: creates Sequence record
+4. For each shot in each sequence: creates Shot record linked to parent sequence
+5. Writes initial `manifest.json` to Object Storage
+6. Returns project with nested sequences → shots
+
+**Note:** The existing `Scene` model is renamed to `Sequence`. All existing code references to Scene will map directly to Sequence. 100% backwards compatible, no logic changes required.
 
 ---
 
@@ -590,7 +652,7 @@ class ProjectListView(generics.ListCreateAPIView):
 │ Aud  │  Advanced        │  ┌─ SH06 (dimmed) ───────────┐│
 │ Chat │  ───────────     │  │ [ref] [gen] [gen]          ││
 │ ──── │  [Generate]       │  └────────────────────────────┘│
-│ Hist │  cost · time     │  ┌─ SH07 (dimmed) ───────────┐│
+│ Hist │                  │  ┌─ SH07 (dimmed) ───────────┐│
 │ Set  │                  │  │ [gen] [gen]                ││
 │      │                  │  └────────────────────────────┘│
 └──────┴──────────────────┴────────────────────────────────┘
@@ -601,12 +663,12 @@ class ProjectListView(generics.ListCreateAPIView):
 #### Column 1: Mode Rail (48px wide)
 A narrow vertical strip on the far left.
 - **Logo** at top: "A" with orange gradient border.
-- **5 mode buttons** (36x36px, `rounded-lg`):
-  - **Image** — photo icon. Active: orange text, orange left bar, subtle orange bg.
-  - **Video** — camera icon.
-  - **Tools** — wrench icon.
-  - **Audio** — music note icon. In Sprint 1: opens placeholder panel.
-  - **Chat** — chat bubble icon.
+- **Mode buttons** (36x36px, `rounded-lg`):
+  - ✅ **Image** — photo icon. Active: orange text, orange left bar, subtle orange bg. **IN SPRINT 1 SCOPE**
+  - ✅ **Video** — camera icon. **IN SPRINT 1 SCOPE**
+  - ❌ **Tools** — wrench icon. **DISABLED IN SPRINT 1**
+  - ❌ **Audio** — music note icon. **DISABLED IN SPRINT 1**
+  - ❌ **Chat** — chat bubble icon. **DISABLED IN SPRINT 1**
 - **Divider line** between mode buttons and utility buttons.
 - **Utility buttons** at bottom:
   - **History** — clock icon. (Sprint 2: full generation history viewer)
@@ -699,18 +761,41 @@ On hover, a gradient vignette appears (black/80 top, transparent middle, black/8
 |----------|------|--------|--------|-------------|
 | Top-left | ✓ checkmark | **Select** | Toggles multi-select checkbox for batch operations (download, delete, publish). | Frontend state only |
 | Top-right #1 | 📌 Pin icon | **Pin** | Pins this candidate for quick access across shots. Hover: bg turns yellow-500. | `POST /api/shots/{id}/files/{file_id}/pin/` |
-| Top-right #2 | ⋮ three dots | **More menu** | Opens context dropdown: "Set as Published", "Move to Refs", "Delete", "Copy S3 URL" | Various |
+| Top-right #2 | ⋮ three dots | **More menu** | Opens cascading context dropdown:
+  - "Set as Published"
+  - "Move to Refs"
+  - ───
+  - **Quick Actions**
+    - ▸ **Crop** → cascading submenu: 1:1, 4:3, 16:9, 9:16, 2.39:1
+    - ▸ **Upscale** → cascading submenu: 2x, 4x, Magnific V2
+  - ───
+
+**Quick actions are one-click generation shortcuts:** select preset → job starts immediately, new version appears in the shot grid. No modal, no fullscreen required. | Various |
 
 **Bottom row (appears on hover):**
 
 | Position | Icon | Button | Action | Backend call |
 |----------|------|--------|--------|-------------|
-| Bottom-left #1 | ↻ retry arrow | **Retry** | Re-runs the exact same generation with a new seed. Copies prompt, model, all settings, refs, elements. Only valid for outputs. | `POST /api/generate/{job_id}/retry/` |
+| Bottom-left #1 | ↻ retry arrow | **Retry** | Copies the exact prompt, model, model settings, prompt tags, references, and elements from this generation directly into the active generation controls pane. **DOES NOT automatically run generation.** User can edit settings or change prompt before clicking Generate manually. Only valid for outputs. | Frontend only — reads all metadata from File record and populates form fields. No backend call required. |
 | Bottom-left #2 | 📋 clipboard | **Copy Prompt** | Copies the generation prompt to clipboard. Shows brief "Copied!" toast. | Frontend only — reads `file.prompt` |
 | Bottom-left #3 | 📎 paperclip | **Use as Reference** | Tags this file as an input ref in the **currently active shot**. No file copying — creates a FileAssignment record. Disabled if already tagged as input in the active shot. | `POST /api/shots/{active_shot_id}/assignments/` with `{ file_id, role: "input" }` |
-| Bottom-right | ⬇ download arrow | **Download** | Downloads the original file. Uses presigned S3 URL. | `GET /api/files/{file_id}/url/` → browser download |
+| Bottom-right | ⬇ download arrow | **Download** | Downloads the original file. Uses presigned Object Storage URL. | `GET /api/files/{file_id}/url/` → browser download |
 
 **All hover buttons use `stopPropagation`** — clicking them does NOT trigger the fullscreen viewer. Only clicking the tile background (not a button) opens fullscreen.
+
+---
+
+### Quick Actions (from three dot menu)
+
+Quick Crop / Quick Upscale are lightweight one-click operations that do NOT open the full Image Lab:
+- Clicking a preset immediately dispatches a generation job with default parameters
+- The job runs in the background
+- A new generation tile appears immediately in the shot grid with loading state
+- No modal, no extra steps, no fullscreen required
+- Uses the exact same generation pipeline as the Image Lab tools
+- Result appears directly in the grid when complete
+
+This is for common operations where the user doesn't need fine control - just a fast one click preset.
 
 **Video tile specific behavior:**
 - On hover: video starts playing (`e.currentTarget.play()`), muted, looped.
@@ -1030,7 +1115,7 @@ The left toolbar shows 7 tool icons. Clicking one activates that mode, which cha
 
 | Control | Description |
 |---------|-------------|
-| **Model selector** | Dropdown of inpainting-capable models. Filtered by `capabilities: ["inpaint"]`. Default: Flux Fill. Shows model name + provider + cost. |
+| **Model selector** | Dropdown of inpainting-capable models. Filtered by `capabilities: ["inpaint"]`. Default: Flux Fill. Shows model name + credit cost. |
 | **🖌 Paint** | Freehand brush mode. Paint mask directly on canvas. |
 | **□ Rect** | Rectangle mask mode. Click and drag to draw a rectangular mask region. |
 | **⊘ Erase** | Erase parts of the mask. Same brush size control. |
@@ -1117,7 +1202,7 @@ The left toolbar shows 7 tool icons. Clicking one activates that mode, which cha
 
 | Control | Description |
 |---------|-------------|
-| **Model selector** | Dropdown filtered by `capabilities: ["upscale"]`. Options: Aura SR v2, Magnific v2, Real-ESRGAN. Shows cost per model. |
+| **Model selector** | Dropdown filtered by `capabilities: ["upscale"]`. Options: Aura SR v2, Magnific v2, Real-ESRGAN. Shows credit cost per model. |
 | **Target dropdown** | Preset output resolutions: 2K (2048×1536), 4K UHD (3840×2160), 8K (7680×4320), Custom. "Custom" reveals width/height number inputs. |
 | **Creativity slider** | How much the model "halluccinates" new detail vs just interpolating. Range: 0.0 – 1.0. Default: 0.3. Only shown for models that support it (e.g., Magnific). Hidden via `showWhen` for models that don't. |
 | **Resolution preview** | Shows current dimensions → target dimensions and the scale factor. Updates dynamically when target changes. |
@@ -1125,32 +1210,55 @@ The left toolbar shows 7 tool icons. Clicking one activates that mode, which cha
 
 ##### Mode 7: Composer (🧩 Puzzle icon)
 
-**What it does:** Structured face/object replacement. Draw a bounding box on the canvas, then connect it to an Element from the project's Asset Library. The AI replaces the boxed region with the Element's likeness, maintaining pose and lighting.
+**What it does:** Free canvas collage and reference layering mode. Drag any image from any shot onto the canvas, position, scale, rotate, and arrange them for AI composition. This is for creating multi-reference collages, shot mashups, and precisely arranging reference positions. **NOT just face/object replacement.**
 
-**Canvas behavior:** Click and drag to draw a bounding box. The box has an orange dashed border and shows the connected Element's thumbnail in the corner.
+**Canvas behavior:**
+- Canvas is the full image area
+- Drag any asset thumbnail from the asset browser onto the canvas
+- Once placed, every asset is a draggable, resizable, rotatable layer
+- Each layer has corner handles for resize, rotation handle at the top
+- Layers can be reordered (bring forward / send backward) via right click
+- Unlimited number of layers can be placed
+- All layers are sent as IP-Adapter references when generating
 
 **Bottom toolbar — split into two rows:**
 ```
 ┌──────────────────────────────────────────────────────────────────────────────────────────┐
-│  Model: [Flux Composer ▼]  │  Strength: [━━━━●━━]  │  Style Mix: [━━●━━━]   [GENERATE]  │
+│  Model: [Flux Composer ▼]  │  [Clear Canvas]  [Reset]  [Generate]                        │
 ├──────────────────────────────────────────────────────────────────────────────────────────┤
-│  ASSET LIBRARY   [All] [Characters] [Props] [Effects]                                    │
-│  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐              │
-│  │ face │ │ hero │ │ car  │ │ mask │ │ ring │ │ bg   │ │  ✨  │ │ ...  │              │
-│  │ img  │ │ img  │ │ img  │ │ img  │ │ img  │ │ img  │ │ img  │ │      │              │
-│  │Elena │ │John  │ │Tesla │ │Oni   │ │Ring  │ │Cyber │ │Glow  │ │      │              │
-│  └──────┘ └──────┘ └──────┘ └──────┘ └──────┘ └──────┘ └──────┘ └──────┘              │
+│  ⬅  ───────────────────────────────────────────────────────────────────────────────  ➡    │
+│  🟡 Current Shot   ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐             │
+│                   │ img  │ │ img  │ │ img  │ │ img  │ │ img  │ │ img  │  ...        │
+│                   └──────┘ └──────┘ └──────┘ └──────┘ └──────┘ └──────┘             │
+│                                                                                          │
+│  SH01   ┌──────┐ ┌──────┐ ┌──────┐                                                        │
+│         │ img  │ │ img  │ │ img  │  ...                                                  │
+│         └──────┘ └──────┘ └──────┘                                                        │
+│                                                                                          │
+│  SH02   ┌──────┐ ┌──────┐                                                                 │
+│         │ img  │ │ img  │  ...                                                            │
+│         └──────┘ └──────┘                                                                 │
+│                                                                                          │
+│  [View All Assets] ──────────────────────────────────────────────────────────────────── ▼ │
 └──────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+**Asset Browser (bottom row):**
+- **Horizontally scrollable** container that loads assets lazily
+- First section always shows assets from **the current shot** (highlighted yellow)
+- Then ordered by shot sequence: SH01, SH02, SH03, etc.
+- Click `[View All Assets]` to open the full screen asset browser modal that shows every asset in the entire project
+
 | Control | Description |
 |---------|-------------|
-| **Model selector** | Dropdown filtered by `capabilities: ["compose", "face_swap", "ip_adapter"]`. |
-| **Strength slider** | How faithfully to reproduce the Element. 1.0 = exact likeness, 0.3 = loose inspiration. Default: 0.8. |
-| **Style Mix slider** | Balance between the source image's style and the Element's style. 0.0 = keep source style, 1.0 = adopt Element's style. Default: 0.3. |
-| **GENERATE** | Sends source image + bounding box coordinates + Element reference image(s) to the compose model. Creates a new version. |
-| **Asset Library tabs** | Filter project Elements by type: All, Characters, Props, Effects. Each Element shows its frontal image thumbnail + name. |
-| **Element selection** | Click an Element in the Asset Library to connect it to the active bounding box. The Element thumbnail appears in the box's corner. |
+| **Drag & Drop** | Drag any asset thumbnail onto the canvas to add it as a new layer |
+| **Layer controls** | Click a layer on the canvas to select it. Drag to move. Drag corner handles to resize. Drag top handle to rotate. |
+| **Right click menu** | Bring forward, Send backward, Delete layer, Reset transform |
+| **Clear Canvas** | Removes all layers, resets to empty |
+| **Reset** | Resets all layers back to original position/size |
+| **Generate** | Sends base image + all placed layers + their positions, sizes, opacity values to the composer model. Creates a new version. |
+
+This is how you make collages of shots, combine reference images, position elements exactly where you want them, and build complex multi-reference compositions before generation. All layers are passed as reference images to the AI with their exact canvas positions.
 
 **Composer generate payload:**
 ```json
@@ -1203,13 +1311,12 @@ The Video Lab opens when clicking a video candidate tile. It shares the same she
 
 ##### Video Lab Tool Modes
 
-**Left toolbar (6 tools):**
+**Left toolbar (5 tools):**
 
 | Icon | Tool | Type | Description |
 |------|------|------|-------------|
 | ▶️ Play | **Review** | Local | Default mode. Full playback controls: play/pause, frame step, speed control, timeline scrubber. |
 | ✂️ Scissors | **Trim** | Local | Set in/out points on the timeline to trim the video. Non-destructive — creates a new version with updated duration. |
-| 🔄 Regen | **Re-Generate** | Generative | Re-generate the video with tweaked parameters. Opens the same prompt/model controls as the main generation pane but pre-filled with the original job's `inputSnapshot`. |
 | 📷 Extract | **Frame Extract** | Local | Click to extract the current frame as a PNG image. Creates a new `File` with `origin="extraction"`, `is_video=false`. Optionally assigns it as an output to the current shot. |
 | ⬆ Upscale | **Video Upscale** | Generative | AI-powered video super-resolution. Same concept as Image Lab upscale but for video. |
 | 🎵 Audio | **Audio Detach** | Local | Strips the audio track from the video into a separate audio `File`. The video version continues without audio. |
@@ -1254,28 +1361,6 @@ The Video Lab opens when clicking a video candidate tile. It shares the same she
 | **Duration display** | Shows the resulting clip duration. Updates as markers move. |
 | **Apply Trim** | Creates a new version with the trimmed segment. Local operation using ffmpeg-wasm (client-side). Updates `duration` on the File record. |
 
-##### Mode: Re-Generate (🔄)
-
-**Bottom toolbar:**
-```
-┌──────────────────────────────────────────────────────────────────────────────────────────┐
-│  Model: [Kling 3.0 ▼]  │  Duration: [5s ▼]  │  Seed: [Random ↻]                        │
-│                                                                                          │
-│  Prompt: [> the original prompt is pre-filled here, editable_________________] [GENERATE] │
-│                                                                                          │
-│  ⚡ Pre-filled from original generation. Edit any parameter and re-generate.              │
-└──────────────────────────────────────────────────────────────────────────────────────────┘
-```
-
-| Control | Description |
-|---------|-------------|
-| **Model selector** | Pre-selected to the model that created the original video. Can be changed to any video-capable model. |
-| **Duration dropdown** | Pre-filled from original settings. |
-| **Seed** | Shows the original seed. Click ↻ to randomize. |
-| **Prompt** | Pre-filled from `file.prompt`. Editable — user can tweak wording. |
-| **GENERATE** | Calls `deriveJob(originalJobId, overrides)` where overrides contain any changed parameters. Creates a new version in the tree. |
-
-This mode reconstructs the original generation parameters from the `File` record's `prompt`, `model_id`, `model_settings`, and the parent `GenerationJob`'s `inputSnapshot`.
 
 ##### Mode: Frame Extract (📷)
 
@@ -1384,7 +1469,7 @@ deriveJob(originalJobId, overrides) →
 ┌──────────────────────────────────────┐
 │ [Flux 1.1 Pro Ultra            ▼]   │  ← Model selector
 ├──────────────────────────────────────┤
-│ REFERENCE IMAGES (OPTIONAL)  Max 4  │
+│ REFERENCE IMAGES (OPTIONAL)  Max 6  │
 │ ┌────┐ ┌────┐ ┌────┐ [+]           │  ← Reference uploads
 │ │ref1│ │ref2│ │ref3│               │
 │ └────┘ └────┘ └────┘               │
@@ -1395,27 +1480,28 @@ deriveJob(originalJobId, overrides) →
 │ └────┘ └────┘                       │
 ├──────────────────────────────────────┤
 │ ┌────────────────────────────────┐  │
+│ │                            [👁] │  │  ← Reveal Tags icon (top-right)
 │ │ > A weathered scarecrow with   │  │  ← Prompt textarea
 │ │   tattered burlap clothing...  │  │
 │ │                                │  │
-│ │ [📷🔘] [undo] [redo] [mode] [✨] │  │  ← Bottom toolbar
+│ │ [↻][↷][🗑]              [✨ ▾] │  │  ← Bottom toolbar
 │ └────────────────────────────────┘  │
 │                                      │
-│ Refine: [make it darker       ] [✨] │  ← Alter box
+│ 🎬 CINEMATOGRAPHER          [ON 🔘] │  ← Toggle switch
+│ [ Alexa 65 · S7/i · 35mm · f/1.4 · Golden ] │  ← Orange pills
+├──────────────────────────────────────┤
+│ ┌──────────────┐  ┌───────────────┐   │
+│ │ ASPECT       │  │ RESOLUTION     │   │
+│ │ 16:9 Cinema  │  │ 1080p          │   │
+│ └──────────────┘  └───────────────┘   │
+│ ┌──────────────┐  ┌───────────────┐   │  ← Model-specific
+│ │ CFG SCALE    │  │ SEED           │   │    (shown per model)
+│ │ 7.5          │  │ Auto           │   │
+│ └──────────────┘  └───────────────┘   │
+│ Advanced Settings                  ▸ │  ← Collapsible
+├──────────────────────────────────────┤
 │                                      │
-│ 🎬 CINEMATOGRAPHER                   │  ← Camera/style picker
-│ ARRI Alexa 65 · Cooke S7/i · 35mm  │
-│ · f/1.4 · Golden Hour               │
-├──────────────────────────────────────┤
-│ Aspect Ratio    [16:9 ▼]           │
-│ Resolution      [1080p ▼]          │
-├──────────────────────────────────────┤
-│ ADVANCED SETTINGS                 ▸ │  ← Collapsible
-│ Guidance: 7.5   Seed: auto         │
-├──────────────────────────────────────┤
-│                                      │
-│  [████████ GENERATE ████████]        │  ← Sticky footer
-│  FAL · $0.06 · ~8s                  │
+│ [██] [████ GENERATE ████]  [1 ▾]   │  ← Sticky footer
 └──────────────────────────────────────┘
 ```
 
@@ -1436,57 +1522,56 @@ deriveJob(originalJobId, overrides) →
 | `sdxl-turbo` | SDXL Turbo | FAL | No | Yes (required) | 1 |
 
 #### 7b. Reference Images
-- **Label:** "Reference Images (optional)" or "Reference Image *" if model requires it.
+- **Header:** "REFERENCES" with "+ Add" link top-right.
 - **Max count** shown top-right: "Max 4" (varies by model).
 - **Drop zone:** Rounded panel. Accepts drag & drop of images, element character sheets, or file entries from the shot grid.
 - **Thumbnails:** 40x40px rounded squares. Hover reveals X button to remove. Shows upload spinner while uploading.
-- **Expiration warning:** If a presigned upload URL is expiring within 10 minutes, an amber badge shows remaining minutes on the thumbnail and a warning below.
 - **[+] button:** Opens file picker for image files. Only shown if under the limit.
 - **Empty state:** "Drag images or element sheets, or click +"
 
-#### 7c. Elements (Face Control)
-- **Only shown** when the selected model has `supportsElements === true` (e.g. Kling 3.0).
-- **Label:** "Elements (face control)" with "+ Add from Elements" link.
+#### 7c. Elements (Character References)
+- **Always shown in Image mode** — not model-specific. Elements work across all image models by injecting the element's frontal character sheet as a reference image. This is not the Kling-specific element API; it simply uses the character sheet image as an additional reference.
+- **Label:** "Elements" with "+ Add from Elements" link.
 - Opens the Elements Manager panel (a slide-out that lists all project elements with their frontal images).
 - Selected elements appear as 56x56px thumbnails with:
   - "E1", "E2" badge top-left (amber background).
   - Element name bottom.
   - X button on hover to deselect.
-- **Usage:** Reference elements in the prompt with `@Element1`, `@Element2`, etc.
+- **Usage:** Reference elements in the prompt with `@Element1`, `@Element2`, etc. (via @ autocomplete).
 
 #### 7d. Prompt Textarea
 - 6-row textarea with `rounded-[24px]`.
-- **@ autocomplete:** Typing `@` triggers a popup listing `@img1`, `@img2`, etc. for each uploaded reference. Navigate with arrow keys, select with Enter/Tab. Shows thumbnail preview + name for each option.
-- **Orange tint overlay:** When cinematographer settings are active, the textarea gets a subtle orange background tint and a "Preview" badge top-right. Hover the badge to see the full prompt that will be sent to the API (user prompt + appended camera settings).
+- **@ autocomplete:** Typing `@` triggers a popup listing all available references and elements. The popup shows:
+  - `@img1`, `@img2`, etc. — for each uploaded reference image (thumbnail + filename).
+  - `@Element1`, `@Element2`, etc. — for each pinned/selected element (frontal thumbnail + element name).
+  - Navigate with arrow keys, select with Enter/Tab. Grouped under "References" and "Elements" headers in the popup.
+- **👁 Reveal Tags (top-right corner):** Eye icon button positioned in the top-right of the textarea. When clicked:
+  1. Appends the current cinematographer prompt tags (e.g., `[ Cinematic, ARRI Alexa 65, 35mm, f/1.4 ]`) directly into the prompt textarea text, after the main prompt.
+  2. Automatically disables the Cinematographer ON/OFF toggle to prevent the tags from being duplicated (appended twice) when generating.
+  3. The inlined tags are rendered as styled orange text within the textarea to visually distinguish them from the user's main prompt.
+  4. Clicking the eye icon again removes the inlined tags from the text and re-enables the Cinematographer toggle.
 
 **Bottom toolbar inside textarea:**
 
 | Position | Control | Description |
 |----------|---------|-------------|
-| Bottom-left | **📷 Camera toggle** | Pill button with camera icon + toggle switch. When ON: cinematographer settings are appended to the prompt automatically. Orange border when active. |
-| Bottom-right #1 | **Undo** | Reverts to previous prompt. Red-tinted round button. Disabled when no history. |
-| Bottom-right #2 | **Redo** | Re-applies undone prompt. Red-tinted round button. |
-| Bottom-right #3 | **Prompt Mode** | Cycles through 3 modes with different icons: **Photoreal** (camera icon, amber) → **Editing** (grid icon, orange) → **Grid Gen** (4-square icon, yellow). Affects how the prompt is auto-expanded. |
-| Bottom-right #4 | **✨ Auto-Expand** | Sends the prompt to an LLM to expand into a detailed cinematic description. Shows spinner while processing. Disabled if prompt is empty. |
+| Bottom-left #1 | **↻ Undo** | Reverts to previous prompt. Subtle icon button. Disabled when no history. |
+| Bottom-left #2 | **↷ Redo** | Re-applies undone prompt. Subtle icon button. Disabled when nothing to redo. |
+| Bottom-left #3 | **🗑 Clear** | Clears the entire prompt textarea. Subtle icon button. Disabled when prompt is empty. |
+| Bottom-right | **✨ Auto-Expand (▾ dropdown)** | Sparkle icon with a dropdown chevron. Click the icon to send the prompt to an LLM to expand into a detailed cinematic description. Click the chevron to open a dropdown of expansion templates (e.g., "Cinematic", "Editorial", "Anime", "Photoreal"). Selecting a template applies that expansion style. Shows spinner while processing. Disabled if prompt is empty. |
 
-#### 7e. Alter Box
-- Single-line text input below the prompt: "Refine prompt (e.g. 'make it darker', 'add rain')..."
-- **[✨] button** next to it: sends the current prompt + the alter instruction to an LLM, which rewrites the prompt incorporating the instruction.
-- Press Enter to submit (same as clicking the button).
-- Disabled during generation or expansion.
+#### 7e. Cinematographer Panel
 
-#### 7f. Cinematographer Panel
+**Trigger:** The `ImageShotLookCards` component renders below the prompt as a distinct row. Shows a 🎬 camera icon, "CINEMATOGRAPHER" label, and an **ON / OFF toggle switch** on the right side. When ON, cinematographer settings are appended to the prompt automatically and the toggle glows orange. Below the row, current selections are displayed as orange pill badges (e.g., `Alexa 65 · S7/i · 35mm · f/1.4 · Golden`).
 
-**Trigger:** The `ImageShotLookCards` component renders below the prompt. Shows a summary of current camera/style settings with orange highlights on non-default values.
-
-**When clicked, opens a modal:**
+**Clicking the row opens the Cinematographer modal:**
 
 ```
-┌─────────────────────────────────────────┐
-│ CINEMATOGRAPHER (gradient text)       ✕ │
-├──────────┬────────────┬─────────────────┤
-│  CAMERA  │  LIGHTING  │     STYLE       │ ← 3 pill tabs
-├──────────┴────────────┴─────────────────┤
+┌─────────────────────────────────────────────┐
+│ CINEMATOGRAPHER (gradient text)           ✕ │
+├──────────┬────────────┬─────────┬───────────┤
+│  CAMERA  │  LIGHTING  │  STYLE  │ HEXCODES  │ ← 4 pill tabs
+├──────────┴────────────┴─────────┴───────────┤
 │                                         │
 │ Camera tab: 4 scrollable columns        │
 │ ┌─────────┬─────────┬─────────┬────────┐│
@@ -1509,169 +1594,322 @@ deriveJob(originalJobId, overrides) →
 └─────────────────────────────────────────┘
 ```
 
-**Camera tab — 4 columns** (340px height, scrollable):
+**Camera tab — 4 columns, cascading selection** (340px height, scrollable):
 
-| Column | Options |
-|--------|---------|
-| **Body** | ARRI Alexa 65, RED Raptor 8K, Sony Venice 2, Panavision DXL2, Blackmagic URSA 12K, Canon C500 MkII, IMAX MSMD |
-| **Lens** | Cooke S7/i, Zeiss SP, Primo 70, ARRI Signature, Atlas 1.5x Anamorphic, Leica M |
-| **Focal Length** | 14mm, 24mm, 35mm, 50mm, 85mm, 100mm, 135mm, 200mm |
-| **f-Stop** | f/1.2, f/1.4, f/2, f/2.8, f/4, f/5.6, f/8, f/11 |
+Selection is **cascading**: the artist first picks a camera body. Once a body is selected, the Lens column populates with compatible lens options for that camera system. Focal Length and f-Stop columns are always visible and independent — they do not depend on the Body or Lens selection.
+
+| Column | Behavior | Options |
+|--------|----------|---------|
+| **Body** | Always visible. Select first. | ARRI Alexa 65, RED Raptor 8K, Sony Venice 2, Panavision DXL2, Blackmagic URSA 12K, Canon C500 MkII, IMAX MSMD |
+| **Lens** | **Appears after Body is selected.** Shows lenses compatible with the chosen camera system. | Cooke S7/i, Zeiss SP, Primo 70, ARRI Signature, Atlas 1.5x Anamorphic, Leica M (filtered by body) |
+| **Focal Length** | Always visible. Independent. | 14mm, 24mm, 35mm, 50mm, 85mm, 100mm, 135mm, 200mm |
+| **f-Stop** | Always visible. Independent. | f/1.2, f/1.4, f/2, f/2.8, f/4, f/5.6, f/8, f/11 |
 
 Active items: orange border + orange glow shadow.
 
-**Lighting tab — 3x3 grid of visual cards:**
+**Lighting tab — 3x3 grid of large square visual panels, each with a descriptive icon and label:**
 
-| Card | Description |
-|------|-------------|
-| Golden Hour | Warm sunset tones |
-| Blue Hour | Cool pre-dawn tones |
-| Moonlight | Cold silver light |
-| Rembrandt | Classic portrait lighting |
-| Neon | Cyberpunk colored lights |
-| Overcast | Soft diffused daylight |
-| Practical | Visible in-scene light sources |
-| High Key | Bright, minimal shadows |
-| Low Key | Dark, dramatic shadows |
+Each panel is a ~140x140px rounded square card (`rounded-[16px]`). Contains an **actual photograph/image** that visually demonstrates the lighting style, with a label overlaid at the bottom. These are not icons — they are real reference images showing the lighting effect applied to a scene. Active panel: golden border + golden-tinted overlay.
 
-Active: golden border + golden glow.
+| Panel | Image | Description |
+|-------|-------|-------------|
+| Golden Hour | Photo of a scene bathed in warm golden sunset light | Warm sunset tones |
+| Blue Hour | Photo of a scene in cool blue pre-dawn light | Cool pre-dawn tones |
+| Rembrandt | Photo with classic Rembrandt triangle lighting | Classic portrait lighting |
+| Overcast | Photo of a scene in soft, even overcast light | Soft diffused daylight |
+| Low Key | Photo of a dark, moody scene with dramatic shadows | Dark, dramatic shadows |
+| Practical | Photo of a scene lit by visible in-frame light sources | Visible in-scene light sources |
+| Moonlight | Photo of a scene in cold silver moonlight | Cold silver light |
+| Neon | Photo of a scene with vibrant neon-colored lights | Cyberpunk colored lights |
+| High Key | Photo of a bright, evenly lit scene with minimal shadows | Bright, minimal shadows |
 
-**Style tab — 2 sections (Filmic + Passion):**
+**Style tab — Grid of large square visual panels with actual images, organized in 2 sections (Films + Fashion):**
 
-| Section | Options |
-|---------|---------|
-| **Filmic** | Photorealistic, Film Stock (Kodak), Analog (grain), Anime/Illustration |
-| **Passion** | Warm Nostalgic, VHS/Synthwave, Cyber-Tech |
+Same card style as Lighting — each panel shows an **actual photograph** demonstrating the film or fashion look, with a label overlaid at the bottom. Active panel: cyan/blue border + subtle tinted overlay.
 
-Active: orange border.
+**Films section (1x4 row):**
+
+| Panel | Image | Description |
+|-------|-------|-------------|
+| Amélie | Photo in warm, whimsical Amélie color grading | Whimsical warm French tones |
+| Mad Max | Photo in desaturated, orange-heavy desert tones | Desaturated orange desert tones |
+| Matrix | Photo with green-tinted digital color grading | Green-tinted digital aesthetic |
+| Grand Budapest | Photo in pastel, symmetrical Wes Anderson style | Wes Anderson pastel symmetry |
+
+**Fashion section (1x3 row):**
+
+| Panel | Image | Description |
+|-------|-------|-------------|
+| Vogue Editorial | Photo in high-fashion editorial studio lighting | High-fashion studio lighting |
+| 90s Streetwear | Photo with retro grain and muted 90s tones | Retro grain and muted tones |
+| Cyber-Tech | Photo in futuristic neon tech aesthetic | Futuristic neon tech aesthetic |
+
+Active: border glow matching section color (golden for Lighting, cyan for Style).
+
+**HEXCodes tab — Color Palette Extraction & Presets:**
+
+```
+┌─────────────────────────────────────────────┐
+│  📷  CAMERA  │  💡  LIGHTING  │  🎨  STYLE  │  🎨  HEXCODES  │
+│              │                │              │  ════════════  │
+├─────────────────────────────────────────────┤
+│                                             │
+│  EXTRACT FROM IMAGE                         │
+│  ┌─────────────────────────────────────┐    │
+│  │                                     │    │
+│  │     📷  Drop image or click to      │    │
+│  │         upload for extraction       │    │
+│  │                                     │    │
+│  └─────────────────────────────────────┘    │
+│                                             │
+│  ── after upload ──                         │
+│                                             │
+│  EXTRACTED COLORS                           │
+│  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐       │
+│  │██████│ │██████│ │██████│ │██████│  [+]  │
+│  │#2A1B3D│ │#E94560│ │#0F3460│ │#533483│       │
+│  └──────┘ └──────┘ └──────┘ └──────┘       │
+│  [✓ Use]                    [↻ Re-extract]  │
+│                                             │
+├─────────────────────────────────────────────┤
+│                                             │
+│  PREMADE PALETTES                           │
+│                                             │
+│  ┌─────────────────────────────────────┐    │
+│  │ ■■■■  Matrix Green                  │    │
+│  │ #003B00  #00FF41  #0D0208  #008F11  │    │
+│  └─────────────────────────────────────┘    │
+│  ┌─────────────────────────────────────┐    │
+│  │ ■■■■  Cyberpunk Neon                │    │
+│  │ #FF006E  #8338EC  #3A86FF  #FB5607  │    │
+│  └─────────────────────────────────────┘    │
+│  ┌─────────────────────────────────────┐    │
+│  │ ■■■■  Desert Warmth                 │    │
+│  │ #E07A5F  #F2CC8F  #81B29A  #3D405B  │    │
+│  └─────────────────────────────────────┘    │
+│  ┌─────────────────────────────────────┐    │
+│  │ ■■■■  Noir                          │    │
+│  │ #1A1A2E  #16213E  #0F3460  #E94560  │    │
+│  └─────────────────────────────────────┘    │
+│  ┌─────────────────────────────────────┐    │
+│  │ ■■■■  Golden Hour                   │    │
+│  │ #FF9A3C  #FF6F00  #E65100  #FFD54F  │    │
+│  └─────────────────────────────────────┘    │
+│                                             │
+├─────────────────────────────────────────────┤
+│                                             │
+│  CUSTOM SWATCHES                            │
+│  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐       │
+│  │██████│ │██████│ │██████│ │  +   │       │
+│  │#FF5733│ │#1DB954│ │#6C5CE7│ │ add  │       │
+│  └──────┘ └──────┘ └──────┘ └──────┘       │
+│                                             │
+│  Click swatch to edit hex · Click + to add  │
+│  Long press to delete                       │
+│                                             │
+├─────────────────────────────────────────────┤
+│  ACTIVE PALETTE                             │
+│  ■ #2A1B3D  ■ #E94560  ■ #0F3460           │
+│                    [Reset]  [Apply ▸]       │
+└─────────────────────────────────────────────┘
+```
+
+**Section details:**
+
+| Section | Description |
+|---------|-------------|
+| **Extract from Image** | Drag & drop or click to upload an image. Primary hex colors are auto-extracted using dominant color analysis. Displays 4–6 extracted swatches with hex codes. Click "Use" to apply as active palette, or "Re-extract" to try again. |
+| **Premade Palettes** | Scrollable list of predefined cinematic palettes. Each row shows color preview squares, palette name, and 4 hex codes. Click a palette to select it. Active palette: orange border. Palettes: Matrix Green, Cyberpunk Neon, Desert Warmth, Noir, Golden Hour, Pastel Dream, Blade Runner, Wes Anderson. |
+| **Custom Swatches** | User-created hex swatches. Click a swatch to open a hex input/color picker to edit. Click "+" to add a new swatch. Long press a swatch to delete. Max 8 custom swatches. |
+| **Active Palette** (bottom bar) | Shows the currently selected hex colors as small squares with codes. These colors are appended to the prompt tags when Cinematographer is ON. |
 
 **Summary bar** at bottom shows all selected options. **[Reset]** clears to defaults. **[Apply]** saves and closes modal.
 
 **Database storage:** All selected options saved as `cinematographer_settings` JSON on the ShotFile when generating.
 
-#### 7g. Parameters
+#### 7g. Parameters (2x2 grid)
+
+**Top row (always visible):**
 | Parameter | Type | Options | Default |
 |-----------|------|---------|---------|
-| Aspect Ratio | dropdown | 16:9, 4:3, 1:1, 3:2, 9:16 (varies by model) | 16:9 |
-| Resolution | dropdown | model-specific (e.g. 720p, 1080p, 4K) | model default |
+| **Aspect** | dropdown | 16:9 Cinema, 4:3, 1:1, 3:2, 9:16 (varies by model) | 16:9 Cinema |
+| **Resolution** | dropdown | model-specific (e.g., 720p, 1080p, 4K) | model default |
+
+**Bottom row (shown per model — only when the model exposes these settings):**
+| Parameter | Type | Options | Default |
+|-----------|------|---------|---------|
+| **CFG Scale** | number input | Guidance scale. Typically 1–20. | 7.5 |
+| **Seed** | number input | "Auto" by default (random). Set a specific number for reproducibility. | Auto |
+
+The bottom row renders dynamically based on the selected model's available parameters. Some models may show Steps instead of CFG Scale, or additional model-specific controls.
 
 #### 7h. Advanced Settings (collapsible)
-| Parameter | Type | Notes |
-|-----------|------|-------|
-| Guidance | number slider | Range varies by model. Typically 1-20. |
-| Seed | number input | "auto" by default (random). Set a specific number for reproducibility. |
+- Additional model-specific parameters.
+- Same collapsible chevron pattern as elsewhere.
 
-#### 7i. Generate Button
-- Full-width pill button, orange gradient (`from-orange-600 to-amber-400`).
-- White text: "GENERATE".
+#### 7i. Generate Button (sticky bottom bar)
+- Sticky bar at the very bottom of the controls pane.
+- **Left:** Grid icon button (opens batch/grid generation options).
+- **Center:** Full-width pill button, orange gradient (`from-orange-600 to-amber-400`). White text: "GENERATE".
+- **Right:** Batch count dropdown "1 ▾" — select how many images to generate per click (1, 2, 4).
 - Hover: scale 1.05, intensified glow shadow.
 - Active/pressed: scale 0.95.
-- Below button: provider · cost · estimated time (e.g. "FAL · $0.06 · ~8s").
-- Disabled during generation (shows spinner).
+- Not disabled during generation — shows a spinner/processing state while inputs are being prepared, then returns to clickable once the job is dispatched.
 - **Keyboard shortcut:** ⌘+Enter (Mac) / Ctrl+Enter.
 
 ---
 
 ### Feature 8: Generation Controls — Video Tab
 
-**What it does:** Controls for video generation. Shares the same layout structure as Image but has different inputs.
+**What it does:** Controls for video generation. Shares the same controls pane column but with video-specific inputs.
 
 **Reference:** `src/components/ControlsPane.tsx` lines 3582-4300
 
-**Differences from Image tab:**
+**Layout (top to bottom):**
 
-#### 8a. Start/End Frames
-- **Two upload zones side by side** (grid-cols-2):
-  - "Start frame" — accepts a single image. When provided, switches mode from T2V (text-to-video) to I2V (image-to-video).
-  - "End frame (optional)" — only shown if model supports it. Provides a target for the video to transition to.
-- **Upload expiration warnings** — same as image references.
-- **Mode indicator** at bottom of generate button: "T2V mode" or "I2V mode" depending on whether a start frame is provided.
+```
+┌──────────────────────────────────────┐
+│ [Cinematic Video Engine v2.4     ▼]  │  ← Model selector
+├──────────────────────────────────────┤
+│ KEYFRAMES                            │
+│ ┌────────┐  ┌────────┐              │
+│ │  📷    │  │  📷    │   [▸]        │
+│ │ START  │  │  END   │              │
+│ │ FRAME  │  │  FRAME │              │
+│ └────────┘  └────────┘              │
+├──────────────────────────────────────┤
+│ PROMPT                               │
+│ ┌────────────────────────────────┐  │
+│ │ > A fast-tracking side shot of │  │
+│ │   a motorcycle weaving through │  │
+│ │   neon traffic, rain droplets  │  │
+│ │   hitting the camera lens...   │  │
+│ │ [↻][↷][🗑]              [✨ ▾] │  │
+│ └────────────────────────────────┘  │
+├──────────────────────────────────────┤
+│ DURATION                      04.0s  │
+│ [═══════════●───────────────────]    │  ← Slider
+├──────────────────────────────────────┤
+│ ┌─────────────┐  ┌──────────────┐   │
+│ │ RESOLUTION  │  │ AUDIO        │   │
+│ │ 8K UHD    ▼ │  │ ATMOS   [🔘] │   │
+│ └─────────────┘  └──────────────┘   │
+│ ┌─────────────┐  ┌──────────────┐   │
+│ │ MOTION      │  │ FRAMERATE    │   │
+│ │ Dynamic (7) │  │ 24 Cinematic │   │
+│ └─────────────┘  └──────────────┘   │
+├──────────────────────────────────────┤
+│ Advanced Export Settings           ▸ │  ← Collapsible
+├──────────────────────────────────────┤
+│                                      │
+│  [████ GENERATE (⚡ 4.0) ████]        │  ← Sticky footer
+└──────────────────────────────────────┘
+```
 
-#### 8b. Reference Images
-- Same drag-and-drop zone as image tab.
-- Numbered badges (1, 2, 3...) on each thumbnail for prompt referencing.
-- Max count varies by model (typically 2-4).
+#### 8a. Model Selector
+- Same style as image tab. Groups models under "Video Pipelines" optgroup.
+- **Tab memory:** Remembers last selected model when switching tabs.
+
+#### 8b. Keyframes & References
+
+The keyframes section has **two modes**, toggled by the **▾ down arrow** on the right:
+
+**Default mode (Keyframes only):**
+```
+┌──────────────────────────────────────┐
+│ KEYFRAMES                            │
+│ ┌────────┐  ┌────────┐              │
+│ │  📷    │  │  📷    │   [▸]        │
+│ │ START  │  │  END   │              │
+│ │ FRAME  │  │  FRAME │              │
+│ └────────┘  └────────┘              │
+└──────────────────────────────────────┘
+```
+
+**Reference mode (expanded via ▾ arrow):**
+```
+┌──────────────────────────────────────┐
+│ KEYFRAMES & REFERENCES           [▴] │
+│ ┌──────┐ ┌──────┐ ┌──────┐ [+]     │
+│ │ REF  │ │ ELF  │ │  📷  │         │
+│ │ img  │ │ img  │ │      │    [▾]  │
+│ └──────┘ └──────┘ └──────┘         │
+└──────────────────────────────────────┘
+```
+
+- Clicking the **▾ down arrow** collapses the full-size keyframe zones and switches to a compact horizontal row of thumbnails.
+- The **first two thumbnails** are always the start and end frames, marked with **SF** (start frame) and **EF** (end frame) corner badges respectively.
+- Each thumbnail has a **color-coded corner badge** identifying its type:
+  - **SF** (amber badge) — start frame
+  - **EF** (amber badge) — end frame
+  - **REF** (orange badge) — reference image
+  - **ELF** (cyan badge) — element character sheet
+- Thumbnails are ~48x48px rounded squares in a single row. **Drag to reorder** references and elements.
+- **[+] button** to add more references, elements, or keyframes.
+- **▾ down arrow** on the row toggles back to the full keyframe view.
+- Elements added here use the same character sheet approach as the image tab — injected as reference images, not model-specific APIs.
 
 #### 8c. Prompt Area
-Same textarea but with additional bottom toolbar buttons:
+- Same textarea as image tab with identical toolbar layout:
+  - Bottom-left: Undo (↻), Redo (↷), Clear (🗑)
+  - Bottom-right: ✨ Auto-Expand with ▾ dropdown templates
 
-| Control | Description |
-|---------|-------------|
-| **Camera Movement selector** | Bottom-left. Blue-tinted button with camera icon. Click opens `CameraMovementSelector` popover below the button. Selecting a movement rewrites the prompt to replace any existing camera movement with the selected one. |
-| **Multi-Shot toggle** | "Multi" button. Only shown for models that support it. When ON, the prompt area splits: a shot list appears above the textarea, and pressing Enter adds the current prompt as a new shot instead of a newline. |
-| **Prompt Mode** | 3 modes: Photoreal (green, camera icon), Audiogen (purple, waveform icon), Timestep (amber, clock icon). |
-| **✨ Expand** | Same as image tab. |
-| **Undo / Redo** | Same as image tab. |
+#### 8d. Multi-Shot Sequence Mode
 
-#### 8d. Camera Movement Selector
-
-Opens as a popover below the camera button:
+When SEQUENCE mode is active (replaces the single prompt with a shot list):
 
 ```
-┌──────────────────────────────────┐
-│ Camera Movements                 │
-│                                  │
-│ ┌────────┐ ┌────────┐ ┌──────┐ │
-│ │ Static │ │Pan Left│ │Pan R │ │
-│ │  Shot  │ │        │ │      │ │
-│ └────────┘ └────────┘ └──────┘ │
-│ ┌────────┐ ┌────────┐ ┌──────┐ │
-│ │Tilt Up │ │Tilt Dwn│ │Dolly │ │
-│ │        │ │        │ │  In  │ │
-│ └────────┘ └────────┘ └──────┘ │
-│ ┌────────┐ ┌────────┐ ┌──────┐ │
-│ │Dolly   │ │Orbit L │ │Orbit │ │
-│ │  Out   │ │        │ │  R   │ │
-│ └────────┘ └────────┘ └──────┘ │
-│ ┌────────┐ ┌────────┐ ┌──────┐ │
-│ │Crane Up│ │CraneDwn│ │Zoom  │ │
-│ │        │ │        │ │  In  │ │
-│ └────────┘ └────────┘ └──────┘ │
-└──────────────────────────────────┘
+┌──────────────────────────────────────┐
+│ SEQUENCE                             │
+│ ┌──────────────────────────────────┐ │
+│ │ SHOT 01                    5.0s  │ │  ← Collapsed (click to expand)
+│ └──────────────────────────────────┘ │
+│ ┌──────────────────────────────────┐ │
+│ │ SHOT 02                    3.5s  │ │  ← Active (expanded)
+│ │ > Close-up of a cybernetic eye  │ │
+│ │   reflecting neon city lights,  │ │
+│ │   high detail, micro-...        │ │
+│ │ [↻][↷][🗑]              [✨ ▾]  │ │
+│ └──────────────────────────────────┘ │
+│ ┌──────────────────────────────────┐ │
+│ │ SHOT 03                    3.5s  │ │  ← Collapsed
+│ └──────────────────────────────────┘ │
+│ ┌──────────────────────────────────┐ │
+│ │              [+]                 │ │  ← Add shot
+│ └──────────────────────────────────┘ │
+└──────────────────────────────────────┘
 ```
 
-Each movement is a visual card with an animation preview. Selecting one sends an "alter" instruction to rewrite the prompt with that camera movement.
+- Each shot row shows: **SHOT ##** label with colored left-edge accent, duration on the right.
+- Click a collapsed shot to expand it and edit its prompt inline (same textarea toolbar as single-prompt mode).
+- **Duration** per shot shown on the right side of each row header (e.g., "5.0s", "3.5s").
+- **[+] button** at the bottom adds a new shot to the sequence.
+- All shots share the same keyframes, references, elements, and parameters.
+- ⌘+Enter generates the full multi-shot sequence.
 
-#### 8e. Multi-Shot Mode
+#### 8e. Duration
+- **Horizontal slider** with orange track and circular thumb.
+- Duration value shown top-right in orange text (e.g., "04.0s").
+- Range varies by model (typically 2s–15s). Step: 0.5s.
+- In sequence mode, this is replaced by per-shot durations in each shot row.
 
-When the Multi toggle is ON:
-
-```
-┌──────────────────────────────────┐
-│ SHOTS                    12s/15s │
-│ ┌──────────────────────────────┐ │
-│ │ ① Close-up cybernetic e... 5s│ │
-│ │ ② Wide shot neon city rai.. 3s│ │
-│ └──────────────────────────────┘ │
-│ ┌──────────────────────────────┐ │
-│ │ Type shot prompt + Enter...  │ │
-│ └──────────────────────────────┘ │
-└──────────────────────────────────┘
-```
-
-- Each shot row: numbered badge, prompt text (truncated), duration dropdown (3-12s), X delete button.
-- Double-click a shot to edit inline.
-- Running total shown top-right (e.g. "12s / 15s"). Turns amber if over 15s.
-- Enter adds the current textarea content as a new shot, clears the textarea.
-- ⌘+Enter generates the full multi-shot video.
-
-#### 8f. Elements Block (for Kling 3.0)
-Same as image tab elements but with video-specific behavior:
-- Elements appear below the prompt.
-- Each element thumbnail has a clickable `@Element1` tag that inserts into the prompt.
-- Autocomplete includes both `@Element1` and `@image 1` options.
-
-#### 8g. Video Parameters
+#### 8f. Video Parameters (2x2 grid)
 | Parameter | Type | Options |
 |-----------|------|---------|
-| Duration | dropdown or number | Model-specific. Common: 3s, 5s, 8s, 10s. |
-| Aspect Ratio | dropdown | 16:9, 9:16, 1:1, 4:3 |
-| Resolution | dropdown | 480p, 720p, 1080p (varies by model) |
-| Motion/Framerate | dropdown | Model-specific (e.g. "24 Cinematic", "60 Smooth") |
+| **Resolution** | dropdown | 720p, 1080p, 4K UHD, 8K UHD (varies by model) |
+| **Audio** | labeled toggle | ATMOS on/off. Orange toggle when active. Enables spatial audio generation alongside video. |
+| **Motion** | stepper/dropdown | Motion intensity level. e.g., "Dynamic (7)". Range 1–10. |
+| **Framerate** | dropdown | 24 Cinematic, 30 Standard, 60 Smooth |
+
+#### 8g. Advanced Export Settings (collapsible)
+- Contains model-specific advanced parameters (guidance, seed, codec options, etc.).
+- Same collapsible pattern as image tab's Advanced Settings.
 
 ---
 
 ### Feature 9: Generation Controls — Other Tabs
+
+⚠️ **NOT IN SPRINT 1 SCOPE:** All tabs other than Image and Video are deferred to later sprints. These are documented here for context only, no implementation required for Sprint 1.
 
 #### 9a. Tools Tab
 - Same layout as Image/Video but models are "Special Pipelines":
@@ -1682,7 +1920,7 @@ Same as image tab elements but with video-specific behavior:
 - Input is typically a file (image or video) rather than a text prompt.
 - Parameters are model-specific and rendered dynamically.
 
-#### 9b. Audio Tab (Sprint 1 Placeholder)
+#### 9b. Audio Tab
 ```
 ┌──────────────────────────────────┐
 │     🎵                           │
@@ -1785,7 +2023,7 @@ Same as image tab elements but with video-specific behavior:
  4. BACKEND: Creates GenerationJob record (status: "pending")
     - Stores ALL settings on the job record for full reproducibility
 
- 5. BACKEND: Dispatches to Celery task queue
+ 5. BACKEND: Dispatches to background worker queue
 
  6. BACKEND: Returns job_id immediately
 
@@ -1797,16 +2035,16 @@ Same as image tab elements but with video-specific behavior:
  8. FRONTEND: Polls GET /api/generate/{job_id}/ every 2 seconds
     - Updates progress bar based on response.progress (0-100)
 
-    --- Meanwhile, in the Celery worker ---
-    a. Resolves ref File records → downloads from S3 if needed
-    b. Resolves element File records → downloads from S3 if needed
+    --- Meanwhile, in the background worker ---
+    a. Resolves ref File records → downloads from Object Storage if needed
+    b. Resolves element File records → downloads from Object Storage if needed
     c. Builds API request for the AI model provider
     d. If cinematographer settings are active, appends camera text to prompt
     e. Calls the AI model API (Kling, Flux, etc.)
     f. Waits for completion (some providers are async themselves)
     g. Downloads the result
     h. Generates filename: {timestamp}_{user}_{model}_{hash}.{ext}
-    i. Uploads to S3: {project_id}/generations/{filename}
+    i. Uploads to Object Storage: {project_id}/generations/{filename}
     j. Creates File record with ALL metadata (prompt, settings, elements)
     k. Creates FileAssignment(file=new_file, shot=target_shot, role="output")
     l. Sets refs_used M2M on the File to link input refs
@@ -1824,7 +2062,7 @@ Same as image tab elements but with video-specific behavior:
 **Retry flow:**
 When the user clicks the **Retry** button on an output tile:
 1. Frontend reads the original job's parameters from the ShotFile metadata
-2. Calls `POST /api/generate/{job_id}/retry/`
+2. Populates generation controls with exact same parameters
 3. Backend creates a new GenerationJob with identical settings but a new random seed
 4. Same flow as above continues
 
@@ -1923,11 +2161,11 @@ When you drag an asset into a shot or click "Use as Reference", the backend crea
 3. Clicks the **📎 Use as Reference** button (bottom-left hover controls)
 4. Frontend calls `POST /api/shots/{sh05_id}/assignments/` with `{ file_id, role: "input" }`
 5. Backend creates a FileAssignment: `(file=file_xyz, shot=sh05, role="input")`
-6. **No file is copied on S3.** The file stays in its original location.
+6. **No file is copied on Object Storage.** The file stays in its original location.
 7. Frontend refreshes SH05's file list — the tagged file appears with an emerald border
 
 **Why this is better:**
-- Zero S3 storage cost for ref usage
+- Zero Object Storage storage cost for ref usage
 - If the artist later removes the ref tag, the original file is untouched
 - You can query "where is this file used?" by listing its assignments
 - If the file is soft-deleted, it vanishes from all shots simultaneously (and can be restored to bring it back everywhere)
@@ -1955,7 +2193,7 @@ Assignments:
 3. Backend:
    - Sets `published=true` on the ShotFile
    - Sets `published=false` on any previously published file
-   - Updates `shot.published_output` to this file's S3 key
+   - Updates `shot.published_output` to this file's Object Storage key
 4. Frontend shows ★ published badge on the tile (violet circle, top-left)
 
 In Sprint 1 this is a local marker. In Sprint 2, published outputs get pinned rightmost on the global board and optionally pushed to Kitsu.
@@ -1978,14 +2216,14 @@ ark_backend/
 │   ├── views.py           # REST views for all CRUD
 │   ├── urls.py
 │   └── services/
-│         ├── s3.py         # S3 upload, download, copy, presigned URLs
+│         ├── s3.py         # Object Storage upload, download, copy, presigned URLs
 │         └── manifest.py   # Read/write manifest.json
 ├── generation/
 │   ├── models.py          # GenerationJob, PromptHistory
 │   ├── serializers.py
 │   ├── views.py           # Generate, poll, retry endpoints
 │   ├── urls.py
-│   └── tasks.py           # Celery tasks for async generation
+│   └── tasks.py           # Background async generation tasks
 ├── chat/
 │   ├── views.py           # LLM proxy endpoint
 │   └── prompts.py         # System prompt presets
@@ -2067,11 +2305,14 @@ Everything in Sprint 1 is built to accommodate Sprint 2 without breaking changes
 ```
 SECRET_KEY=django-secret-key
 DATABASE_URL=postgres://...
-REDIS_URL=redis://localhost:6379/0
-AWS_ACCESS_KEY_ID=...
-AWS_SECRET_ACCESS_KEY=...
-AWS_S3_BUCKET=ark-production
-AWS_S3_REGION=us-east-1
+# No external queue service required in Sprint 1
+OBJECT_STORAGE_ACCESS_KEY=...
+OBJECT_STORAGE_SECRET_KEY=...
+OBJECT_STORAGE_BUCKET=ark-production
+OBJECT_STORAGE_REGION=...
+
+# Provider agnostic object storage.
+# Works with S3, GCS, Cloudflare R2, MinIO, or any S3-compatible service.
 CORS_ALLOWED_ORIGINS=http://localhost:3000
 ```
 

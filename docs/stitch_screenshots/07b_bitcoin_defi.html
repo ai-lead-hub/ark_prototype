@@ -1,0 +1,1568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AISCOPE — Master UI (Bitcoin DeFi)</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    /* ═══════════════════════════════════════════
+       TOKENS — Bitcoin DeFi Design System
+       ═══════════════════════════════════════════ */
+    :root {
+      --bg: #030304;
+      --surface: #0F1115;
+      --text: #FFFFFF;
+      --muted: #94A3B8;
+      --border: #1E293B;
+      --primary: #F7931A;
+      --secondary: #EA580C;
+      --tertiary: #FFD600;
+      --border-alpha: rgba(255,255,255,0.1);
+      --border-hover: rgba(247,147,26,0.5);
+      --glow-orange: 0 0 20px -5px rgba(234,88,12,0.5);
+      --glow-orange-intense: 0 0 30px -5px rgba(234,88,12,0.7);
+      --gradient-primary: linear-gradient(to right, #EA580C, #F7931A);
+      --glass: rgba(15,17,21,0.8);
+      --glass-border: rgba(255,255,255,0.08);
+      --font-heading: 'Space Grotesk', sans-serif;
+      --font-body: 'Inter', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      --radius-card: 16px;
+      --radius-full: 9999px;
+      --radius-lg: 12px;
+      --radius-sm: 8px;
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: var(--font-body);
+      background: var(--bg);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+      overflow: hidden;
+      height: 100vh;
+    }
+
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: var(--radius-full); }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(247,147,26,0.3); }
+
+    .app { display: flex; height: 100vh; position: relative; }
+
+    /* Background grid pattern */
+    .app::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+      background-size: 50px 50px;
+      mask-image: radial-gradient(ellipse at 60% 50%, black 20%, transparent 70%);
+      -webkit-mask-image: radial-gradient(ellipse at 60% 50%, black 20%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Orange radial blob behind controls */
+    .app::after {
+      content: '';
+      position: fixed;
+      top: 30%;
+      left: 200px;
+      width: 500px;
+      height: 500px;
+      background: radial-gradient(circle, rgba(234,88,12,0.07) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ═══════════════════════════════════════════
+       MODE RAIL (48px)
+       ═══════════════════════════════════════════ */
+    .mode-rail {
+      width: 48px;
+      background: var(--surface);
+      border-right: 1px solid var(--border-alpha);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 10px 0;
+      gap: 4px;
+      flex-shrink: 0;
+      z-index: 2;
+    }
+
+    .rail-logo {
+      width: 34px;
+      height: 34px;
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      border: 2px solid transparent;
+      background-image: linear-gradient(var(--surface), var(--surface)), var(--gradient-primary);
+      background-origin: border-box;
+      background-clip: padding-box, border-box;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-heading);
+      font-weight: 700;
+      font-size: 12px;
+      color: var(--primary);
+      margin-bottom: 12px;
+      cursor: pointer;
+    }
+
+    .rail-btn {
+      width: 36px;
+      height: 36px;
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: var(--radius-sm);
+      position: relative;
+      transition: all 0.3s ease;
+      font-size: 16px;
+    }
+    .rail-btn:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+    .rail-btn.active {
+      color: var(--primary);
+      background: rgba(247,147,26,0.08);
+    }
+    .rail-btn.active::before {
+      content: '';
+      position: absolute;
+      left: -6px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 3px;
+      height: 20px;
+      background: var(--gradient-primary);
+      border-radius: 0 var(--radius-full) var(--radius-full) 0;
+    }
+
+    .rail-spacer { flex: 1; }
+
+    /* ═══════════════════════════════════════════
+       CONTROLS PANE (380px)
+       ═══════════════════════════════════════════ */
+    .controls-pane {
+      width: 380px;
+      background: var(--surface);
+      border-right: 1px solid var(--border-alpha);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      z-index: 2;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+    .controls-header {
+      padding: 16px 20px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-alpha);
+    }
+
+    .controls-title {
+      font-family: var(--font-heading);
+      font-weight: 700;
+      font-size: 14px;
+      letter-spacing: 2px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--primary);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(247,147,26,0.4); }
+      50% { opacity: 0.7; box-shadow: 0 0 0 6px rgba(247,147,26,0); }
+    }
+
+    .fq-toggle {
+      display: flex;
+      background: rgba(255,255,255,0.05);
+      border-radius: var(--radius-full);
+      padding: 2px;
+      gap: 2px;
+    }
+
+    .fq-btn {
+      padding: 4px 14px;
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      border-radius: var(--radius-full);
+      transition: all 0.3s ease;
+      letter-spacing: 0.5px;
+    }
+    .fq-btn.active {
+      background: var(--gradient-primary);
+      color: var(--text);
+    }
+    .fq-btn:hover:not(.active) { color: var(--text); }
+
+    /* Model card */
+    .model-section { padding: 14px 20px; }
+
+    .model-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      border-radius: var(--radius-lg);
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border-alpha);
+      backdrop-filter: blur(10px);
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    .model-card:hover {
+      border-color: var(--border-hover);
+      box-shadow: var(--glow-orange);
+    }
+
+    .model-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: var(--radius-sm);
+      background: rgba(247,147,26,0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    .model-info { flex: 1; min-width: 0; }
+
+    .model-name {
+      font-family: var(--font-heading);
+      font-weight: 600;
+      font-size: 13px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .model-meta {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .model-auto {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      padding: 3px 10px;
+      border-radius: var(--radius-full);
+      border: 1px solid transparent;
+      background-image: linear-gradient(var(--surface), var(--surface)), var(--gradient-primary);
+      background-origin: border-box;
+      background-clip: padding-box, border-box;
+      color: var(--primary);
+      flex-shrink: 0;
+    }
+
+    .model-caret {
+      color: var(--muted);
+      font-size: 12px;
+      flex-shrink: 0;
+      transition: color 0.3s;
+    }
+    .model-card:hover .model-caret { color: var(--primary); }
+
+    /* References */
+    .section-bar {
+      padding: 10px 20px 6px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .section-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 1.5px;
+      color: var(--muted);
+    }
+
+    .section-add {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--primary);
+      cursor: pointer;
+      background: none;
+      border: none;
+      letter-spacing: 0.5px;
+      transition: color 0.3s;
+    }
+    .section-add:hover { color: var(--tertiary); }
+
+    .ref-thumbs {
+      display: flex;
+      gap: 8px;
+      padding: 6px 20px 10px;
+    }
+
+    .ref-thumb {
+      width: 46px;
+      height: 46px;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-alpha);
+      overflow: hidden;
+      position: relative;
+      cursor: pointer;
+      transition: all 0.3s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .ref-thumb:hover { border-color: var(--border-hover); }
+
+    .ref-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .ref-thumb.empty {
+      background: rgba(255,255,255,0.03);
+      color: var(--muted);
+      font-size: 18px;
+      font-weight: 300;
+    }
+    .ref-thumb.empty:hover { color: var(--primary); background: rgba(247,147,26,0.05); }
+
+    .ref-thumb .ref-close {
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--secondary);
+      color: white;
+      font-size: 9px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      border: none;
+      line-height: 1;
+    }
+    .ref-thumb:hover .ref-close { display: flex; }
+
+    .ref-thumb.filled {
+      background: linear-gradient(135deg, rgba(247,147,26,0.2), rgba(234,88,12,0.1));
+    }
+
+    /* Prompt */
+    .prompt-section { padding: 6px 20px 10px; }
+
+    .prompt-wrap {
+      position: relative;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-alpha);
+      background: rgba(255,255,255,0.03);
+      transition: all 0.3s;
+    }
+    .prompt-wrap:focus-within {
+      border-color: var(--primary);
+      box-shadow: 0 0 15px -5px rgba(247,147,26,0.3);
+    }
+
+    .prompt-prefix {
+      position: absolute;
+      top: 13px;
+      left: 14px;
+      color: var(--primary);
+      font-family: var(--font-mono);
+      font-size: 14px;
+      font-weight: 600;
+      pointer-events: none;
+    }
+
+    .prompt-textarea {
+      width: 100%;
+      min-height: 70px;
+      max-height: 140px;
+      padding: 12px 14px 12px 30px;
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font-family: var(--font-body);
+      font-size: 13px;
+      line-height: 1.5;
+      resize: none;
+      outline: none;
+    }
+    .prompt-textarea::placeholder { color: rgba(148,163,184,0.4); }
+
+    .prompt-footer {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding: 4px 10px 8px;
+    }
+
+    .auto-chip {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--muted);
+      padding: 3px 10px;
+      border-radius: var(--radius-full);
+      background: rgba(255,255,255,0.04);
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .auto-chip:hover { color: var(--primary); background: rgba(247,147,26,0.06); }
+
+    .auto-chip .chip-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--primary);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    /* Cinematographer button */
+    .cinema-section { padding: 6px 20px; }
+
+    .cinema-btn {
+      width: 100%;
+      padding: 10px 16px;
+      border-radius: var(--radius-full);
+      border: 1px dashed rgba(255,255,255,0.15);
+      background: transparent;
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 1.5px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.3s;
+    }
+    .cinema-btn:hover {
+      border-color: var(--border-hover);
+      color: var(--primary);
+      background: rgba(247,147,26,0.03);
+    }
+
+    .cinema-summary {
+      padding: 6px 20px 10px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    .cinema-summary .highlight { color: var(--primary); }
+
+    /* Parameters 2x2 grid */
+    .params-section { padding: 6px 20px 10px; }
+
+    .params-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .param-box {
+      padding: 10px 12px;
+      border-radius: var(--radius-lg);
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border-alpha);
+      backdrop-filter: blur(6px);
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .param-box:hover { border-color: var(--border-hover); }
+
+    .param-label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 1px;
+      margin-bottom: 4px;
+    }
+
+    .param-value {
+      font-family: var(--font-heading);
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    /* Advanced */
+    .advanced-section { padding: 6px 20px; }
+
+    .advanced-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--muted);
+      cursor: pointer;
+      background: none;
+      border: none;
+      letter-spacing: 1px;
+      transition: color 0.3s;
+      width: 100%;
+      padding: 8px 0;
+    }
+    .advanced-toggle:hover { color: var(--text); }
+    .advanced-toggle .adv-arrow { transition: transform 0.3s; font-size: 9px; }
+    .advanced-toggle.open .adv-arrow { transform: rotate(90deg); }
+
+    /* Generate footer */
+    .generate-section {
+      padding: 14px 20px;
+      margin-top: auto;
+      border-top: 1px solid var(--border-alpha);
+    }
+
+    .generate-btn {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: var(--radius-full);
+      background: var(--gradient-primary);
+      color: var(--text);
+      font-family: var(--font-heading);
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: var(--glow-orange);
+    }
+    .generate-btn:hover {
+      transform: scale(1.05);
+      box-shadow: var(--glow-orange-intense);
+    }
+    .generate-btn:active { transform: scale(1.02); }
+
+    .generate-meta {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      margin-top: 10px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--muted);
+    }
+    .generate-meta span { display: flex; align-items: center; gap: 4px; }
+    .generate-meta .val { color: var(--primary); }
+
+    /* ═══════════════════════════════════════════
+       CONTENT AREA
+       ═══════════════════════════════════════════ */
+    .content-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      z-index: 1;
+      min-width: 0;
+    }
+
+    .content-header {
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-alpha);
+    }
+
+    .breadcrumb {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .breadcrumb .bc-active { color: var(--text); }
+    .breadcrumb .bc-sep { margin: 0 6px; color: rgba(255,255,255,0.2); }
+
+    .content-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .sort-btn, .view-btn {
+      padding: 5px 12px;
+      border: 1px solid var(--border-alpha);
+      background: transparent;
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      cursor: pointer;
+      border-radius: var(--radius-lg);
+      transition: all 0.3s;
+    }
+    .sort-btn:hover, .view-btn:hover { border-color: var(--border-hover); color: var(--text); }
+    .view-btn.active { background: rgba(247,147,26,0.08); color: var(--primary); border-color: var(--border-hover); }
+
+    /* File grid */
+    .file-grid-wrap {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 24px;
+    }
+
+    .file-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    .file-card {
+      border-radius: var(--radius-card);
+      border: 1px solid var(--border-alpha);
+      background: var(--surface);
+      overflow: hidden;
+      transition: all 0.3s;
+      cursor: pointer;
+    }
+    .file-card:hover {
+      border-color: var(--border-hover);
+      box-shadow: var(--glow-orange);
+    }
+
+    .file-thumb {
+      aspect-ratio: 4/3;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .file-thumb-bg {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .file-badge {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      padding: 3px 8px;
+      border-radius: var(--radius-lg);
+      background: rgba(247,147,26,0.15);
+      color: var(--primary);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    .file-menu-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 26px;
+      height: 26px;
+      border-radius: var(--radius-full);
+      background: rgba(0,0,0,0.5);
+      border: none;
+      color: white;
+      font-size: 14px;
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s;
+    }
+    .file-card:hover .file-menu-btn { display: flex; }
+    .file-menu-btn:hover { background: var(--secondary); }
+
+    /* Hover overlay with action buttons */
+    .file-hover-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(3,3,4,0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+    }
+    .file-card:hover .file-hover-overlay {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .hover-action-btn {
+      width: 38px;
+      height: 38px;
+      border-radius: var(--radius-full);
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s;
+    }
+    .hover-action-btn:hover {
+      background: rgba(247,147,26,0.2);
+      border-color: var(--primary);
+      color: var(--primary);
+      box-shadow: var(--glow-orange);
+    }
+
+    .file-info {
+      padding: 10px 12px;
+    }
+
+    .file-name {
+      font-family: var(--font-body);
+      font-size: 12px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .file-meta {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 3px;
+    }
+
+    /* Queue strip */
+    .queue-strip {
+      padding: 10px 24px;
+      border-top: 1px solid var(--border-alpha);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--surface);
+    }
+
+    .queue-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .queue-credits {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--primary);
+      font-weight: 600;
+    }
+
+    /* ═══════════════════════════════════════════
+       CINEMATOGRAPHER MODAL
+       ═══════════════════════════════════════════ */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.75);
+      z-index: 100;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .modal-overlay.show {
+      display: flex;
+      opacity: 1;
+    }
+
+    .modal {
+      width: 680px;
+      max-height: 85vh;
+      border-radius: var(--radius-card);
+      background: var(--surface);
+      border: 1px solid var(--border-alpha);
+      box-shadow: var(--glow-orange);
+      backdrop-filter: blur(20px);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transform: scale(0.95);
+      transition: transform 0.3s;
+    }
+    .modal-overlay.show .modal { transform: scale(1); }
+
+    .modal-header {
+      padding: 18px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-alpha);
+    }
+
+    .modal-title {
+      font-family: var(--font-heading);
+      font-weight: 700;
+      font-size: 16px;
+      letter-spacing: 2px;
+      background: var(--gradient-primary);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .modal-close {
+      width: 32px;
+      height: 32px;
+      border-radius: var(--radius-full);
+      border: 1px solid var(--border-alpha);
+      background: transparent;
+      color: var(--muted);
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s;
+    }
+    .modal-close:hover {
+      border-color: var(--secondary);
+      color: var(--secondary);
+      background: rgba(234,88,12,0.1);
+    }
+
+    /* Tabs */
+    .modal-tabs {
+      display: flex;
+      gap: 4px;
+      padding: 10px 24px 0;
+    }
+
+    .modal-tab {
+      padding: 8px 20px;
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 1px;
+      cursor: pointer;
+      border-radius: var(--radius-full);
+      transition: all 0.3s;
+      position: relative;
+    }
+    .modal-tab:hover { color: var(--text); }
+    .modal-tab.active { color: var(--primary); background: rgba(247,147,26,0.08); }
+    .modal-tab.active::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 60%;
+      height: 2px;
+      border-radius: var(--radius-full);
+    }
+    .modal-tab[data-tab="camera"].active { color: var(--primary); }
+    .modal-tab[data-tab="camera"].active::after { background: var(--primary); }
+    .modal-tab[data-tab="lighting"].active { color: var(--tertiary); }
+    .modal-tab[data-tab="lighting"].active::after { background: var(--tertiary); }
+    .modal-tab[data-tab="style"].active { color: var(--secondary); }
+    .modal-tab[data-tab="style"].active::after { background: var(--secondary); }
+
+    /* Tab content */
+    .modal-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 24px;
+    }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* Camera tab — 4 columns */
+    .camera-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      height: 340px;
+    }
+
+    .camera-col {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      overflow-y: auto;
+    }
+
+    .camera-col-header {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 1.5px;
+      color: var(--primary);
+      padding: 6px 8px;
+      background: rgba(247,147,26,0.06);
+      border-radius: var(--radius-sm);
+      margin-bottom: 4px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    .camera-item {
+      padding: 7px 10px;
+      border-radius: var(--radius-lg);
+      border: 1px solid transparent;
+      background: rgba(255,255,255,0.03);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.3s;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .camera-item:hover { color: var(--text); border-color: rgba(255,255,255,0.1); }
+    .camera-item.active {
+      border-color: var(--primary);
+      color: var(--primary);
+      background: rgba(247,147,26,0.08);
+      box-shadow: 0 0 12px -4px rgba(247,147,26,0.4);
+    }
+
+    /* Lighting & Style grids */
+    .visual-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+
+    .visual-card {
+      aspect-ratio: 1;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-alpha);
+      background: rgba(255,255,255,0.03);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: all 0.3s;
+      padding: 12px;
+    }
+    .visual-card:hover { border-color: rgba(255,255,255,0.2); }
+
+    .visual-card .vc-icon { font-size: 26px; }
+    .visual-card .vc-label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.5px;
+      color: var(--muted);
+      text-align: center;
+      transition: color 0.3s;
+    }
+
+    /* Lighting active */
+    .visual-card.active-lighting {
+      border-color: var(--tertiary);
+      background: rgba(255,214,0,0.06);
+      box-shadow: 0 0 15px -5px rgba(255,214,0,0.4);
+    }
+    .visual-card.active-lighting .vc-label { color: var(--tertiary); }
+
+    /* Style active */
+    .visual-card.active-style {
+      border-color: var(--secondary);
+      background: rgba(234,88,12,0.06);
+      box-shadow: 0 0 15px -5px rgba(234,88,12,0.4);
+    }
+    .visual-card.active-style .vc-label { color: var(--secondary); }
+
+    /* Modal footer */
+    .modal-footer {
+      padding: 14px 24px;
+      border-top: 1px solid var(--border-alpha);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .modal-summary {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--muted);
+      max-width: 360px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-reset {
+      padding: 8px 20px;
+      border-radius: var(--radius-full);
+      border: 1px solid var(--border-alpha);
+      background: transparent;
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 1px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .btn-reset:hover { border-color: var(--border-hover); color: var(--text); }
+
+    .btn-apply {
+      padding: 8px 24px;
+      border-radius: var(--radius-full);
+      border: none;
+      background: var(--gradient-primary);
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      cursor: pointer;
+      transition: all 0.3s;
+      box-shadow: var(--glow-orange);
+    }
+    .btn-apply:hover { box-shadow: var(--glow-orange-intense); transform: scale(1.03); }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- MODE RAIL -->
+    <div class="mode-rail">
+      <div class="rail-logo">AS</div>
+      <button class="rail-btn active" title="Image">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+      </button>
+      <button class="rail-btn" title="Video">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+      </button>
+      <button class="rail-btn" title="Audio">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+      </button>
+      <button class="rail-btn" title="Tools">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+      </button>
+      <div class="rail-spacer"></div>
+      <button class="rail-btn" title="History">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      </button>
+      <button class="rail-btn" title="Settings">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+    </div>
+
+    <!-- CONTROLS PANE -->
+    <div class="controls-pane">
+      <!-- Header -->
+      <div class="controls-header">
+        <div class="controls-title">
+          <span class="pulse-dot"></span>
+          IMAGE
+        </div>
+        <div class="fq-toggle">
+          <button class="fq-btn active" data-mode="fast">FAST</button>
+          <button class="fq-btn" data-mode="quality">QUALITY</button>
+        </div>
+      </div>
+
+      <!-- Model -->
+      <div class="model-section">
+        <div class="model-card">
+          <div class="model-icon">&#x2B21;</div>
+          <div class="model-info">
+            <div class="model-name">Flux 1.1 Pro Ultra</div>
+            <div class="model-meta">FAL &middot; $0.06 &middot; T2I</div>
+          </div>
+          <span class="model-auto">AUTO</span>
+          <span class="model-caret">&#9662;</span>
+        </div>
+      </div>
+
+      <!-- References -->
+      <div class="section-bar">
+        <span class="section-label">REFERENCES</span>
+        <button class="section-add">+ ADD</button>
+      </div>
+      <div class="ref-thumbs">
+        <div class="ref-thumb filled">
+          <div style="width:100%;height:100%;background:linear-gradient(135deg,rgba(247,147,26,0.3),rgba(234,88,12,0.15));display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--primary);">&#x1F304;</div>
+          <button class="ref-close">&times;</button>
+        </div>
+        <div class="ref-thumb filled">
+          <div style="width:100%;height:100%;background:linear-gradient(135deg,rgba(255,214,0,0.2),rgba(247,147,26,0.1));display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--tertiary);">&#x1F307;</div>
+          <button class="ref-close">&times;</button>
+        </div>
+        <div class="ref-thumb empty">+</div>
+      </div>
+
+      <!-- Prompt -->
+      <div class="prompt-section">
+        <div class="prompt-wrap">
+          <span class="prompt-prefix">&gt;</span>
+          <textarea class="prompt-textarea" placeholder="Describe your image..."></textarea>
+          <div class="prompt-footer">
+            <div class="auto-chip">
+              <span class="chip-dot"></span>
+              Auto-expand
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cinematographer -->
+      <div class="cinema-section">
+        <button class="cinema-btn" id="openCinema">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          CINEMATOGRAPHER
+        </button>
+      </div>
+      <div class="cinema-summary" id="cinemaSummary">
+        <span class="highlight">ARRI Alexa 65</span> &middot; Cooke S7/i &middot; <span class="highlight">35mm</span> &middot; f/1.4 &middot; Golden Hour &middot; Cinematic
+      </div>
+
+      <!-- Parameters -->
+      <div class="params-section">
+        <div class="params-grid">
+          <div class="param-box">
+            <div class="param-label">ASPECT</div>
+            <div class="param-value">16:9</div>
+          </div>
+          <div class="param-box">
+            <div class="param-label">STEPS</div>
+            <div class="param-value">30</div>
+          </div>
+          <div class="param-box">
+            <div class="param-label">CFG</div>
+            <div class="param-value">7.5</div>
+          </div>
+          <div class="param-box">
+            <div class="param-label">SEED</div>
+            <div class="param-value">Auto</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Advanced -->
+      <div class="advanced-section">
+        <button class="advanced-toggle" id="advToggle">
+          <span class="adv-arrow">&#9654;</span>
+          ADVANCED
+        </button>
+      </div>
+
+      <!-- Generate -->
+      <div class="generate-section">
+        <button class="generate-btn">GENERATE</button>
+        <div class="generate-meta">
+          <span>Cost: <span class="val">$0.06</span></span>
+          <span>Time: <span class="val">~4s</span></span>
+          <span>Quality: <span class="val">Ultra</span></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTENT AREA -->
+    <div class="content-area">
+      <div class="content-header">
+        <div class="breadcrumb">
+          Projects <span class="bc-sep">/</span> Campaign Q1 <span class="bc-sep">/</span> <span class="bc-active">Generated</span>
+        </div>
+        <div class="content-actions">
+          <button class="sort-btn">Sort: Recent</button>
+          <button class="view-btn active">Grid</button>
+          <button class="view-btn">List</button>
+        </div>
+      </div>
+      <div class="file-grid-wrap">
+        <div class="file-grid" id="fileGrid"></div>
+      </div>
+      <div class="queue-strip">
+        <div class="queue-left">
+          <span class="pulse-dot"></span>
+          Processing 1 of 3 &middot; Queue: 2 remaining
+        </div>
+        <div class="queue-credits">142.8 credits remaining</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CINEMATOGRAPHER MODAL -->
+  <div class="modal-overlay" id="cinemaModal">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">CINEMATOGRAPHER</div>
+        <button class="modal-close" id="closeCinema">&times;</button>
+      </div>
+      <div class="modal-tabs">
+        <button class="modal-tab active" data-tab="camera">CAMERA</button>
+        <button class="modal-tab" data-tab="lighting">LIGHTING</button>
+        <button class="modal-tab" data-tab="style">STYLE</button>
+      </div>
+      <div class="modal-body">
+        <!-- Camera Tab -->
+        <div class="tab-panel active" data-panel="camera">
+          <div class="camera-grid">
+            <div class="camera-col" data-col="body">
+              <div class="camera-col-header">BODY</div>
+              <div class="camera-item active" data-val="ARRI Alexa 65">ARRI Alexa 65</div>
+              <div class="camera-item" data-val="RED Raptor 8K">RED Raptor 8K</div>
+              <div class="camera-item" data-val="Sony Venice 2">Sony Venice 2</div>
+              <div class="camera-item" data-val="Panavision DXL2">Panavision DXL2</div>
+              <div class="camera-item" data-val="Blackmagic URSA 12K">BM URSA 12K</div>
+              <div class="camera-item" data-val="Canon C500 MkII">Canon C500 MkII</div>
+              <div class="camera-item" data-val="IMAX MSMD">IMAX MSMD</div>
+            </div>
+            <div class="camera-col" data-col="lens">
+              <div class="camera-col-header">LENS</div>
+              <div class="camera-item active" data-val="Cooke S7/i">Cooke S7/i</div>
+              <div class="camera-item" data-val="Zeiss SP">Zeiss SP</div>
+              <div class="camera-item" data-val="Primo 70">Primo 70</div>
+              <div class="camera-item" data-val="ARRI Sig">ARRI Sig</div>
+              <div class="camera-item" data-val="Atlas 1.5x">Atlas 1.5x</div>
+              <div class="camera-item" data-val="Leica M">Leica M</div>
+            </div>
+            <div class="camera-col" data-col="focal">
+              <div class="camera-col-header">FOCAL</div>
+              <div class="camera-item" data-val="14mm">14mm</div>
+              <div class="camera-item" data-val="24mm">24mm</div>
+              <div class="camera-item active" data-val="35mm">35mm</div>
+              <div class="camera-item" data-val="50mm">50mm</div>
+              <div class="camera-item" data-val="85mm">85mm</div>
+              <div class="camera-item" data-val="100mm">100mm</div>
+              <div class="camera-item" data-val="135mm">135mm</div>
+              <div class="camera-item" data-val="200mm">200mm</div>
+            </div>
+            <div class="camera-col" data-col="fstop">
+              <div class="camera-col-header">f-STOP</div>
+              <div class="camera-item" data-val="f/1.2">f/1.2</div>
+              <div class="camera-item active" data-val="f/1.4">f/1.4</div>
+              <div class="camera-item" data-val="f/2">f/2</div>
+              <div class="camera-item" data-val="f/2.8">f/2.8</div>
+              <div class="camera-item" data-val="f/4">f/4</div>
+              <div class="camera-item" data-val="f/5.6">f/5.6</div>
+              <div class="camera-item" data-val="f/8">f/8</div>
+              <div class="camera-item" data-val="f/11">f/11</div>
+            </div>
+          </div>
+        </div>
+        <!-- Lighting Tab -->
+        <div class="tab-panel" data-panel="lighting">
+          <div class="visual-grid" id="lightingGrid"></div>
+        </div>
+        <!-- Style Tab -->
+        <div class="tab-panel" data-panel="style">
+          <div class="visual-grid" id="styleGrid"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <div class="modal-summary" id="modalSummary">ARRI Alexa 65 &middot; Cooke S7/i &middot; 35mm &middot; f/1.4</div>
+        <div class="modal-actions">
+          <button class="btn-reset" id="resetCinema">RESET</button>
+          <button class="btn-apply" id="applyCinema">APPLY</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ═══════════════════════════════════════════
+       STATE
+       ═══════════════════════════════════════════ */
+    const defaults = {
+      body: 'ARRI Alexa 65',
+      lens: 'Cooke S7/i',
+      focal: '35mm',
+      fstop: 'f/1.4',
+      lighting: 'Golden Hour',
+      style: 'Cinematic'
+    };
+
+    let state = { ...defaults };
+
+    const lightingOptions = [
+      { icon: '\u2600\uFE0F', label: 'Golden Hour' },
+      { icon: '\uD83C\uDF19', label: 'Blue Hour' },
+      { icon: '\uD83D\uDCA1', label: 'Rembrandt' },
+      { icon: '\u2728', label: 'Butterfly' },
+      { icon: '\uD83C\uDF1F', label: 'Split' },
+      { icon: '\uD83D\uDD25', label: 'Practical' },
+      { icon: '\uD83C\uDF0C', label: 'Neon Noir' },
+      { icon: '\u26A1', label: 'High Key' },
+      { icon: '\uD83C\uDF11', label: 'Low Key' }
+    ];
+
+    const styleOptions = [
+      { icon: '\uD83C\uDFAC', label: 'Cinematic' },
+      { icon: '\uD83D\uDCF7', label: 'Documentary' },
+      { icon: '\uD83C\uDF86', label: 'Ethereal' },
+      { icon: '\uD83D\uDD76\uFE0F', label: 'Film Noir' },
+      { icon: '\uD83C\uDF08', label: 'Technicolor' },
+      { icon: '\uD83C\uDFDE\uFE0F', label: 'Naturalistic' },
+      { icon: '\uD83D\uDE80', label: 'Sci-Fi' },
+      { icon: '\uD83C\uDFA8', label: 'Painterly' },
+      { icon: '\uD83D\uDDA4', label: 'Monochrome' }
+    ];
+
+    const fileCards = [
+      { name: 'btc_hero_render_01.png', meta: '2048x1152 \u00B7 4.2MB \u00B7 2m ago', gradient: 'linear-gradient(135deg, #1a0f00, #0f1115, #1a0800)' },
+      { name: 'defi_dashboard_v3.png', meta: '1920x1080 \u00B7 3.8MB \u00B7 5m ago', gradient: 'linear-gradient(135deg, #0f1115, #1a0f05, #0a0500)' },
+      { name: 'chain_abstract_07.png', meta: '2048x2048 \u00B7 5.1MB \u00B7 8m ago', gradient: 'linear-gradient(135deg, #0d0800, #0f1115, #150a00)' },
+      { name: 'wallet_concept_02.png', meta: '1536x1024 \u00B7 2.9MB \u00B7 12m ago', gradient: 'linear-gradient(135deg, #0f1115, #0d0700, #0f1115)' },
+      { name: 'mining_rig_scene.png', meta: '2048x1152 \u00B7 4.7MB \u00B7 18m ago', gradient: 'linear-gradient(135deg, #100a00, #0f1115, #0d0600)' },
+      { name: 'protocol_viz_final.png', meta: '1920x1080 \u00B7 3.4MB \u00B7 25m ago', gradient: 'linear-gradient(135deg, #0f1115, #120900, #0f1115)' }
+    ];
+
+    /* ═══════════════════════════════════════════
+       INIT
+       ═══════════════════════════════════════════ */
+    document.addEventListener('DOMContentLoaded', () => {
+      buildFileGrid();
+      buildLightingGrid();
+      buildStyleGrid();
+      bindEvents();
+    });
+
+    /* File grid */
+    function buildFileGrid() {
+      const grid = document.getElementById('fileGrid');
+      grid.innerHTML = fileCards.map(f => `
+        <div class="file-card">
+          <div class="file-thumb">
+            <div class="file-thumb-bg" style="background:${f.gradient};">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="rgba(247,147,26,0.2)" stroke-width="1"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+            </div>
+            <span class="file-badge">IMG</span>
+            <button class="file-menu-btn">\u22EF</button>
+            <div class="file-hover-overlay">
+              <button class="hover-action-btn" title="Retry">\u21BB</button>
+              <button class="hover-action-btn" title="Reuse Prompt">\uD83D\uDCCB</button>
+              <button class="hover-action-btn" title="Download">\u2B07</button>
+            </div>
+          </div>
+          <div class="file-info">
+            <div class="file-name">${f.name}</div>
+            <div class="file-meta">${f.meta}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    /* Lighting grid */
+    function buildLightingGrid() {
+      const grid = document.getElementById('lightingGrid');
+      grid.innerHTML = lightingOptions.map(o => `
+        <div class="visual-card${o.label === state.lighting ? ' active-lighting' : ''}" data-type="lighting" data-val="${o.label}">
+          <span class="vc-icon">${o.icon}</span>
+          <span class="vc-label">${o.label}</span>
+        </div>
+      `).join('');
+    }
+
+    /* Style grid */
+    function buildStyleGrid() {
+      const grid = document.getElementById('styleGrid');
+      grid.innerHTML = styleOptions.map(o => `
+        <div class="visual-card${o.label === state.style ? ' active-style' : ''}" data-type="style" data-val="${o.label}">
+          <span class="vc-icon">${o.icon}</span>
+          <span class="vc-label">${o.label}</span>
+        </div>
+      `).join('');
+    }
+
+    /* ═══════════════════════════════════════════
+       EVENTS
+       ═══════════════════════════════════════════ */
+    function bindEvents() {
+      /* Mode rail */
+      document.querySelectorAll('.rail-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.rail-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+        });
+      });
+
+      /* Fast/Quality toggle */
+      document.querySelectorAll('.fq-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.fq-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+        });
+      });
+
+      /* Advanced toggle */
+      document.getElementById('advToggle').addEventListener('click', function() {
+        this.classList.toggle('open');
+      });
+
+      /* View toggle */
+      document.querySelectorAll('.view-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+        });
+      });
+
+      /* Modal open */
+      document.getElementById('openCinema').addEventListener('click', openModal);
+
+      /* Modal close */
+      document.getElementById('closeCinema').addEventListener('click', closeModal);
+
+      /* Overlay click close */
+      document.getElementById('cinemaModal').addEventListener('click', e => {
+        if (e.target === e.currentTarget) closeModal();
+      });
+
+      /* Escape key */
+      document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') closeModal();
+      });
+
+      /* Tabs */
+      document.querySelectorAll('.modal-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+          document.querySelectorAll('.modal-tab').forEach(t => t.classList.remove('active'));
+          tab.classList.add('active');
+          document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+          document.querySelector(`[data-panel="${tab.dataset.tab}"]`).classList.add('active');
+        });
+      });
+
+      /* Camera column selection */
+      document.querySelectorAll('.camera-col').forEach(col => {
+        col.addEventListener('click', e => {
+          const item = e.target.closest('.camera-item');
+          if (!item) return;
+          col.querySelectorAll('.camera-item').forEach(i => i.classList.remove('active'));
+          item.classList.add('active');
+          state[col.dataset.col] = item.dataset.val;
+          updateModalSummary();
+        });
+      });
+
+      /* Lighting selection */
+      document.getElementById('lightingGrid').addEventListener('click', e => {
+        const card = e.target.closest('.visual-card');
+        if (!card) return;
+        document.querySelectorAll('#lightingGrid .visual-card').forEach(c => c.classList.remove('active-lighting'));
+        card.classList.add('active-lighting');
+        state.lighting = card.dataset.val;
+        updateModalSummary();
+      });
+
+      /* Style selection */
+      document.getElementById('styleGrid').addEventListener('click', e => {
+        const card = e.target.closest('.visual-card');
+        if (!card) return;
+        document.querySelectorAll('#styleGrid .visual-card').forEach(c => c.classList.remove('active-style'));
+        card.classList.add('active-style');
+        state.style = card.dataset.val;
+        updateModalSummary();
+      });
+
+      /* Reset */
+      document.getElementById('resetCinema').addEventListener('click', () => {
+        state = { ...defaults };
+        /* Reset camera columns */
+        document.querySelectorAll('.camera-col').forEach(col => {
+          col.querySelectorAll('.camera-item').forEach(item => {
+            item.classList.toggle('active', item.dataset.val === defaults[col.dataset.col]);
+          });
+        });
+        /* Reset lighting */
+        document.querySelectorAll('#lightingGrid .visual-card').forEach(c => {
+          c.classList.toggle('active-lighting', c.dataset.val === defaults.lighting);
+        });
+        /* Reset style */
+        document.querySelectorAll('#styleGrid .visual-card').forEach(c => {
+          c.classList.toggle('active-style', c.dataset.val === defaults.style);
+        });
+        updateModalSummary();
+      });
+
+      /* Apply */
+      document.getElementById('applyCinema').addEventListener('click', () => {
+        updateCinemaSummary();
+        closeModal();
+      });
+    }
+
+    /* ═══════════════════════════════════════════
+       HELPERS
+       ═══════════════════════════════════════════ */
+    function openModal() {
+      const overlay = document.getElementById('cinemaModal');
+      overlay.style.display = 'flex';
+      requestAnimationFrame(() => overlay.classList.add('show'));
+    }
+
+    function closeModal() {
+      const overlay = document.getElementById('cinemaModal');
+      overlay.classList.remove('show');
+      setTimeout(() => { overlay.style.display = 'none'; }, 300);
+    }
+
+    function updateModalSummary() {
+      document.getElementById('modalSummary').textContent =
+        `${state.body} \u00B7 ${state.lens} \u00B7 ${state.focal} \u00B7 ${state.fstop}`;
+    }
+
+    function updateCinemaSummary() {
+      const el = document.getElementById('cinemaSummary');
+      el.innerHTML =
+        `<span class="highlight">${state.body}</span> \u00B7 ${state.lens} \u00B7 ` +
+        `<span class="highlight">${state.focal}</span> \u00B7 ${state.fstop} \u00B7 ` +
+        `${state.lighting} \u00B7 ${state.style}`;
+    }
+  </script>
+</body>
+</html>

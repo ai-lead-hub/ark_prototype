@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>AiScope Image Lab — Vary Mode</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "tertiary": "#e9c400",
+              "surface-container-lowest": "#0c0e12",
+              "secondary-fixed-dim": "#ffb599",
+              "on-primary": "#4b2800",
+              "on-error-container": "#ffdad6",
+              "secondary-container": "#f66018",
+              "secondary-fixed": "#ffdbce",
+              "on-tertiary-fixed-variant": "#544600",
+              "on-tertiary": "#3a3000",
+              "outline": "#a38d7b",
+              "on-secondary-fixed-variant": "#7f2b00",
+              "on-error": "#690005",
+              "surface-dim": "#111317",
+              "primary-fixed-dim": "#ffb874",
+              "on-primary-fixed": "#2d1600",
+              "surface-container-high": "#282a2e",
+              "background": "#030304",
+              "surface-variant": "#333539",
+              "primary": "#ffb874",
+              "on-secondary-container": "#4f1700",
+              "surface-bright": "#37393e",
+              "on-surface": "#e2e2e8",
+              "inverse-surface": "#e2e2e8",
+              "on-tertiary-container": "#4c3e00",
+              "on-primary-container": "#603500",
+              "on-surface-variant": "#dbc2ae",
+              "surface": "#111317",
+              "outline-variant": "#554335",
+              "on-tertiary-fixed": "#221b00",
+              "surface-tint": "#ffb874",
+              "primary-fixed": "#ffdcbf",
+              "inverse-on-surface": "#2f3035",
+              "tertiary-fixed-dim": "#e9c400",
+              "on-secondary": "#5a1c00",
+              "on-secondary-fixed": "#370e00",
+              "tertiary-container": "#caa900",
+              "on-primary-fixed-variant": "#6b3b00",
+              "surface-container-highest": "#333539",
+              "surface-container-low": "#1a1c20",
+              "tertiary-fixed": "#ffe170",
+              "error-container": "#93000a",
+              "error": "#ffb4ab",
+              "secondary": "#ffb599",
+              "primary-container": "#f7931a",
+              "surface-container": "#1e2024",
+              "inverse-primary": "#8c4f00",
+              "on-background": "#e2e2e8",
+              "electric-cyan": "#0C9EEA"
+            },
+            fontFamily: {
+              "headline": ["Space Grotesk"],
+              "body": ["Inter"],
+              "label": ["JetBrains Mono"]
+            },
+            borderRadius: {"DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .kinetic-grid {
+            background-image: 
+                linear-gradient(to right, rgba(247, 147, 26, 0.03) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(247, 147, 26, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            mask-image: radial-gradient(circle at center, black, transparent 80%);
+        }
+        .atmospheric-blur {
+            filter: blur(120px);
+            background: radial-gradient(circle, rgba(234, 88, 12, 0.08) 0%, transparent 70%);
+        }
+        .mask-overlay {
+            background: radial-gradient(circle at center, rgba(12, 158, 234, 0.25) 0%, transparent 70%);
+            mix-blend-mode: screen;
+        }
+        .glass-pill {
+            background: rgba(30, 32, 36, 0.7);
+            backdrop-filter: blur(40px);
+            border: 1px solid rgba(219, 194, 174, 0.1);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.05);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body overflow-hidden selection:bg-primary-container selection:text-on-primary-container">
+<!-- Kinetic Vault Environment -->
+<div class="fixed inset-0 kinetic-grid z-0"></div>
+<div class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] atmospheric-blur z-0"></div>
+<!-- Top AppBar -->
+<header class="fixed top-0 left-0 right-0 h-16 flex justify-between items-center px-6 z-50">
+<div class="flex items-center gap-4">
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container-highest transition-colors active:scale-95">
+<span class="material-symbols-outlined text-on-surface">arrow_back</span>
+</button>
+<div class="h-4 w-[1px] bg-outline-variant/30"></div>
+<h1 class="font-headline font-bold text-sm tracking-tight uppercase text-primary-container">Image Lab</h1>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex flex-col items-end">
+<span class="font-headline font-bold text-xs uppercase tracking-wider text-on-surface-variant">Campaign Q1</span>
+<div class="flex items-center gap-1.5 mt-0.5">
+<span class="material-symbols-outlined text-[14px] text-tertiary">toll</span>
+<span class="font-label text-[11px] font-bold text-tertiary">142.8</span>
+</div>
+</div>
+</div>
+</header>
+<!-- SideNavBar (Left Tool Rail) -->
+<nav class="fixed left-4 top-1/2 -translate-y-1/2 w-14 bg-surface-container-low/40 backdrop-blur-xl border border-outline-variant/10 rounded-2xl flex flex-col items-center py-6 gap-6 z-50 shadow-2xl">
+<button class="p-2 text-slate-500 hover:text-white hover:bg-surface-container-high rounded-xl transition-all" title="Annotate">
+<span class="material-symbols-outlined">edit</span>
+</button>
+<button class="p-2 text-slate-500 hover:text-white hover:bg-surface-container-high rounded-xl transition-all" title="Crop">
+<span class="material-symbols-outlined">crop</span>
+</button>
+<button class="p-2 text-slate-500 hover:text-white hover:bg-surface-container-high rounded-xl transition-all" title="Inpaint">
+<span class="material-symbols-outlined">brush</span>
+</button>
+<button class="p-2 text-slate-500 hover:text-white hover:bg-surface-container-high rounded-xl transition-all" title="Prompt">
+<span class="material-symbols-outlined">terminal</span>
+</button>
+<button class="p-2 bg-electric-cyan/10 text-electric-cyan rounded-xl shadow-[0_0_15px_rgba(12,158,234,0.3)] transition-all border border-electric-cyan/20" title="Vary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+</button>
+<button class="p-2 text-slate-500 hover:text-white hover:bg-surface-container-high rounded-xl transition-all" title="Upscale">
+<span class="material-symbols-outlined">zoom_out_map</span>
+</button>
+</nav>
+<!-- Central Canvas Area -->
+<main class="fixed inset-0 flex items-center justify-center p-20 z-10">
+<div class="relative group">
+<!-- Main Image -->
+<div class="relative max-w-5xl max-h-[768px] rounded-2xl overflow-hidden shadow-[0_40px_100px_rgba(0,0,0,0.8)] border border-outline-variant/20">
+<img alt="Cinematic AI rendering" class="w-full h-full object-contain bg-surface-container-lowest" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAm4-f9BEzAoc5oAqZ7ATO_gJvOL0AViHALOK3KEsPb-RSan8ulD1OEx114E2vZtU4JCSgt0JN92kroiZiUGttRG7MyRWXS5ZLFZfngjDIPf93Z5Mh4FOpG7WpQSSyfi0E3JjMNeuKcxm71Cs3Sb4DcQPYRu40SdN1dRHPAY_IT2tUzx0nUAA4TVQZdYhkNhLdYBlaFsCpfbVV-eN7fCXUAAbQo74Ou4xvmgYLDg8DqIGLdOsaBtHGG0u7P3xln28-AXKrzU6apLfWm"/>
+<!-- Translucent Mask Overlay Removed for Vary Mode -->
+</div>
+<!-- Floating Image Metadata -->
+<div class="absolute -bottom-10 left-0 flex items-center gap-4 px-2">
+<div class="flex items-center gap-2">
+<span class="font-label text-[10px] uppercase text-on-surface-variant/60 tracking-widest">Resolution</span>
+<span class="font-label text-[10px] text-on-surface-variant font-bold">2048 x 2048</span>
+</div>
+<div class="w-[1px] h-3 bg-outline-variant/30"></div>
+<div class="flex items-center gap-2">
+<span class="font-label text-[10px] uppercase text-on-surface-variant/60 tracking-widest">Seed</span>
+<span class="font-label text-[10px] text-on-surface-variant font-bold">849201174</span>
+</div>
+</div>
+</div>
+</main>
+<!-- Contextual Bottom Bar: Vary Mode Redesign -->
+<div class="fixed bottom-10 left-1/2 -translate-x-1/2 z-50">
+<div class="glass-pill rounded-2xl p-2.5 flex items-center gap-4 shrink-0">
+<!-- Section 1: Mode Toggle (Vary Options) -->
+<div class="relative group/mode shrink-0">
+<button class="flex items-center gap-3 px-4 py-2 bg-electric-cyan/10 hover:bg-electric-cyan/20 border border-electric-cyan/20 rounded-xl transition-all text-left h-11">
+<span class="material-symbols-outlined text-[20px] text-electric-cyan" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+<div class="flex flex-col pr-2">
+<span class="text-[8px] font-black text-electric-cyan/70 uppercase tracking-widest leading-none">Mode</span>
+<span class="text-[11px] font-bold text-on-surface tracking-tight uppercase">Describe</span>
+</div>
+<span class="material-symbols-outlined text-[14px] text-on-surface-variant/40">expand_more</span>
+</button>
+<!-- Dropdown Menu -->
+<div class="absolute bottom-full left-0 mb-4 opacity-0 scale-95 pointer-events-none group-hover/mode:opacity-100 group-hover/mode:scale-100 group-hover/mode:pointer-events-auto transition-all origin-bottom-left">
+<div class="bg-surface-container-highest border border-outline-variant/20 rounded-xl p-2 shadow-2xl min-w-[180px]">
+<div class="px-3 py-2 text-[9px] font-black text-on-surface-variant/40 uppercase tracking-widest border-b border-outline-variant/10 mb-1">Variation Type</div>
+<button class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-electric-cyan/10 text-electric-cyan border border-electric-cyan/20 transition-all text-left mb-1">
+<span class="text-[11px] font-bold tracking-tight uppercase">Describe</span>
+</button>
+<button class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-surface-container-high text-on-surface-variant transition-all text-left mb-1">
+<span class="text-[11px] font-bold tracking-tight uppercase">Angles</span>
+</button>
+<button class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-surface-container-high text-on-surface-variant transition-all text-left">
+<span class="text-[11px] font-bold tracking-tight uppercase">Next Scene</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Divider -->
+<div class="w-[1px] h-8 bg-outline-variant/20 shrink-0"></div>
+<!-- Action Button -->
+<button class="group relative overflow-hidden bg-gradient-to-r from-electric-cyan to-blue-600 text-white px-8 py-2 h-11 rounded-xl font-label text-[10px] font-black uppercase tracking-[0.1em] flex items-center gap-2 shadow-[0_0_20px_rgba(12,158,234,0.4)] transition-all hover:scale-[1.02] active:scale-95 shrink-0">
+<span class="relative z-10">GENERATE</span>
+<span class="material-symbols-outlined text-[16px] relative z-10 transition-transform group-hover:rotate-12">auto_fix_high</span>
+<div class="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+</button>
+</div>
+</div>
+<!-- UI Overlay: Edited Versions Panel -->
+<div class="fixed top-20 right-8 z-20 w-52 flex flex-col gap-4">
+<div class="bg-surface-container-low/40 backdrop-blur-md p-4 rounded-xl border border-outline-variant/10">
+<div class="flex justify-between items-center mb-4">
+<span class="font-headline text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Edited Versions</span>
+<span class="material-symbols-outlined text-[14px] text-on-surface-variant">history</span>
+</div>
+<div class="space-y-1.5">
+<!-- Version Item: Active v3 -->
+<div class="group flex items-center justify-between p-2 bg-electric-cyan/10 border border-electric-cyan/30 rounded-lg cursor-pointer transition-all hover:bg-electric-cyan/20">
+<span class="font-label text-[11px] text-electric-cyan font-bold tracking-tight">VERSION_03</span>
+<div class="flex items-center gap-1">
+<button class="w-6 h-6 flex items-center justify-center rounded bg-electric-cyan/20 text-electric-cyan hover:bg-electric-cyan/40" title="Save">
+<span class="material-symbols-outlined text-[14px]">save</span>
+</button>
+<button class="w-6 h-6 flex items-center justify-center rounded bg-electric-cyan/20 text-electric-cyan hover:bg-electric-cyan/40" title="Compare">
+<span class="material-symbols-outlined text-[14px] font-bold">compare</span>
+</button>
+</div>
+</div>
+<!-- Version Item: v2 -->
+<div class="group flex items-center justify-between p-2 hover:bg-surface-container-highest/50 border border-transparent hover:border-outline-variant/20 rounded-lg cursor-pointer transition-all">
+<span class="font-label text-[11px] text-on-surface-variant/80 font-bold tracking-tight">VERSION_02</span>
+<div class="flex items-center gap-1">
+<button class="w-6 h-6 flex items-center justify-center rounded text-on-surface-variant/40 hover:text-on-surface-variant hover:bg-surface-container-highest" title="Save"><span class="material-symbols-outlined text-[14px]">save</span></button>
+<button class="w-6 h-6 flex items-center justify-center rounded text-on-surface-variant/40 hover:text-on-surface-variant hover:bg-surface-container-highest" title="Compare"><span class="material-symbols-outlined text-[14px]">compare</span></button>
+</div>
+</div>
+<!-- Version Item: v1 -->
+<div class="group flex items-center justify-between p-2 hover:bg-surface-container-highest/50 border border-transparent hover:border-outline-variant/20 rounded-lg cursor-pointer transition-all">
+<span class="font-label text-[11px] text-on-surface-variant/80 font-bold tracking-tight">VERSION_01</span>
+<div class="flex items-center gap-1">
+<button class="w-6 h-6 flex items-center justify-center rounded text-on-surface-variant/40 hover:text-on-surface-variant hover:bg-surface-container-highest" title="Save"><span class="material-symbols-outlined text-[14px]">save</span></button>
+<button class="w-6 h-6 flex items-center justify-center rounded text-on-surface-variant/40 hover:text-on-surface-variant hover:bg-surface-container-highest" title="Compare"><span class="material-symbols-outlined text-[14px]">compare</span></button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Bottom Right Workspace Actions -->
+<div class="fixed bottom-6 right-6 z-20">
+<button class="p-2 text-on-surface-variant/40 hover:text-primary-container transition-colors">
+<span class="material-symbols-outlined text-[20px]">info</span>
+</button>
+</div>
+</body></html>

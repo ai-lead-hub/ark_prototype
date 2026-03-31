@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>AiScope Studio - Cinematographer Modal</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "surface-container-lowest": "#0c0e12",
+                        "on-background": "#e2e2e8",
+                        "error": "#ffb4ab",
+                        "on-secondary-fixed-variant": "#7f2b00",
+                        "primary": "#ffb874",
+                        "surface-container-low": "#1a1c20",
+                        "on-tertiary-fixed-variant": "#544600",
+                        "surface-tint": "#ffb874",
+                        "on-error-container": "#ffdad6",
+                        "background": "#111317",
+                        "on-surface": "#e2e2e8",
+                        "on-primary-container": "#603500",
+                        "on-primary": "#4b2800",
+                        "tertiary-fixed-dim": "#e9c400",
+                        "inverse-on-surface": "#2f3035",
+                        "secondary-fixed-dim": "#ffb599",
+                        "inverse-primary": "#8c4f00",
+                        "on-tertiary-fixed": "#221b00",
+                        "on-surface-variant": "#dbc2ae",
+                        "tertiary-fixed": "#ffe170",
+                        "surface-dim": "#111317",
+                        "primary-container": "#f7931a",
+                        "outline-variant": "#554335",
+                        "on-secondary": "#5a1c00",
+                        "surface": "#111317",
+                        "surface-bright": "#37393e",
+                        "primary-fixed": "#ffdcbf",
+                        "on-secondary-container": "#4f1700",
+                        "secondary-fixed": "#ffdbce",
+                        "tertiary": "#e9c400",
+                        "error-container": "#93000a",
+                        "on-primary-fixed-variant": "#6b3b00",
+                        "secondary-container": "#f66018",
+                        "inverse-surface": "#e2e2e8",
+                        "surface-container-high": "#282a2e",
+                        "on-secondary-fixed": "#370e00",
+                        "secondary": "#ffb599",
+                        "on-tertiary-container": "#4c3e00",
+                        "on-tertiary": "#3a3000",
+                        "surface-variant": "#333539",
+                        "outline": "#a38d7b",
+                        "tertiary-container": "#caa900",
+                        "on-primary-fixed": "#2d1600",
+                        "surface-container-highest": "#333539",
+                        "surface-container": "#1e2024",
+                        "on-error": "#690005",
+                        "primary-fixed-dim": "#ffb874",
+                        "electric-cyan": "#0C9EEA",
+                        "digital-gold": "#FFD600"
+                    },
+                    fontFamily: {
+                        "headline": ["Space Grotesk"],
+                        "body": ["Inter"],
+                        "label": ["Inter"],
+                        "mono": ["JetBrains Mono"]
+                    },
+                    borderRadius: {"DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        .glass-modal {
+            background: rgba(15, 17, 21, 0.85);
+            backdrop-filter: blur(24px);
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.02);
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+        .gold-glow {
+            box-shadow: 0 0 15px rgba(255, 214, 0, 0.25);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body selection:bg-primary-container/30 overflow-hidden">
+<!-- Background Screen Simulation (SCREEN_18) -->
+<div class="fixed inset-0 z-0 grayscale-[0.2] brightness-50">
+<header class="fixed top-0 w-full flex justify-between items-center px-6 h-16 bg-[#111317]/80 backdrop-blur-md border-b border-white/5 z-50">
+<div class="text-2xl font-bold bg-gradient-to-r from-orange-600 to-orange-400 bg-clip-text text-transparent font-headline tracking-tight">AiScope</div>
+<div class="flex gap-8 items-center">
+<nav class="flex gap-6 font-headline tracking-tight">
+<span class="text-slate-400">Projects</span>
+<span class="text-orange-500 border-b-2 border-orange-500 pb-1">Studio</span>
+<span class="text-slate-400">Vault</span>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<span class="text-slate-400 font-mono text-sm">0.42 BTC</span>
+<span class="material-symbols-outlined text-slate-400">account_balance_wallet</span>
+<div class="w-8 h-8 rounded-full bg-surface-container-high border border-white/10 overflow-hidden">
+<img alt="User Profile Avatar" data-alt="User profile placeholder avatar" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDIngqPsYwAQsxxwKKqIsVN0zUXdJIT42cJpREubOYGhCLZOnBvWQQIjgTM6NOprutWzf0Q98FWpJw-dq8yjnMZv5G3pB8UcBqEiZ09zW_dBXglK9PeyyJKWxEZPIZ7y1cMhJQVfqnuasyz2HH_qfeGwQY_JiVae2WCEasANVcjIRck5VFKu71Jot_jj5QYXENlYJ-6HW8F4br2MngCs-wHQ07JasGjA8H4CFMk84y6xTzYRjpFl07bK2L2yAsXqq4CqdlSS77dPTd6"/>
+</div>
+</div>
+</header>
+<main class="pt-24 px-12 grid grid-cols-12 gap-8 h-screen overflow-hidden">
+<aside class="col-span-1 flex flex-col items-center py-6 bg-[#111317] border-r border-white/5 h-full">
+<div class="flex flex-col gap-10">
+<span class="material-symbols-outlined text-orange-500">movie_filter</span>
+<span class="material-symbols-outlined text-slate-500">view_timeline</span>
+<span class="material-symbols-outlined text-slate-500">database</span>
+<span class="material-symbols-outlined text-slate-500">hub</span>
+</div>
+</aside>
+<section class="col-span-11 flex flex-col gap-8">
+<div class="flex justify-between items-center">
+<h1 class="text-4xl font-headline font-bold">Image Refinement</h1>
+<div class="flex gap-3">
+<button class="px-6 py-2 rounded-full bg-surface-container-high border border-white/10 text-sm font-medium">Export 4K</button>
+<button class="px-6 py-2 rounded-full bg-primary-container text-on-primary-container font-bold text-sm">Update Seed</button>
+</div>
+</div>
+<div class="relative w-full aspect-video rounded-lg overflow-hidden border border-white/5 bg-surface-container-low shadow-2xl">
+<img alt="Cinematic Scene Preview" class="w-full h-full object-cover" data-alt="High-end cinematic film shot of a futuristic landscape" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBfNnUNbmcRNy-vuxWzjXFVkJCnKVs4ZJoJ5Dj1VglK5rU6ILDF8OseHP_9RPJDn9wlw9Q7KpTjX4LZPf6i451PGieHz60OaHx1MLv0E3KSEMlG6lkNla6I8DmkuuIoq7BFdbZJevwRiAbGC24Qk3zgsgfDYKnYYod7FBSW39f_gR0EEQjLHXd1Z3QcKP5VH0zsYzlmVtmFppouu5LKba1Yz4Xpx0trZ_cvdZjd97xSEqK4-yiIFwnVMLJleOREgw-GBs4vJcsTRjKd"/>
+<div class="absolute inset-0 bg-gradient-to-t from-background/80 to-transparent"></div>
+</div>
+</section>
+</main>
+</div>
+<!-- Modal Overlay -->
+<div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 backdrop-blur-sm px-6">
+<!-- Cinematographer Modal -->
+<div class="glass-modal w-full max-w-[680px] rounded-lg overflow-hidden border border-white/10 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.5)] flex flex-col">
+<!-- Header -->
+<div class="px-8 py-6 flex justify-between items-center border-b border-white/5">
+<h2 class="text-2xl font-headline font-bold bg-gradient-to-r from-[#EA580C] to-[#F7931A] bg-clip-text text-transparent uppercase tracking-wider">
+                    CINEMATOGRAPHER
+                </h2>
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/5 transition-colors text-slate-400">
+<span class="material-symbols-outlined" data-icon="close">close</span>
+</button>
+</div>
+<!-- Tabs Navigation -->
+<div class="px-8 pt-6">
+<div class="flex gap-2 bg-surface-container-low p-1 rounded-full w-fit">
+<button class="px-6 py-2 rounded-full text-xs font-bold font-mono tracking-widest text-slate-500 hover:text-slate-300 transition-colors">
+                        CAMERA
+                    </button>
+<button class="px-6 py-2 rounded-full text-xs font-bold font-mono tracking-widest bg-digital-gold/10 text-digital-gold border border-digital-gold/30 shadow-[0_0_10px_rgba(255,214,0,0.15)]">
+                        LIGHTING
+                    </button>
+<button class="px-6 py-2 rounded-full text-xs font-bold font-mono tracking-widest text-slate-500 hover:text-slate-300 transition-colors">
+                        STYLE
+                    </button>
+</div>
+</div>
+<!-- Body: Lighting Tab Grid -->
+<div class="px-8 py-8 h-[360px] overflow-y-auto custom-scrollbar">
+<div class="grid grid-cols-3 gap-4">
+<!-- Golden Hour (Active) -->
+<div class="group relative aspect-square rounded-xl bg-digital-gold/5 border border-digital-gold gold-glow cursor-pointer transition-all hover:scale-[1.02] flex flex-col items-center justify-center gap-3 overflow-hidden">
+<div class="absolute inset-0 bg-gradient-to-b from-transparent to-digital-gold/10 pointer-events-none"></div>
+<span class="material-symbols-outlined text-3xl text-digital-gold" data-icon="wb_sunny">wb_sunny</span>
+<span class="text-[10px] font-mono font-bold tracking-widest text-digital-gold uppercase text-center px-2">Golden Hour</span>
+<div class="absolute top-2 right-2">
+<div class="w-2 h-2 rounded-full bg-digital-gold animate-pulse"></div>
+</div>
+</div>
+<!-- Blue Hour -->
+<div class="group relative aspect-square rounded-xl bg-white/5 border border-white/10 cursor-pointer transition-all hover:border-white/30 hover:bg-white/10 hover:scale-[1.02] flex flex-col items-center justify-center gap-3">
+<span class="material-symbols-outlined text-3xl text-slate-400 group-hover:text-white" data-icon="nights_stay">nights_stay</span>
+<span class="text-[10px] font-mono font-bold tracking-widest text-slate-400 group-hover:text-white uppercase text-center px-2">Blue Hour</span>
+</div>
+<!-- Rembrandt -->
+<div class="group relative aspect-square rounded-xl bg-white/5 border border-white/10 cursor-pointer transition-all hover:border-white/30 hover:bg-white/10 hover:scale-[1.02] flex flex-col items-center justify-center gap-3">
+<span class="material-symbols-outlined text-3xl text-slate-400 group-hover:text-white" data-icon="portrait">portrait</span>
+<span class="text-[10px] font-mono font-bold tracking-widest text-slate-400 group-hover:text-white uppercase text-center px-2">Rembrandt</span>
+</div>
+<!-- Butterfly -->
+<div class="group relative aspect-square rounded-xl bg-white/5 border border-white/10 cursor-pointer transition-all hover:border-white/30 hover:bg-white/10 hover:scale-[1.02] flex flex-col items-center justify-center gap-3">
+<span class="material-symbols-outlined text-3xl text-slate-400 group-hover:text-white" data-icon="flare">flare</span>
+<span class="text-[10px] font-mono font-bold tracking-widest text-slate-400 group-hover:text-white uppercase text-center px-2">Butterfly</span>
+</div>
+<!-- Split -->
+<div class="group relative aspect-square rounded-xl bg-white/5 border border-white/10 cursor-pointer transition-all hover:border-white/30 hover:bg-white/10 hover:scale-[1.02] flex flex-col items-center justify-center gap-3">
+<span class="material-symbols-outlined text-3xl text-slate-400 group-hover:text-white" data-icon="contrast">contrast</span>
+<span class="text-[10px] font-mono font-bold tracking-widest text-slate-400 group-hover:text-white uppercase text-center px-2">Split</span>
+</div>
+<!-- Practical -->
+<div class="group relative aspect-square rounded-xl bg-white/5 border border-white/10 cursor-pointer transition-all hover:border-white/30 hover:bg-white/10 hover:scale-[1.02] flex flex-col items-center justify-center gap-3">
+<span class="material-symbols-outlined text-3xl text-slate-400 group-hover:text-white" data-icon="light">light</span>
+<span class="text-[10px] font-mono font-bold tracking-widest text-slate-400 group-hover:text-white uppercase text-center px-2">Practical</span>
+</div>
+<!-- Neon Noir -->
+<div class="group relative aspect-square rounded-xl bg-white/5 border border-white/10 cursor-pointer transition-all hover:border-white/30 hover:bg-white/10 hover:scale-[1.02] flex flex-col items-center justify-center gap-3">
+<span class="material-symbols-outlined text-3xl text-slate-400 group-hover:text-white" data-icon="colors">colors</span>
+<span class="text-[10px] font-mono font-bold tracking-widest text-slate-400 group-hover:text-white uppercase text-center px-2">Neon Noir</span>
+</div>
+<!-- High Key -->
+<div class="group relative aspect-square rounded-xl bg-white/5 border border-white/10 cursor-pointer transition-all hover:border-white/30 hover:bg-white/10 hover:scale-[1.02] flex flex-col items-center justify-center gap-3">
+<span class="material-symbols-outlined text-3xl text-slate-400 group-hover:text-white" data-icon="brightness_high">brightness_high</span>
+<span class="text-[10px] font-mono font-bold tracking-widest text-slate-400 group-hover:text-white uppercase text-center px-2">High Key</span>
+</div>
+<!-- Low Key -->
+<div class="group relative aspect-square rounded-xl bg-white/5 border border-white/10 cursor-pointer transition-all hover:border-white/30 hover:bg-white/10 hover:scale-[1.02] flex flex-col items-center justify-center gap-3">
+<span class="material-symbols-outlined text-3xl text-slate-400 group-hover:text-white" data-icon="brightness_low">brightness_low</span>
+<span class="text-[10px] font-mono font-bold tracking-widest text-slate-400 group-hover:text-white uppercase text-center px-2">Low Key</span>
+</div>
+</div>
+</div>
+<!-- Footer -->
+<div class="px-8 py-6 border-t border-white/5 bg-surface-container-lowest/50 flex justify-between items-center">
+<div class="text-xs font-mono text-slate-500 flex items-center gap-2">
+<span class="text-electric-cyan">ARRI Alexa 65</span>
+<span class="opacity-30">·</span>
+<span class="text-electric-cyan">Cooke S7/i</span>
+<span class="opacity-30">·</span>
+<span class="text-digital-gold">Golden Hour</span>
+<span class="opacity-30">·</span>
+<span class="text-electric-cyan">f/1.4</span>
+</div>
+<div class="flex gap-4">
+<button class="px-6 py-2 rounded-full text-xs font-bold font-mono text-slate-400 hover:text-white transition-colors">
+                        RESET
+                    </button>
+<button class="px-8 py-2.5 rounded-full bg-gradient-to-r from-[#EA580C] to-[#F7931A] text-on-primary-fixed font-headline font-bold text-sm tracking-tight active:scale-95 transition-all shadow-[0_4px_15px_rgba(234,88,12,0.3)]">
+                        APPLY
+                    </button>
+</div>
+</div>
+</div>
+</div>
+</body></html>
