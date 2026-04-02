@@ -78,7 +78,7 @@ export default function FileBrowser({ disableKeyboardNav, onBack }: FileBrowserP
   }, [catalogEntries]);
 
   const { jobs, retryJob } = useQueue();
-  const { shots, activeShot, inactiveShots, setActiveShot, navigateShot, projectName, allScenes, activeSceneId, setActiveScene } = useShots();
+  const { shots, activeShot, inactiveShots, setActiveShot, navigateShot, projectName, allScenes, activeSceneId, setActiveScene, deleteShot, addShot } = useShots();
   const queueTiles = useMemo(
     () => {
       const rank: Record<"processing" | "pending" | "failed" | "completed", number> = {
@@ -1089,6 +1089,7 @@ export default function FileBrowser({ disableKeyboardNav, onBack }: FileBrowserP
                 isActive={true}
                 onActivate={() => {}}
                 onNavigate={navigateShot}
+                onDelete={() => activeShot && deleteShot(activeShot.id)}
                 demoQueuePhase={demoQueuePhase}
                 demoQueueProgress={demoQueueProgress}
               />
@@ -1102,8 +1103,21 @@ export default function FileBrowser({ disableKeyboardNav, onBack }: FileBrowserP
                 isActive={false}
                 onActivate={() => setActiveShot(shot.id)}
                 onNavigate={navigateShot}
+                onDelete={() => deleteShot(shot.id)}
               />
             ))}
+
+            {/* + Add New Shot button */}
+            <button
+              type="button"
+              onClick={() => addShot({})}
+              className="mt-2 flex items-center justify-center gap-2 rounded-[20px] border border-dashed border-slate-500/40 bg-[#0a0b0e] py-4 text-sm font-semibold text-slate-400 transition hover:border-amber-400/50 hover:text-amber-200 hover:bg-[#0d0e12]"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 5v14M5 12h14"/>
+              </svg>
+              Add New Shot
+            </button>
           {/* Manage Shots Modal */}
           <CreateShotsModal
             isOpen={showManageShotsModal}

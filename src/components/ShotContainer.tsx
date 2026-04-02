@@ -9,6 +9,7 @@ type Props = {
   isActive: boolean;
   onActivate: () => void;
   onNavigate: (dir: "prev" | "next") => void;
+  onDelete?: () => void;
   /** Element avatars to show next to shot name */
   taggedElements?: { id: string; name: string; thumbnailPath?: string }[];
   demoQueuePhase?: string;
@@ -165,6 +166,7 @@ export default function ShotContainer({
   isActive,
   onActivate,
   onNavigate,
+  onDelete,
   taggedElements = [],
   demoQueuePhase,
   demoQueueProgress,
@@ -283,6 +285,25 @@ export default function ShotContainer({
           <span className="kv-mono text-[10px] text-slate-600">
             {shot.candidates.length} candidate{shot.candidates.length !== 1 ? "s" : ""}
           </span>
+
+          {/* Delete button - only appears on hover */}
+          {onDelete && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              className="ml-1 flex h-6 w-6 items-center justify-center rounded text-slate-600 opacity-0 group-hover:opacity-100 transition hover:text-rose-400 hover:bg-rose-500/10"
+              aria-label="Delete shot"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 6h18"/>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>
+                <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+              </svg>
+            </button>
+          )}
         </div>
 
         {/* Candidate grid — grouped by role when active */}

@@ -68,6 +68,7 @@ type ShotsContextValue = {
   setActiveScene: (id: string) => void;
   addShot: (shotData: Partial<Shot>) => void;
   addScene: (sceneData: Partial<Scene>) => void;
+  deleteShot: (id: string) => void;
 };
 
 const ShotsContext = createContext<ShotsContextValue | null>(null);
@@ -164,6 +165,13 @@ export function ShotsProvider({ children }: { children: ReactNode }) {
     }));
   }, [activeSceneId, shots.length]);
 
+  const deleteShot = useCallback((id: string) => {
+    setShotsByScene((prev) => ({
+      ...prev,
+      [activeSceneId]: (prev[activeSceneId] || []).filter((shot) => shot.id !== id),
+    }));
+  }, [activeSceneId]);
+
   const setActiveScene = useCallback((id: string) => {
     setActiveSceneId(id);
   }, []);
@@ -215,8 +223,9 @@ export function ShotsProvider({ children }: { children: ReactNode }) {
       setActiveScene,
       addShot,
       addScene,
+      deleteShot,
     }),
-    [shots, assets, activeShotId, setActiveShot, navigateShot, activeShot, inactiveShots, activeScene, activeSceneId, setActiveScene, allScenes, addShot, addScene]
+    [shots, assets, activeShotId, setActiveShot, navigateShot, activeShot, inactiveShots, activeScene, activeSceneId, setActiveScene, allScenes, addShot, addScene, deleteShot]
   );
 
   return (
