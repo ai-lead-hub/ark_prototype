@@ -1069,6 +1069,24 @@ export default function FileBrowser({ disableKeyboardNav, onBack }: FileBrowserP
                   <option key={shot.id} value={shot.id}>{shot.name}</option>
                 ))}
               </select>
+              <div className="flex flex-col gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => navigateShot("prev")}
+                  className="flex h-5 w-5 items-center justify-center rounded text-slate-500 transition hover:bg-white/5 hover:text-white"
+                  aria-label="Previous shot"
+                >
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6"/></svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigateShot("next")}
+                  className="flex h-5 w-5 items-center justify-center rounded text-slate-500 transition hover:bg-white/5 hover:text-white"
+                  aria-label="Next shot"
+                >
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+              </div>
               <span className="kv-mono text-[10px] text-slate-600">{shots.length} shots</span>
             </div>
 

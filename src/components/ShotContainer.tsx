@@ -223,77 +223,16 @@ export default function ShotContainer({
           }`}
           onClick={!isActive ? onActivate : undefined}
         >
-          {/* Nav arrows */}
-          <div className="flex flex-col gap-0.5">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onNavigate("prev");
-              }}
-              className="flex h-5 w-5 items-center justify-center rounded text-slate-500 transition hover:bg-white/5 hover:text-white"
-              aria-label="Previous shot"
-            >
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6"/></svg>
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onNavigate("next");
-              }}
-              className="flex h-5 w-5 items-center justify-center rounded text-slate-500 transition hover:bg-white/5 hover:text-white"
-              aria-label="Next shot"
-            >
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-            </button>
-          </div>
 
-          {/* Shot name with dropdown picker */}
-          <div className="relative min-w-0 flex-1" ref={pickerRef}>
-            <button
-              type="button"
-              className="flex items-center gap-1.5 rounded-md px-1.5 py-0.5 transition hover:bg-white/5"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (allShots.length > 1) setShowShotPicker((v) => !v);
-              }}
-            >
-              <span className="kv-mono text-sm font-semibold text-amber-200/90">
-                {shot.name}
-              </span>
-              {allShots.length > 1 && (
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-500"><path d="m6 9 6 6 6-6"/></svg>
-              )}
-            </button>
+          {/* Shot name */}
+          <div className="min-w-0 flex-1">
+            <span className="kv-mono text-sm font-semibold text-amber-200/90">
+              {shot.name}
+            </span>
             {shot.directionNote && (
               <span className="ml-1 text-xs text-slate-500">
                 — {shot.directionNote}
               </span>
-            )}
-
-            {showShotPicker && (
-              <div className="absolute left-0 top-full z-50 mt-1 max-h-64 w-56 overflow-y-auto rounded-xl border border-white/10 bg-[#15171c] py-1 shadow-2xl">
-                {allShots.map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition hover:bg-white/5 ${
-                      s.id === shot.id ? "text-amber-200" : "text-slate-300"
-                    }`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onSelectShot?.(s.id);
-                      setShowShotPicker(false);
-                    }}
-                  >
-                    <span className="kv-mono font-semibold">{s.name}</span>
-                    {s.id === shot.id && (
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="ml-auto text-amber-400"><polyline points="20 6 9 17 4 12"/></svg>
-                    )}
-                  </button>
-                ))}
-              </div>
             )}
           </div>
 
