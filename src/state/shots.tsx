@@ -66,6 +66,8 @@ type ShotsContextValue = {
   allScenes: Scene[];
   activeSceneId: string;
   setActiveScene: (id: string) => void;
+  addShot: (shotData: Partial<Shot>) => void;
+  addScene: (sceneData: Partial<Scene>) => void;
 };
 
 const ShotsContext = createContext<ShotsContextValue | null>(null);
@@ -118,19 +120,49 @@ const DEMO_SCENES: Scene[] = [
 
 export function ShotsProvider({ children }: { children: ReactNode }) {
   const [activeSceneId, setActiveSceneId] = useState(demoData.scene.id);
+  const [allScenes, setAllScenes] = useState<Scene[]>(DEMO_SCENES);
+  const [shotsByScene, setShotsByScene] = useState<Record<string, Shot[]>>({
+    [demoData.scene.id]: augmentWithRoles(demoData.shots),
+  });
+
   const shots = useMemo(() => {
-    // Only the real scene (SC03) has demo data; others show empty
-    if (activeSceneId === demoData.scene.id) {
-      return augmentWithRoles(demoData.shots);
-    }
-    return [];
-  }, [activeSceneId]);
+    return shotsByScene[activeSceneId] || [];
+  }, [activeSceneId, shotsByScene]);
+
   const assets = demoData.assets as KitsuAsset[];
   const [activeShotId, setActiveShotId] = useState<string | null>(
     shots[0]?.id ?? null
   );
 
   const activeScene = DEMO_SCENES.find((s) => s.id === activeSceneId) ?? DEMO_SCENES[0];
+
+  const addScene = useCallback((sceneData: Partial<Scene>) => {
+    const newScene: Scene = {
+      id: sceneData.id || `scene-${Date.now()}`,
+      name: sceneData.name || `SC${allScenes.length + 1}`,
+    };
+    setAllScenes((prev) => [...prev, newScene]);
+    setShotsByScene((prev) => ({
+      ...prev,
+      [newScene.id]: [],
+    }));
+  }, [allScenes.length]);
+
+  const addShot = useCallback((shotData: Partial<Shot>) => {
+    const newShot: Shot = {
+      id: shotData.id || `shot-${Date.now()}`,
+      name: shotData.name || `SH${shots.length + 1}`,
+      description: shotData.description || "",
+      directionNote: shotData.directionNote || "",
+      nbFrames: shotData.nbFrames || 24,
+      previewFileId: null,
+      candidates: [],
+    };
+    setShotsByScene((prev) => ({
+      ...prev,
+      [activeSceneId]: [...(prev[activeSceneId] || []), newShot],
+    }));
+  }, [activeSceneId, shots.length]);
 
   const setActiveScene = useCallback((id: string) => {
     setActiveSceneId(id);
@@ -178,11 +210,13 @@ export function ShotsProvider({ children }: { children: ReactNode }) {
       navigateShot,
       activeShot,
       inactiveShots,
-      allScenes: DEMO_SCENES,
+      allScenes,
       activeSceneId,
       setActiveScene,
+      addShot,
+      addScene,
     }),
-    [shots, assets, activeShotId, setActiveShot, navigateShot, activeShot, inactiveShots, activeScene, activeSceneId, setActiveScene]
+    [shots, assets, activeShotId, setActiveShot, navigateShot, activeShot, inactiveShots, activeScene, activeSceneId, setActiveScene, allScenes, addShot, addScene]
   );
 
   return (

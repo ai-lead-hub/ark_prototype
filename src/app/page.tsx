@@ -5,6 +5,8 @@ import ControlsPane from "../components/ControlsPane";
 import ElementsModal from "../components/ElementsModal";
 import FileBrowser from "../components/FileBrowser";
 import HomeScreen from "../components/HomeScreen";
+import CreateProjectScreen from "../components/CreateProjectScreen";
+import CreateShotsScreen from "../components/CreateShotsScreen";
 import { CatalogProvider } from "../state/catalog";
 import { QueueProvider } from "../state/queue";
 import { ElementsProvider, useElements } from "../state/elements";
@@ -34,11 +36,49 @@ function MainLayout({ onBack }: { onBack: () => void }) {
   );
 }
 
-export default function Page() {
-  const [activeProject, setActiveProject] = useState<string | null>(null);
+type AppState = "home" | "create-project" | "create-shots" | "main";
 
-  if (!activeProject) {
-    return <HomeScreen onOpenProject={setActiveProject} />;
+export default function Page() {
+  const [appState, setAppState] = useState<AppState>("home");
+  const [projectData, setProjectData] = useState<any>(null);
+
+  const handleCreateProjectNext = (data: any) => {
+    console.log("Project data:", data);
+    setProjectData(data);
+    setAppState("create-shots");
+  };
+
+  const handleCreateShotsSubmit = (data: any) => {
+    console.log("Shots data:", data);
+    setAppState("main");
+  };
+
+  if (appState === "home") {
+    return (
+      <HomeScreen
+        onOpenProject={() => setAppState("main")}
+        onCreateProject={() => setAppState("create-project")}
+      />
+    );
+  }
+
+  if (appState === "create-project") {
+    return (
+      <CreateProjectScreen
+        onBack={() => setAppState("home")}
+        onNext={handleCreateProjectNext}
+      />
+    );
+  }
+
+  if (appState === "create-shots") {
+    return (
+      <CreateShotsScreen
+        onBack={() => setAppState("create-project")}
+        onSubmit={handleCreateShotsSubmit}
+        projectData={projectData}
+      />
+    );
   }
 
   return (
@@ -46,7 +86,7 @@ export default function Page() {
       <QueueProvider>
         <ElementsProvider>
           <ShotsProvider>
-            <MainLayout onBack={() => setActiveProject(null)} />
+            <MainLayout onBack={() => setAppState("home")} />
           </ShotsProvider>
         </ElementsProvider>
       </QueueProvider>

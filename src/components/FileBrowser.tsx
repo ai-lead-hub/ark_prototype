@@ -1036,7 +1036,7 @@ export default function FileBrowser({ disableKeyboardNav, onBack }: FileBrowserP
           />
         ) : shots.length > 0 ? (
           <div className="flex flex-col gap-3 p-3 min-h-full">
-            {/* Project / Scene header */}
+            {/* Project / Scene / Shot header */}
             <div className="flex items-center gap-2 px-1">
               {onBack && (
                 <button
@@ -1057,6 +1057,16 @@ export default function FileBrowser({ disableKeyboardNav, onBack }: FileBrowserP
               >
                 {allScenes.map((s) => (
                   <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+              <span className="text-slate-600">/</span>
+              <select
+                value={activeShot?.id ?? ""}
+                onChange={(e) => setActiveShot(e.target.value)}
+                className="kv-mono rounded-lg bg-transparent px-1.5 py-0.5 text-sm font-semibold text-amber-200/80 transition hover:bg-white/5 cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-400/30"
+              >
+                {shots.map((shot) => (
+                  <option key={shot.id} value={shot.id}>{shot.name}</option>
                 ))}
               </select>
               <span className="kv-mono text-[10px] text-slate-600">{shots.length} shots</span>

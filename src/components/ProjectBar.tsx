@@ -169,7 +169,7 @@ export default function ProjectBar({ mode = "full" }: ProjectBarProps) {
     setStatus("Disconnected from workspace.");
   };
 
-  const connectionLabel = connection ? connection.workspaceId : "Not connected";
+  const connectionLabel = connection ? (connection.workspaceId === "default" ? "My Workspace" : connection.workspaceId) : "Not connected";
   const showLeading = mode === "full" || mode === "leading";
   const showUtilities = mode === "full" || mode === "utilities";
 

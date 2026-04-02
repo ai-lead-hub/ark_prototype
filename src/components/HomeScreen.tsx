@@ -66,13 +66,25 @@ const STATUS_COLORS: Record<string, string> = {
 
 type Props = {
   onOpenProject: (projectId: string) => void;
+  onCreateProject?: () => void;
 };
 
-export default function HomeScreen({ onOpenProject }: Props) {
+export default function HomeScreen({ onOpenProject, onCreateProject }: Props) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+
+  // The modal is now managed in page.tsx
+  const handleNewProjectClick = () => {
+    if (onCreateProject) {
+      onCreateProject();
+    } else {
+      // Fallback to old behavior
+      onOpenProject(`project-${Date.now()}`);
+    }
+  };
 
   return (
     <div className="flex h-dvh flex-col bg-[#08090c] text-slate-100">
+
       {/* Top bar */}
       <div className="flex items-center justify-between px-8 py-5">
         <div className="flex items-center gap-3">
@@ -167,6 +179,7 @@ export default function HomeScreen({ onOpenProject }: Props) {
           {/* New project card */}
           <button
             type="button"
+            onClick={handleNewProjectClick}
             className="flex aspect-[4/3] flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-white/8 bg-transparent text-slate-500 transition hover:border-amber-400/20 hover:text-slate-300"
           >
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/[0.03]">

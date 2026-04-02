@@ -42,7 +42,7 @@ function encodeRelPath(relPath: string) {
 }
 
 export function getDefaultConnection(
-  workspaceId = "default"
+  workspaceId = "my-workspace"
 ): WorkspaceConnection | null {
   if (!defaultApiBase) return null;
   return {
