@@ -1104,8 +1104,6 @@ export default function FileBrowser({ disableKeyboardNav, onBack }: FileBrowserP
                 onNavigate={navigateShot}
               />
             ))}
-          </div>
-
           {/* Manage Shots Modal */}
           <CreateShotsModal
             isOpen={showManageShotsModal}
@@ -1115,6 +1113,7 @@ export default function FileBrowser({ disableKeyboardNav, onBack }: FileBrowserP
               setShowManageShotsModal(false);
             }}
           />
+        </div>
         ) : (
           <div className="flex flex-col min-h-full">
               <div ref={gridContainerRef} className="grid grid-cols-3 gap-2 p-2">
