@@ -158,192 +158,224 @@ export default function ElementForm() {
         `${baseClass} ${dragOver[zone] ? "border-sky-400 bg-sky-500/10 scale-[1.02]" : ""}`;
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="flex items-center justify-between mb-4">
-                <h4 className="text-sm font-semibold text-white">Create New Element</h4>
-                <button
-                    type="button"
-                    onClick={closeForm}
-                    className="text-slate-400 hover:text-white transition text-xs"
-                >
-                    Cancel
-                </button>
-            </div>
-
-            {/* Name */}
-            <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1">
-                    Name *
-                </label>
-                <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="e.g., Hero Character, Magic Sword"
-                    className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 transition"
-                />
-            </div>
-
-            {/* Category */}
-            <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1">
-                    Category *
-                </label>
-                <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value as "character" | "environment" | "prop" | "shot")}
-                    className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 transition"
-                >
-                    <option value="character">Character</option>
-                    <option value="environment">Environment</option>
-                    <option value="prop">Prop</option>
-                    <option value="shot">Shot Store</option>
-                </select>
-            </div>
-
-            {/* Frontal Image */}
-            <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1">
-                    Frontal Image * <span className="text-slate-500">(clear front view)</span>
-                </label>
-                <div
-                    onClick={() => frontalInputRef.current?.click()}
-                    onDragOver={(e) => handleDragOver(e, "frontal")}
-                    onDragLeave={(e) => handleDragLeave(e, "frontal")}
-                    onDrop={(e) =>
-                        handleDrop(e, "frontal", (file) => {
-                            // Revoke previous URL to prevent memory leak
-                            if (frontalPreview) URL.revokeObjectURL(frontalPreview);
-                            setFrontalImage(file);
-                            setFrontalPreview(URL.createObjectURL(file));
-                        })
-                    }
-                    className={dropZoneClass(
-                        "frontal",
-                        "flex items-center justify-center border border-dashed border-white/20 rounded-lg h-32 cursor-pointer hover:border-sky-400 transition overflow-hidden"
-                    )}
-                >
-                    {frontalPreview ? (
-                        <img src={frontalPreview} alt="Frontal" className="h-full object-contain" />
-                    ) : (
-                        <span className="text-slate-500 text-sm">Drop image or click</span>
-                    )}
-                </div>
-                <input
-                    ref={frontalInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFrontalChange}
-                    className="hidden"
-                />
-            </div>
-
-            {/* Reference Images */}
-            <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1">
-                    Reference Images <span className="text-slate-500">(2-3 additional angles)</span>
-                </label>
-                <div
-                    onClick={() => refInputRef.current?.click()}
-                    onDragOver={(e) => handleDragOver(e, "refs")}
-                    onDragLeave={(e) => handleDragLeave(e, "refs")}
-                    onDrop={(e) =>
-                        handleDrop(e, "refs", (file) => {
-                            setReferenceImages((prev) => [...prev.slice(0, 2), file]);
-                            setReferencePreviews((prev) => {
-                                // Revoke the URL being dropped (if over limit)
-                                if (prev.length >= 3 && prev[2]) {
-                                    URL.revokeObjectURL(prev[2]);
-                                }
-                                return [
-                                    ...prev.slice(0, 2),
-                                    URL.createObjectURL(file),
-                                ];
-                            });
-                        })
-                    }
-                    className={dropZoneClass(
-                        "refs",
-                        "flex items-center gap-2 border border-dashed border-white/20 rounded-lg p-3 cursor-pointer hover:border-sky-400 transition min-h-[80px]"
-                    )}
-                >
-                    {referencePreviews.length > 0 ? (
-                        referencePreviews.map((preview, i) => (
+        <div className="flex h-full min-h-0">
+            {/* Left: File Browser Grid */}
+            <div className="w-1/2 border-r border-white/10 bg-black/30 p-5 overflow-y-auto">
+                <h4 className="text-sm font-semibold text-white mb-4">Assets in Project</h4>
+                <div className="grid grid-cols-3 gap-2">
+                    {/* Dummy files for preview */}
+                    {[1, 2, 3, 4, 5, 6].map((i) => (
+                        <div key={i} className="aspect-square rounded-lg bg-slate-800 border border-white/10 overflow-hidden cursor-pointer hover:border-sky-400 transition">
                             <img
-                                key={i}
-                                src={preview}
-                                alt={`Ref ${i + 1}`}
-                                className="h-16 w-16 object-cover rounded"
+                                src={`https://picsum.photos/seed/asset-${i}/200/200`}
+                                alt={`Asset ${i}`}
+                                className="h-full w-full object-cover"
+                                onDragStart={(e) => {
+                                    const payload = {
+                                        path: `/assets/asset-${i}.png`,
+                                        name: `asset-${i}.png`,
+                                        mime: "image/png"
+                                    };
+                                    e.dataTransfer.setData(FILE_ENTRY_MIME, JSON.stringify(payload));
+                                    e.dataTransfer.effectAllowed = "copy";
+                                }}
                             />
-                        ))
-                    ) : (
-                        <span className="text-slate-500 text-sm">Drop images or click (max 3)</span>
-                    )}
+                            <div className="p-2 text-xs text-slate-300">Asset {i}</div>
+                        </div>
+                    ))}
                 </div>
-                <input
-                    ref={refInputRef}
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={handleRefImagesChange}
-                    className="hidden"
-                />
             </div>
 
-            {/* Character Sheet */}
-            <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1">
-                    Character Sheet <span className="text-slate-500">(optional, for reference)</span>
-                </label>
-                <div
-                    onClick={() => sheetInputRef.current?.click()}
-                    onDragOver={(e) => handleDragOver(e, "sheet")}
-                    onDragLeave={(e) => handleDragLeave(e, "sheet")}
-                    onDrop={(e) =>
-                        handleDrop(e, "sheet", (file) => {
-                            // Revoke previous URL to prevent memory leak
-                            if (sheetPreview) URL.revokeObjectURL(sheetPreview);
-                            setCharacterSheet(file);
-                            setSheetPreview(URL.createObjectURL(file));
-                        })
-                    }
-                    className={dropZoneClass(
-                        "sheet",
-                        "flex items-center justify-center border border-dashed border-white/20 rounded-lg h-20 cursor-pointer hover:border-amber-400 transition overflow-hidden"
-                    )}
-                >
-                    {sheetPreview ? (
-                        <img src={sheetPreview} alt="Sheet" className="h-full object-contain" />
-                    ) : (
-                        <span className="text-slate-500 text-sm">Drop image or click</span>
-                    )}
-                </div>
-                <input
-                    ref={sheetInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleSheetChange}
-                    className="hidden"
-                />
-            </div>
+            {/* Right: Form */}
+            <div className="w-1/2 p-5 overflow-y-auto">
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div className="flex items-center justify-between mb-4">
+                        <h4 className="text-sm font-semibold text-white">Create New Element</h4>
+                        <button
+                            type="button"
+                            onClick={closeForm}
+                            className="text-slate-400 hover:text-white transition text-xs"
+                        >
+                            Cancel
+                        </button>
+                    </div>
 
-            {/* Error */}
-            {error && (
-                <div className="rounded-lg bg-red-500/10 border border-red-500/30 px-3 py-2 text-sm text-red-400">
-                    {error}
-                </div>
-            )}
+                    {/* Name */}
+                    <div>
+                        <label className="block text-xs font-medium text-slate-400 mb-1">
+                            Name *
+                        </label>
+                        <input
+                            type="text"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            placeholder="e.g., Hero Character, Magic Sword"
+                            className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 transition"
+                        />
+                    </div>
 
-            {/* Submit */}
-            <div className="flex gap-2">
-                <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="flex-1 rounded-lg bg-sky-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-400 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                    {isSubmitting ? "Creating..." : "Create Element"}
-                </button>
+                    {/* Category */}
+                    <div>
+                        <label className="block text-xs font-medium text-slate-400 mb-1">
+                            Category *
+                        </label>
+                        <select
+                            value={category}
+                            onChange={(e) => setCategory(e.target.value as "character" | "environment" | "prop" | "shot")}
+                            className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 transition"
+                        >
+                            <option value="character">Character</option>
+                            <option value="environment">Environment</option>
+                            <option value="prop">Prop</option>
+                            <option value="shot">Shot Store</option>
+                        </select>
+                    </div>
+
+                    {/* Frontal Image */}
+                    <div>
+                        <label className="block text-xs font-medium text-slate-400 mb-1">
+                            Frontal Image * <span className="text-slate-500">(clear front view)</span>
+                        </label>
+                        <div
+                            onClick={() => frontalInputRef.current?.click()}
+                            onDragOver={(e) => handleDragOver(e, "frontal")}
+                            onDragLeave={(e) => handleDragLeave(e, "frontal")}
+                            onDrop={(e) =>
+                                handleDrop(e, "frontal", (file) => {
+                                    // Revoke previous URL to prevent memory leak
+                                    if (frontalPreview) URL.revokeObjectURL(frontalPreview);
+                                    setFrontalImage(file);
+                                    setFrontalPreview(URL.createObjectURL(file));
+                                })
+                            }
+                            className={dropZoneClass(
+                                "frontal",
+                                "flex items-center justify-center border border-dashed border-white/20 rounded-lg h-32 cursor-pointer hover:border-sky-400 transition overflow-hidden"
+                            )}
+                        >
+                            {frontalPreview ? (
+                                <img src={frontalPreview} alt="Frontal" className="h-full object-contain" />
+                            ) : (
+                                <span className="text-slate-500 text-sm">Drop image or click</span>
+                            )}
+                        </div>
+                        <input
+                            ref={frontalInputRef}
+                            type="file"
+                            accept="image/*"
+                            onChange={handleFrontalChange}
+                            className="hidden"
+                        />
+                    </div>
+
+                    {/* Reference Images */}
+                    <div>
+                        <label className="block text-xs font-medium text-slate-400 mb-1">
+                            Reference Images <span className="text-slate-500">(2-3 additional angles)</span>
+                        </label>
+                        <div
+                            onClick={() => refInputRef.current?.click()}
+                            onDragOver={(e) => handleDragOver(e, "refs")}
+                            onDragLeave={(e) => handleDragLeave(e, "refs")}
+                            onDrop={(e) =>
+                                handleDrop(e, "refs", (file) => {
+                                    setReferenceImages((prev) => [...prev.slice(0, 2), file]);
+                                    setReferencePreviews((prev) => {
+                                        // Revoke the URL being dropped (if over limit)
+                                        if (prev.length >= 3 && prev[2]) {
+                                            URL.revokeObjectURL(prev[2]);
+                                        }
+                                        return [
+                                            ...prev.slice(0, 2),
+                                            URL.createObjectURL(file),
+                                        ];
+                                    });
+                                })
+                            }
+                            className={dropZoneClass(
+                                "refs",
+                                "flex items-center gap-2 border border-dashed border-white/20 rounded-lg p-3 cursor-pointer hover:border-sky-400 transition min-h-[80px]"
+                            )}
+                        >
+                            {referencePreviews.length > 0 ? (
+                                referencePreviews.map((preview, i) => (
+                                    <img
+                                        key={i}
+                                        src={preview}
+                                        alt={`Ref ${i + 1}`}
+                                        className="h-16 w-16 object-cover rounded"
+                                    />
+                                ))
+                            ) : (
+                                <span className="text-slate-500 text-sm">Drop images or click (max 3)</span>
+                            )}
+                        </div>
+                        <input
+                            ref={refInputRef}
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            onChange={handleRefImagesChange}
+                            className="hidden"
+                        />
+                    </div>
+
+                    {/* Character Sheet */}
+                    <div>
+                        <label className="block text-xs font-medium text-slate-400 mb-1">
+                            Character Sheet <span className="text-slate-500">(optional, for reference)</span>
+                        </label>
+                        <div
+                            onClick={() => sheetInputRef.current?.click()}
+                            onDragOver={(e) => handleDragOver(e, "sheet")}
+                            onDragLeave={(e) => handleDragLeave(e, "sheet")}
+                            onDrop={(e) =>
+                                handleDrop(e, "sheet", (file) => {
+                                    // Revoke previous URL to prevent memory leak
+                                    if (sheetPreview) URL.revokeObjectURL(sheetPreview);
+                                    setCharacterSheet(file);
+                                    setSheetPreview(URL.createObjectURL(file));
+                                })
+                            }
+                            className={dropZoneClass(
+                                "sheet",
+                                "flex items-center justify-center border border-dashed border-white/20 rounded-lg h-20 cursor-pointer hover:border-amber-400 transition overflow-hidden"
+                            )}
+                        >
+                            {sheetPreview ? (
+                                <img src={sheetPreview} alt="Sheet" className="h-full object-contain" />
+                            ) : (
+                                <span className="text-slate-500 text-sm">Drop image or click</span>
+                            )}
+                        </div>
+                        <input
+                            ref={sheetInputRef}
+                            type="file"
+                            accept="image/*"
+                            onChange={handleSheetChange}
+                            className="hidden"
+                        />
+                    </div>
+
+                    {/* Error */}
+                    {error && (
+                        <div className="rounded-lg bg-red-500/10 border border-red-500/30 px-3 py-2 text-sm text-red-400">
+                            {error}
+                        </div>
+                    )}
+
+                    {/* Submit */}
+                    <div className="flex gap-2">
+                        <button
+                            type="submit"
+                            disabled={isSubmitting}
+                            className="flex-1 rounded-lg bg-sky-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {isSubmitting ? "Creating..." : "Create Element"}
+                        </button>
+                    </div>
+                </form>
             </div>
-        </form>
+        </div>
     );
 }
