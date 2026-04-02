@@ -8,6 +8,7 @@ type Props = {
   shot: Shot;
   isActive: boolean;
   onActivate: () => void;
+  onNavigate: (dir: "prev" | "next") => void;
   /** Element avatars to show next to shot name */
   taggedElements?: { id: string; name: string; thumbnailPath?: string }[];
   demoQueuePhase?: string;
@@ -163,6 +164,7 @@ export default function ShotContainer({
   shot,
   isActive,
   onActivate,
+  onNavigate,
   taggedElements = [],
   demoQueuePhase,
   demoQueueProgress,
@@ -215,6 +217,32 @@ export default function ShotContainer({
           }`}
           onClick={!isActive ? onActivate : undefined}
         >
+
+          {/* Nav arrows */}
+          <div className="flex flex-col gap-0.5">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onNavigate("prev");
+              }}
+              className="flex h-5 w-5 items-center justify-center rounded text-slate-500 transition hover:bg-white/5 hover:text-white"
+              aria-label="Previous shot"
+            >
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6"/></svg>
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onNavigate("next");
+              }}
+              className="flex h-5 w-5 items-center justify-center rounded text-slate-500 transition hover:bg-white/5 hover:text-white"
+              aria-label="Next shot"
+            >
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+          </div>
 
           {/* Shot name */}
           <div className="min-w-0 flex-1">
