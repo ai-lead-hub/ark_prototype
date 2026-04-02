@@ -174,13 +174,24 @@ type Props = {
     lookSettings: LookSettings;
     onShotChange: (s: ShotSettings) => void;
     onLookChange: (l: LookSettings) => void;
+    isCinematographerOn: boolean;
+    onCinematographerToggle: (on: boolean) => void;
 };
 
-export function ImageShotLookCards({ shotSettings, lookSettings, onShotChange, onLookChange }: Props) {
-    const [openModal, setOpenModal] = useState<"shot" | "look" | null>(null);
+export function ImageShotLookCards({ shotSettings, lookSettings, onShotChange, onLookChange, isCinematographerOn, onCinematographerToggle }: Props) {
+    const [openModal, setOpenModal] = useState<"cinematographer" | null>(null);
 
-    const shotHas = shotSettings.angle || shotSettings.focalLength || shotSettings.aperture || shotSettings.shot;
-    const lookHas = lookSettings.style || lookSettings.cameraBody || lookSettings.lens || lookSettings.filmStock || lookSettings.lighting || lookSettings.inspiration;
+    const hasSettings =
+        shotSettings.angle ||
+        shotSettings.focalLength ||
+        shotSettings.aperture ||
+        shotSettings.shot ||
+        lookSettings.style ||
+        lookSettings.cameraBody ||
+        lookSettings.lens ||
+        lookSettings.filmStock ||
+        lookSettings.lighting ||
+        lookSettings.inspiration;
 
     // ── Cascading camera system options (same logic as PromptBuilderV2) ──
 
@@ -218,55 +229,56 @@ export function ImageShotLookCards({ shotSettings, lookSettings, onShotChange, o
 
     return (
         <>
-            <div className="flex gap-1.5 pt-1">
+            <div className="flex items-center gap-1.5 pt-1">
                 <button
                     type="button"
-                    onClick={() => setOpenModal("shot")}
-                    className={`flex flex-1 items-center gap-1.5 rounded-[18px] border px-2 py-1.5 text-left transition ${shotHas ? "border-amber-500/20 bg-amber-500/5 hover:border-amber-500/40" : "border-white/10 bg-white/[0.03] hover:border-white/20"}`}
+                    onClick={() => setOpenModal("cinematographer")}
+                    className={`flex flex-1 items-center gap-1.5 rounded-[18px] border px-2 py-1.5 text-left transition ${hasSettings ? "border-amber-500/20 bg-amber-500/5 hover:border-amber-500/40" : "border-white/10 bg-white/[0.03] hover:border-white/20"}`}
                 >
-                    <span className="text-amber-400 text-xs">📷</span>
+                    <span className="text-amber-400 text-xs">🎬</span>
                     <div className="min-w-0 flex-1">
-                        <div className="text-[8px] font-bold uppercase tracking-wider text-slate-500">Shot</div>
-                        <div className={`truncate text-[10px] leading-tight ${shotHas ? "text-slate-200" : "text-slate-500 italic"}`}>{shotSummary(shotSettings)}</div>
+                        <div className="text-[8px] font-bold uppercase tracking-wider text-slate-500">Cinematographer</div>
+                        <div className={`truncate text-[10px] leading-tight ${hasSettings ? "text-slate-200" : "text-slate-500 italic"}`}>
+                            {hasSettings ? `${shotSummary(shotSettings)}, ${lookSummary(lookSettings)}` : "Not set"}
+                        </div>
                     </div>
                 </button>
                 <button
                     type="button"
-                    onClick={() => setOpenModal("look")}
-                    className={`flex flex-1 items-center gap-1.5 rounded-[18px] border px-2 py-1.5 text-left transition ${lookHas ? "border-amber-500/20 bg-amber-500/5 hover:border-amber-500/40" : "border-white/10 bg-white/[0.03] hover:border-white/20"}`}
+                    onClick={() => onCinematographerToggle(!isCinematographerOn)}
+                    className={`flex items-center justify-center rounded-[18px] border px-3 py-1.5 transition ${isCinematographerOn ? "border-amber-500/20 bg-amber-500/5 text-amber-400" : "border-white/10 bg-white/[0.03] text-slate-500"}`}
                 >
-                    <span className="text-orange-300 text-xs">🎨</span>
-                    <div className="min-w-0 flex-1">
-                        <div className="text-[8px] font-bold uppercase tracking-wider text-slate-500">Look</div>
-                        <div className={`truncate text-[10px] leading-tight ${lookHas ? "text-slate-200" : "text-slate-500 italic"}`}>{lookSummary(lookSettings)}</div>
-                    </div>
+                    <span className="text-[10px] font-semibold">{isCinematographerOn ? "ON" : "OFF"}</span>
                 </button>
             </div>
 
-            {/* Shot Modal */}
-            {openModal === "shot" && (
-                <Modal title="Shot" accent="from-sky-600 to-cyan-600" onClose={() => setOpenModal(null)} onClear={() => onShotChange(DEFAULT_SHOT)} hasValues={!!shotHas}>
-                    <div className="grid grid-cols-2 gap-2">
-                        <SelGrouped label="Angle" value={shotSettings.angle} groups={cameraOptions.angle} onChange={(v) => onShotChange({ ...shotSettings, angle: v })} />
-                        <SelGrouped label="Shot" value={shotSettings.shot} groups={cameraOptions.shot} onChange={(v) => onShotChange({ ...shotSettings, shot: v })} />
-                        <SelGrouped label="Focal" value={shotSettings.focalLength} groups={cameraOptions.lens} onChange={(v) => onShotChange({ ...shotSettings, focalLength: v })} />
-                        <SelGrouped label="Aperture" value={shotSettings.aperture} groups={cameraOptions.aperture} onChange={(v) => onShotChange({ ...shotSettings, aperture: v })} />
+            {/* Cinematographer Modal */}
+            {openModal === "cinematographer" && (
+                <Modal title="Cinematographer" accent="from-amber-600 to-orange-600" onClose={() => setOpenModal(null)} onClear={() => { onShotChange(DEFAULT_SHOT); onLookChange(DEFAULT_LOOK); }} hasValues={!!hasSettings}>
+                    {/* Shot Section */}
+                    <div className="mb-3">
+                        <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-2">Shot</div>
+                        <div className="grid grid-cols-2 gap-2">
+                            <SelGrouped label="Angle" value={shotSettings.angle} groups={cameraOptions.angle} onChange={(v) => onShotChange({ ...shotSettings, angle: v })} />
+                            <SelGrouped label="Shot" value={shotSettings.shot} groups={cameraOptions.shot} onChange={(v) => onShotChange({ ...shotSettings, shot: v })} />
+                            <SelGrouped label="Focal" value={shotSettings.focalLength} groups={cameraOptions.lens} onChange={(v) => onShotChange({ ...shotSettings, focalLength: v })} />
+                            <SelGrouped label="Aperture" value={shotSettings.aperture} groups={cameraOptions.aperture} onChange={(v) => onShotChange({ ...shotSettings, aperture: v })} />
+                        </div>
                     </div>
-                </Modal>
-            )}
 
-            {/* Look Modal */}
-            {openModal === "look" && (
-                <Modal title="Look" accent="from-purple-600 to-indigo-600" onClose={() => setOpenModal(null)} onClear={() => onLookChange(DEFAULT_LOOK)} hasValues={!!lookHas}>
-                    <Sel label="Style" value={lookSettings.style} options={STYLE_OPTIONS} onChange={(v) => onLookChange({ ...lookSettings, style: v })} />
-                    <div className="grid grid-cols-2 gap-2">
-                        <Sel label="System" value={lookSettings.cameraSystem} options={systemOptions} placeholder="All" onChange={handleSystemChange} />
-                        <Sel label="Body" value={lookSettings.cameraBody} options={bodyOptions} placeholder={lookSettings.cameraSystem ? "Select" : "Pick system"} onChange={(v) => onLookChange({ ...lookSettings, cameraBody: v })} disabled={!lookSettings.cameraSystem} />
-                        <Sel label="Lens" value={lookSettings.lens} options={lensOptions} placeholder={lookSettings.cameraSystem ? "Select" : "Pick system"} onChange={(v) => onLookChange({ ...lookSettings, lens: v })} disabled={!lookSettings.cameraSystem} />
-                        <Sel label="Film Stock" value={lookSettings.filmStock} options={filmStockOptions} onChange={(v) => onLookChange({ ...lookSettings, filmStock: v })} />
+                    {/* Look Section */}
+                    <div className="mb-3">
+                        <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-2">Look</div>
+                        <Sel label="Style" value={lookSettings.style} options={STYLE_OPTIONS} onChange={(v) => onLookChange({ ...lookSettings, style: v })} />
+                        <div className="grid grid-cols-2 gap-2">
+                            <Sel label="System" value={lookSettings.cameraSystem} options={systemOptions} placeholder="All" onChange={handleSystemChange} />
+                            <Sel label="Body" value={lookSettings.cameraBody} options={bodyOptions} placeholder={lookSettings.cameraSystem ? "Select" : "Pick system"} onChange={(v) => onLookChange({ ...lookSettings, cameraBody: v })} disabled={!lookSettings.cameraSystem} />
+                            <Sel label="Lens" value={lookSettings.lens} options={lensOptions} placeholder={lookSettings.cameraSystem ? "Select" : "Pick system"} onChange={(v) => onLookChange({ ...lookSettings, lens: v })} disabled={!lookSettings.cameraSystem} />
+                            <Sel label="Film Stock" value={lookSettings.filmStock} options={filmStockOptions} onChange={(v) => onLookChange({ ...lookSettings, filmStock: v })} />
+                        </div>
+                        <Sel label="Lighting" value={lookSettings.lighting} options={LIGHTING_OPTIONS} onChange={(v) => onLookChange({ ...lookSettings, lighting: v })} />
+                        <Sel label="Inspiration" value={lookSettings.inspiration} options={INSPIRATION_OPTIONS} onChange={(v) => onLookChange({ ...lookSettings, inspiration: v })} />
                     </div>
-                    <Sel label="Lighting" value={lookSettings.lighting} options={LIGHTING_OPTIONS} onChange={(v) => onLookChange({ ...lookSettings, lighting: v })} />
-                    <Sel label="Inspiration" value={lookSettings.inspiration} options={INSPIRATION_OPTIONS} onChange={(v) => onLookChange({ ...lookSettings, inspiration: v })} />
                 </Modal>
             )}
         </>

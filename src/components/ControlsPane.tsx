@@ -3524,6 +3524,8 @@ export default function ControlsPane() {
                   lookSettings={imageLookSettings}
                   onShotChange={setImageShotSettings}
                   onLookChange={setImageLookSettings}
+                  isCinematographerOn={appendImageCameraSettings}
+                  onCinematographerToggle={setAppendImageCameraSettings}
                 />
               )}
             </div>
