@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { createPortal } from "react-dom";
 import {
     cameraOptions,
@@ -9,107 +9,10 @@ import {
 } from "../lib/prompt-builder/types";
 import {
     lighting,
-    mood,
     styles,
-    flattenToOptions,
 } from "../lib/prompt-builder";
 import cameraSystems from "../lib/prompt-builder/camera-systems.json";
 
-// ── Camera system types ────────────────────────────────────────────────
-
-type CameraSystemData = {
-    name: string;
-    bodies: { id: string; name: string; prompt: string }[];
-    lenses: { id: string; name: string; prompt: string }[];
-    filmStocks: string[];
-};
-
-type FilmStockEntry = { name: string; prompt: string };
-
-// Pre-build lighting & inspiration & style options
-const LIGHTING_OPTIONS = flattenToOptions(lighting);
-const INSPIRATION_OPTIONS = flattenToOptions(mood);
-const STYLE_OPTIONS = flattenToOptions(styles);
-
-// ── Compact dropdown ───────────────────────────────────────────────────
-
-function Sel({
-    label,
-    value,
-    options,
-    placeholder,
-    onChange,
-    disabled,
-}: {
-    label: string;
-    value: string;
-    options: { value: string; label: string }[];
-    placeholder?: string;
-    onChange: (v: string) => void;
-    disabled?: boolean;
-}) {
-    return (
-        <div>
-            <span className="text-[9px] font-medium uppercase tracking-wider text-slate-500">{label}</span>
-            <select
-                value={value}
-                onChange={(e) => onChange(e.target.value)}
-                disabled={disabled}
-                className={`kv-input mt-0.5 w-full appearance-none rounded-xl px-2 py-1 text-[11px] text-white cursor-pointer ${disabled ? "opacity-40 cursor-not-allowed" : ""}`}
-                style={{
-                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
-                    backgroundRepeat: "no-repeat",
-                    backgroundPosition: "right 6px center",
-                    paddingRight: "22px",
-                }}
-            >
-                <option value="">{placeholder || "—"}</option>
-                {options.map((o, i) => (
-                    <option key={`${o.value}-${i}`} value={o.value}>{o.label}</option>
-                ))}
-            </select>
-        </div>
-    );
-}
-
-// Grouped variant (for camera angle/shot/lens/aperture which use Record<string, ...>)
-function SelGrouped({
-    label,
-    value,
-    groups,
-    onChange,
-}: {
-    label: string;
-    value: string;
-    groups: Record<string, { value: string; label: string }[]>;
-    onChange: (v: string) => void;
-}) {
-    return (
-        <div>
-            <span className="text-[9px] font-medium uppercase tracking-wider text-slate-500">{label}</span>
-            <select
-                value={value}
-                onChange={(e) => onChange(e.target.value)}
-                className="kv-input mt-0.5 w-full appearance-none rounded-xl px-2 py-1 text-[11px] text-white cursor-pointer"
-                style={{
-                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
-                    backgroundRepeat: "no-repeat",
-                    backgroundPosition: "right 6px center",
-                    paddingRight: "22px",
-                }}
-            >
-                <option value="">—</option>
-                {Object.entries(groups).map(([g, items]) => (
-                    <optgroup key={g} label={g}>
-                        {items.map((o, i) => (
-                            <option key={`${o.value}-${i}`} value={o.value}>{o.label}</option>
-                        ))}
-                    </optgroup>
-                ))}
-            </select>
-        </div>
-    );
-}
 
 // ── Summary helpers ────────────────────────────────────────────────────
 
@@ -131,14 +34,12 @@ function lookSummary(l: LookSettings): string {
 
 function Modal({
     title,
-    accent,
     children,
     onClose,
     onClear,
     hasValues,
 }: {
     title: string;
-    accent: string;
     children: React.ReactNode;
     onClose: () => void;
     onClear: () => void;
@@ -149,17 +50,17 @@ function Modal({
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
             onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
-            <div className="kv-panel w-full max-w-md overflow-hidden rounded-[24px]">
-                <div className={`flex items-center justify-between px-3 py-2 bg-gradient-to-r ${accent}`}>
-                    <span className="text-xs font-semibold text-white">{title}</span>
-                    <button type="button" onClick={onClose} className="kv-icon-button flex h-6 w-6 items-center justify-center rounded-full text-xs">×</button>
+            <div className="w-full max-w-4xl rounded-[24px] bg-[#1a1a1a] p-6 text-slate-100 shadow-2xl">
+                <div className="flex items-center justify-between mb-4">
+                    <span className="text-xl font-bold text-white">{title}</span>
+                    <button type="button" onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 transition">×</button>
                 </div>
-                <div className="p-3 space-y-2">{children}</div>
-                <div className="kv-panel-soft flex justify-between px-3 py-2">
+                <div className="space-y-4 max-h-[600px] overflow-y-auto">{children}</div>
+                <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
                     {hasValues ? (
-                        <button type="button" onClick={onClear} className="kv-icon-button rounded-full px-2 py-1 text-[10px] text-slate-300 transition">Reset</button>
+                        <button type="button" onClick={onClear} className="rounded-xl bg-white/10 px-6 py-2 text-sm font-medium text-slate-300 hover:bg-white/20 transition">Reset</button>
                     ) : <div />}
-                    <button type="button" onClick={onClose} className="kv-cta rounded-full px-3 py-1 text-[10px] font-semibold transition hover:opacity-90">Apply</button>
+                    <button type="button" onClick={onClose} className="rounded-xl bg-emerald-500 px-6 py-2 text-sm font-medium text-white hover:bg-emerald-600 transition">Apply</button>
                 </div>
             </div>
         </div>,
@@ -194,40 +95,6 @@ export function ImageShotLookCards({ shotSettings, lookSettings, onShotChange, o
         lookSettings.lighting ||
         lookSettings.inspiration;
 
-    // ── Cascading camera system options (same logic as PromptBuilderV2) ──
-
-    const systemOptions = useMemo(() => {
-        const systems = cameraSystems.systems as Record<string, CameraSystemData>;
-        const order = ["imax", "panavision", "arri", "red", "sony_venice", "blackmagic", "sony", "canon_dslr", "nikon", "fujifilm", "leica"];
-        return order.filter((k) => systems[k]).map((k) => ({ value: k, label: systems[k].name }));
-    }, []);
-
-    const bodyOptions = useMemo(() => {
-        if (!lookSettings.cameraSystem) return [];
-        const sys = (cameraSystems.systems as Record<string, CameraSystemData>)[lookSettings.cameraSystem];
-        return sys ? sys.bodies.map((b) => ({ value: b.prompt, label: b.name })) : [];
-    }, [lookSettings.cameraSystem]);
-
-    const lensOptions = useMemo(() => {
-        if (!lookSettings.cameraSystem) return [];
-        const sys = (cameraSystems.systems as Record<string, CameraSystemData>)[lookSettings.cameraSystem];
-        return sys ? sys.lenses.map((l) => ({ value: l.prompt, label: l.name })) : [];
-    }, [lookSettings.cameraSystem]);
-
-    const filmStockOptions = useMemo(() => {
-        const stocks = cameraSystems.filmStocks as Record<string, FilmStockEntry>;
-        if (!lookSettings.cameraSystem) {
-            return Object.values(stocks).map((s) => ({ value: s.prompt, label: s.name }));
-        }
-        const sys = (cameraSystems.systems as Record<string, CameraSystemData>)[lookSettings.cameraSystem];
-        if (!sys) return [];
-        return sys.filmStocks.filter((k) => stocks[k]).map((k) => ({ value: stocks[k].prompt, label: stocks[k].name }));
-    }, [lookSettings.cameraSystem]);
-
-    const handleSystemChange = (system: string) => {
-        onLookChange({ ...lookSettings, cameraSystem: system, cameraBody: "", lens: "", filmStock: "" });
-    };
-
     return (
         <>
             <div className="flex items-center gap-1.5 pt-1">
@@ -255,7 +122,7 @@ export function ImageShotLookCards({ shotSettings, lookSettings, onShotChange, o
 
             {/* Cinematographer Modal */}
             {openModal === "cinematographer" && (
-                <Modal title="Cinematographer" accent="from-amber-600 to-orange-600" onClose={() => setOpenModal(null)} onClear={() => { onShotChange(DEFAULT_SHOT); onLookChange(DEFAULT_LOOK); }} hasValues={!!hasSettings}>
+                <Modal title="Cinematographer" onClose={() => setOpenModal(null)} onClear={() => { onShotChange(DEFAULT_SHOT); onLookChange(DEFAULT_LOOK); }} hasValues={!!hasSettings}>
                     {/* Tabs */}
                     <div className="flex gap-2 mb-3">
                         {["camera", "lighting", "style", "hexcodes"].map((tab) => (
@@ -272,67 +139,180 @@ export function ImageShotLookCards({ shotSettings, lookSettings, onShotChange, o
 
                     {/* Tab Content */}
                     {activeTab === "camera" && (
-                        <div className="space-y-3">
-                            {/* Shot Section */}
-                            <div>
-                                <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-2">Shot</div>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <SelGrouped label="Angle" value={shotSettings.angle} groups={cameraOptions.angle} onChange={(v) => onShotChange({ ...shotSettings, angle: v })} />
-                                    <SelGrouped label="Shot" value={shotSettings.shot} groups={cameraOptions.shot} onChange={(v) => onShotChange({ ...shotSettings, shot: v })} />
-                                    <SelGrouped label="Focal" value={shotSettings.focalLength} groups={cameraOptions.lens} onChange={(v) => onShotChange({ ...shotSettings, focalLength: v })} />
-                                    <SelGrouped label="Aperture" value={shotSettings.aperture} groups={cameraOptions.aperture} onChange={(v) => onShotChange({ ...shotSettings, aperture: v })} />
+                        <div className="grid grid-cols-4 gap-3">
+                            {/* All Camera Bodies Column */}
+                            <div className="space-y-1">
+                                <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-2">Camera Body</div>
+                                <div className="h-[300px] overflow-y-auto pr-1">
+                                    {Object.values(cameraSystems.systems).flatMap(sys => sys.bodies).map((body) => (
+                                        <button
+                                            key={body.prompt}
+                                            type="button"
+                                            onClick={() => onLookChange({ ...lookSettings, cameraBody: body.prompt })}
+                                            className={`w-full text-left rounded-lg px-2 py-1.5 text-xs transition ${lookSettings.cameraBody === body.prompt ? "bg-amber-500/20 text-amber-200 border border-amber-500/30" : "text-slate-400 hover:text-white hover:bg-white/5"}`}
+                                        >
+                                            {body.name}
+                                        </button>
+                                    ))}
                                 </div>
                             </div>
 
-                            {/* Look Section - Camera */}
-                            <div>
-                                <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-2">Camera</div>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <Sel label="System" value={lookSettings.cameraSystem} options={systemOptions} placeholder="All" onChange={handleSystemChange} />
-                                    <Sel label="Body" value={lookSettings.cameraBody} options={bodyOptions} placeholder={lookSettings.cameraSystem ? "Select" : "Pick system"} onChange={(v) => onLookChange({ ...lookSettings, cameraBody: v })} disabled={!lookSettings.cameraSystem} />
-                                    <Sel label="Lens" value={lookSettings.lens} options={lensOptions} placeholder={lookSettings.cameraSystem ? "Select" : "Pick system"} onChange={(v) => onLookChange({ ...lookSettings, lens: v })} disabled={!lookSettings.cameraSystem} />
-                                    <Sel label="Film Stock" value={lookSettings.filmStock} options={filmStockOptions} onChange={(v) => onLookChange({ ...lookSettings, filmStock: v })} />
+                            {/* All Camera Lenses Column */}
+                            <div className="space-y-1">
+                                <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-2">Lens</div>
+                                <div className="h-[300px] overflow-y-auto pr-1">
+                                    {Object.values(cameraSystems.systems).flatMap(sys => sys.lenses).map((lens) => (
+                                        <button
+                                            key={lens.prompt}
+                                            type="button"
+                                            onClick={() => onLookChange({ ...lookSettings, lens: lens.prompt })}
+                                            className={`w-full text-left rounded-lg px-2 py-1.5 text-xs transition ${lookSettings.lens === lens.prompt ? "bg-amber-500/20 text-amber-200 border border-amber-500/30" : "text-slate-400 hover:text-white hover:bg-white/5"}`}
+                                        >
+                                            {lens.name}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Focal Length Column */}
+                            <div className="space-y-1">
+                                <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-2">Focal Length</div>
+                                <div className="h-[300px] overflow-y-auto pr-1">
+                                    {cameraSystems.focalLengths.map((focal) => (
+                                        <button
+                                            key={focal.value}
+                                            type="button"
+                                            onClick={() => onShotChange({ ...shotSettings, focalLength: focal.value })}
+                                            className={`w-full text-left rounded-lg px-2 py-1.5 text-xs transition ${shotSettings.focalLength === focal.value ? "bg-amber-500/20 text-amber-200 border border-amber-500/30" : "text-slate-400 hover:text-white hover:bg-white/5"}`}
+                                        >
+                                            {focal.value}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Aperture Column */}
+                            <div className="space-y-1">
+                                <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-2">Aperture</div>
+                                <div className="h-[300px] overflow-y-auto pr-1">
+                                    {Object.entries(cameraOptions.aperture).flatMap(([, items]) => items).map((aperture) => (
+                                        <button
+                                            key={aperture.value}
+                                            type="button"
+                                            onClick={() => onShotChange({ ...shotSettings, aperture: aperture.value })}
+                                            className={`w-full text-left rounded-lg px-2 py-1.5 text-xs transition ${shotSettings.aperture === aperture.value ? "bg-amber-500/20 text-amber-200 border border-amber-500/30" : "text-slate-400 hover:text-white hover:bg-white/5"}`}
+                                        >
+                                            {aperture.label}
+                                        </button>
+                                    ))}
                                 </div>
                             </div>
                         </div>
                     )}
 
                     {activeTab === "lighting" && (
-                        <div className="space-y-3">
-                            <div>
-                                <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-2">Lighting</div>
-                                <Sel label="Lighting" value={lookSettings.lighting} options={LIGHTING_OPTIONS} onChange={(v) => onLookChange({ ...lookSettings, lighting: v })} />
-                            </div>
-                            <div>
-                                <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-2">Inspiration</div>
-                                <Sel label="Mood" value={lookSettings.inspiration} options={INSPIRATION_OPTIONS} onChange={(v) => onLookChange({ ...lookSettings, inspiration: v })} />
-                            </div>
+                        <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                            {Object.entries(lighting).map(([category, presets]) => (
+                                <div key={category} className="space-y-1">
+                                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-2">{category}</div>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        {presets.map((preset) => (
+                                            <div
+                                                key={preset.prompt}
+                                                className={`rounded-lg overflow-hidden transition ${lookSettings.lighting === preset.prompt ? "border-2 border-amber-500/30" : "border border-white/10"}`}
+                                            >
+                                                <div className="aspect-video bg-slate-800 relative">
+                                                    <img
+                                                        src={`https://picsum.photos/seed/lighting-${preset.name}/200/150`}
+                                                        alt={preset.name}
+                                                        className="h-full w-full object-cover"
+                                                    />
+                                                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+                                                    <div className="absolute bottom-2 left-2 text-xs text-white font-medium">
+                                                        {preset.name}
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onLookChange({ ...lookSettings, lighting: preset.prompt })}
+                                                    className={`w-full px-3 py-1.5 text-xs transition ${lookSettings.lighting === preset.prompt ? "bg-amber-500/20 text-amber-200" : "text-slate-400 hover:text-white hover:bg-white/5"}`}
+                                                >
+                                                    Select
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     )}
 
                     {activeTab === "style" && (
-                        <div className="space-y-3">
-                            <div>
-                                <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-2">Style</div>
-                                <Sel label="Style" value={lookSettings.style} options={STYLE_OPTIONS} onChange={(v) => onLookChange({ ...lookSettings, style: v })} />
-                            </div>
+                        <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                            {Object.entries(styles).map(([category, presets]) => (
+                                <div key={category} className="space-y-1">
+                                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-2">{category}</div>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        {presets.map((preset) => (
+                                            <div
+                                                key={preset.prompt}
+                                                className={`rounded-lg overflow-hidden transition ${lookSettings.style === preset.prompt ? "border-2 border-amber-500/30" : "border border-white/10"}`}
+                                            >
+                                                <div className="aspect-video bg-slate-800 relative">
+                                                    <img
+                                                        src={`https://picsum.photos/seed/style-${preset.name}/200/150`}
+                                                        alt={preset.name}
+                                                        className="h-full w-full object-cover"
+                                                    />
+                                                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+                                                    <div className="absolute bottom-2 left-2 text-xs text-white font-medium">
+                                                        {preset.name}
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onLookChange({ ...lookSettings, style: preset.prompt })}
+                                                    className={`w-full px-3 py-1.5 text-xs transition ${lookSettings.style === preset.prompt ? "bg-amber-500/20 text-amber-200" : "text-slate-400 hover:text-white hover:bg-white/5"}`}
+                                                >
+                                                    Select
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     )}
 
                     {activeTab === "hexcodes" && (
-                        <div className="space-y-3">
+                        <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
                             <div>
                                 <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-2">Hex Codes</div>
-                                <div className="flex gap-2 flex-wrap">
-                                    {["#FF6B00", "#FFB84D", "#FFE66D", "#4ECDC4", "#556270"].map((hex) => (
-                                        <div key={hex} className="flex flex-col items-center gap-1">
-                                            <div className="w-8 h-8 rounded-full" style={{ backgroundColor: hex }}></div>
-                                            <span className="text-[8px] text-slate-400">{hex}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                                <div className="mt-3 text-[10px] text-slate-500">
-                                    Drag & drop an image to extract colors
+                                <div
+                                    className="border-2 border-dashed border-white/20 rounded-lg p-4 text-center cursor-pointer hover:border-sky-400 transition"
+                                    onClick={() => console.log("Open file picker")}
+                                    onDragOver={(e) => {
+                                        e.preventDefault();
+                                        e.dataTransfer.dropEffect = "copy";
+                                    }}
+                                    onDragLeave={(e) => {
+                                        e.preventDefault();
+                                    }}
+                                    onDrop={(e) => {
+                                        e.preventDefault();
+                                        console.log("Image dropped for color extraction");
+                                        // TODO: Implement color extraction from dropped image
+                                    }}
+                                >
+                                    <div className="text-slate-400 text-sm mb-2">Drop an image to extract colors</div>
+                                    <div className="grid grid-cols-5 gap-2">
+                                        {["#FF6B00", "#FFB84D", "#FFE66D", "#4ECDC4", "#556270"].map((hex) => (
+                                            <div key={hex} className="flex flex-col items-center gap-1">
+                                                <div className="w-8 h-8 rounded-full" style={{ backgroundColor: hex }}></div>
+                                                <span className="text-[8px] text-slate-400">{hex}</span>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
                         </div>
