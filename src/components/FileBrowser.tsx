@@ -23,6 +23,7 @@ import { useHoverPlayVideos } from "../lib/useHoverPlayVideos";
 import CanvasBrowser, { type CanvasBrowserItem } from "./CanvasBrowser";
 import ShotContainer from "./ShotContainer";
 import { useShots } from "../state/shots";
+import CreateShotsModal from "./CreateShotsModal";
 
 const IMAGE_EXTS = ["png", "jpg", "jpeg", "webp"];
 const VIDEO_EXTS = ["mp4", "webm", "mov", "mkv"];
@@ -144,6 +145,7 @@ export default function FileBrowser({ disableKeyboardNav, onBack }: FileBrowserP
 
   const [filterOpen, setFilterOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "canvas">("grid");
+  const [showManageShotsModal, setShowManageShotsModal] = useState(false);
   const [hoverPlayVideos] = useHoverPlayVideos();
 
   const iconButtonBase =
@@ -1069,24 +1071,14 @@ export default function FileBrowser({ disableKeyboardNav, onBack }: FileBrowserP
                   <option key={shot.id} value={shot.id}>{shot.name}</option>
                 ))}
               </select>
-              <div className="flex flex-col gap-0.5">
-                <button
-                  type="button"
-                  onClick={() => navigateShot("prev")}
-                  className="flex h-5 w-5 items-center justify-center rounded text-slate-500 transition hover:bg-white/5 hover:text-white"
-                  aria-label="Previous shot"
-                >
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6"/></svg>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => navigateShot("next")}
-                  className="flex h-5 w-5 items-center justify-center rounded text-slate-500 transition hover:bg-white/5 hover:text-white"
-                  aria-label="Next shot"
-                >
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => setShowManageShotsModal(true)}
+                className="flex items-center gap-1 rounded-lg bg-white/5 px-2 py-1 text-xs font-medium text-slate-300 hover:bg-white/10 transition"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+                Manage Shots
+              </button>
               <span className="kv-mono text-[10px] text-slate-600">{shots.length} shots</span>
             </div>
 
@@ -1113,6 +1105,16 @@ export default function FileBrowser({ disableKeyboardNav, onBack }: FileBrowserP
               />
             ))}
           </div>
+
+          {/* Manage Shots Modal */}
+          <CreateShotsModal
+            isOpen={showManageShotsModal}
+            onClose={() => setShowManageShotsModal(false)}
+            onSubmit={(data) => {
+              console.log("Manage shots data:", data);
+              setShowManageShotsModal(false);
+            }}
+          />
         ) : (
           <div className="flex flex-col min-h-full">
               <div ref={gridContainerRef} className="grid grid-cols-3 gap-2 p-2">
