@@ -3,11 +3,15 @@
  * Elements are reusable characters/objects that can be referenced during generation.
  */
 
+export type ElementCategory = "character" | "environment" | "prop" | "shot";
+
 export interface Element {
     /** Unique identifier (UUID) */
     id: string;
     /** User-friendly name */
     name: string;
+    /** Category */
+    category: ElementCategory;
     /** Required frontal image URL */
     frontalImageUrl: string;
     /** 2-3 additional reference images from different angles */
@@ -18,10 +22,13 @@ export interface Element {
     createdAt: number;
     /** Last updated timestamp */
     updatedAt: number;
+    /** Is the element pinned? */
+    isPinned?: boolean;
 }
 
 export interface ElementInput {
     name: string;
+    category: ElementCategory;
     frontalImage: File;
     referenceImages: File[];
     characterSheet?: File;

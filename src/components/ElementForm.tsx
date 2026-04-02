@@ -15,6 +15,7 @@ export default function ElementForm() {
     const { state } = useCatalog();
     const connection = state.connection;
     const [name, setName] = useState("");
+    const [category, setCategory] = useState<"character" | "environment" | "prop" | "shot">("character");
     const [frontalImage, setFrontalImage] = useState<File | null>(null);
     const [frontalPreview, setFrontalPreview] = useState<string | null>(null);
     const [referenceImages, setReferenceImages] = useState<File[]>([]);
@@ -131,6 +132,7 @@ export default function ElementForm() {
         try {
             await addElement({
                 name: name.trim(),
+                category,
                 frontalImage,
                 referenceImages,
                 characterSheet: characterSheet || undefined,
@@ -180,6 +182,23 @@ export default function ElementForm() {
                     placeholder="e.g., Hero Character, Magic Sword"
                     className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 transition"
                 />
+            </div>
+
+            {/* Category */}
+            <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1">
+                    Category *
+                </label>
+                <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value as "character" | "environment" | "prop" | "shot")}
+                    className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 transition"
+                >
+                    <option value="character">Character</option>
+                    <option value="environment">Environment</option>
+                    <option value="prop">Prop</option>
+                    <option value="shot">Shot Store</option>
+                </select>
             </div>
 
             {/* Frontal Image */}

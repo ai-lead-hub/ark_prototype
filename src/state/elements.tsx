@@ -91,6 +91,7 @@ export function ElementsProvider({ children }: { children: ReactNode }) {
     const addElement = useCallback(async (input: ElementInput): Promise<Element> => {
         const formData = new FormData();
         formData.append("name", input.name);
+        formData.append("category", input.category);
         formData.append("frontalImage", input.frontalImage);
         input.referenceImages.forEach((file, i) => {
             formData.append(`referenceImage_${i}`, file);

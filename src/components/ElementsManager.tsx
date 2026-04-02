@@ -8,6 +8,7 @@ const DEMO_ELEMENTS: Element[] = [
   {
     id: "demo-element-1",
     name: "Captain Vale",
+    category: "character",
     frontalImageUrl: "https://picsum.photos/seed/demo-element-1/640/640",
     referenceImageUrls: [
       "https://picsum.photos/seed/demo-element-1-ref-a/640/640",
@@ -16,31 +17,38 @@ const DEMO_ELEMENTS: Element[] = [
     characterSheetUrl: "https://picsum.photos/seed/demo-element-1-sheet/640/640",
     createdAt: Date.now(),
     updatedAt: Date.now(),
+    isPinned: true,
   },
   {
     id: "demo-element-2",
     name: "Neon Courier",
+    category: "character",
     frontalImageUrl: "https://picsum.photos/seed/demo-element-2/640/640",
     referenceImageUrls: ["https://picsum.photos/seed/demo-element-2-ref-a/640/640"],
     characterSheetUrl: "https://picsum.photos/seed/demo-element-2-sheet/640/640",
     createdAt: Date.now(),
     updatedAt: Date.now(),
+    isPinned: false,
   },
   {
     id: "demo-element-3",
     name: "The Glass Market",
+    category: "environment",
     frontalImageUrl: "https://picsum.photos/seed/demo-element-3/640/640",
     referenceImageUrls: ["https://picsum.photos/seed/demo-element-3-ref-a/640/640"],
     createdAt: Date.now(),
     updatedAt: Date.now(),
+    isPinned: true,
   },
   {
     id: "demo-element-4",
     name: "Orbit Bike",
+    category: "prop",
     frontalImageUrl: "https://picsum.photos/seed/demo-element-4/640/640",
     referenceImageUrls: [],
     createdAt: Date.now(),
     updatedAt: Date.now(),
+    isPinned: false,
   },
 ];
 
@@ -51,28 +59,30 @@ export default function ElementsManager() {
     error,
     isFormOpen,
     isSelectionMode,
-    selectedElements,
     closeManager,
     openForm,
     selectElement,
     deleteElement,
   } = useElements();
   const [demoElements, setDemoElements] = useState<Element[]>(DEMO_ELEMENTS);
+  const [activeTab, setActiveTab] = useState<"character" | "environment" | "prop" | "shot">("character");
 
   const usingDemoElements = elements.length === 0;
   const visibleElements = usingDemoElements ? demoElements : elements;
 
+  const filteredElements = visibleElements.filter(element => element.category === activeTab);
+
   const pinnedElements = useMemo(
-    () => usingDemoElements ? visibleElements.slice(0, 2) : selectedElements.map(({ element }) => element),
-    [selectedElements, usingDemoElements, visibleElements]
+    () => filteredElements.filter(element => element.isPinned),
+    [filteredElements]
   );
   const pinnedIds = useMemo(
     () => new Set(pinnedElements.map((element) => element.id)),
     [pinnedElements]
   );
   const libraryElements = useMemo(
-    () => visibleElements.filter((element) => !pinnedIds.has(element.id)),
-    [pinnedIds, visibleElements]
+    () => filteredElements.filter(element => !element.isPinned),
+    [filteredElements]
   );
   const showLoading = isLoading && !usingDemoElements;
   const showError = Boolean(error) && !usingDemoElements;
@@ -140,6 +150,28 @@ export default function ElementsManager() {
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col px-5 py-4">
+        {!isFormOpen && (
+          <div className="mb-6 flex gap-2">
+            {[
+              { key: "character", label: "Character" },
+              { key: "environment", label: "Environment" },
+              { key: "prop", label: "Prop" },
+              { key: "shot", label: "Shot Store" },
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key as "character" | "environment" | "prop" | "shot")}
+                className={`px-4 py-2 rounded-full text-sm font-medium transition ${
+                  activeTab === tab.key
+                    ? "bg-amber-500/20 text-amber-200 border border-amber-500/30"
+                    : "text-slate-400 hover:text-white hover:bg-white/5"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        )}
         {isFormOpen ? (
           <div className="kv-panel-soft custom-scrollbar min-h-0 overflow-y-auto rounded-[24px] p-5">
             <ElementForm />
