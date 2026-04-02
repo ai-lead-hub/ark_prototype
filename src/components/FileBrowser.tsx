@@ -78,7 +78,7 @@ export default function FileBrowser({ disableKeyboardNav, onBack }: FileBrowserP
   }, [catalogEntries]);
 
   const { jobs, retryJob } = useQueue();
-  const { shots, activeShot, inactiveShots, setActiveShot, navigateShot, sceneName, projectName, allScenes, activeSceneId, setActiveScene } = useShots();
+  const { shots, activeShot, inactiveShots, setActiveShot, navigateShot, projectName, allScenes, activeSceneId, setActiveScene } = useShots();
   const queueTiles = useMemo(
     () => {
       const rank: Record<"processing" | "pending" | "failed" | "completed", number> = {
