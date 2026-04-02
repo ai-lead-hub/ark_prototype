@@ -281,12 +281,7 @@ export default function ShotContainer({
             </div>
           )}
 
-          {/* Candidate count */}
-          <span className="kv-mono text-[10px] text-slate-600">
-            {shot.candidates.length} candidate{shot.candidates.length !== 1 ? "s" : ""}
-          </span>
-
-          {/* Delete button - only appears on hover */}
+          {/* Delete button - fixed in corner */}
           {onDelete && (
             <button
               type="button"
@@ -294,7 +289,7 @@ export default function ShotContainer({
                 e.stopPropagation();
                 onDelete();
               }}
-              className="ml-1 flex h-6 w-6 items-center justify-center rounded text-slate-600 opacity-0 group-hover:opacity-100 transition hover:text-rose-400 hover:bg-rose-500/10"
+              className="ml-1 flex h-6 w-6 items-center justify-center rounded text-slate-600 transition hover:text-rose-400 hover:bg-rose-500/10"
               aria-label="Delete shot"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -304,6 +299,11 @@ export default function ShotContainer({
               </svg>
             </button>
           )}
+
+          {/* Candidate count */}
+          <span className="kv-mono text-[10px] text-slate-600">
+            {shot.candidates.length} candidate{shot.candidates.length !== 1 ? "s" : ""}
+          </span>
         </div>
 
         {/* Candidate grid — grouped by role when active */}

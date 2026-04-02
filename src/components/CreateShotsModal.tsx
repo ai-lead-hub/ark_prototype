@@ -42,19 +42,14 @@ export default function CreateShotsModal({ isOpen, onClose, onSubmit }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-      <div className="w-full max-w-4xl rounded-2xl bg-[#1a1a1a] p-8 text-slate-100 shadow-2xl">
-        <h1 className="text-3xl font-bold text-white mb-6">Create Shots</h1>
+      <div className="w-full max-w-2xl rounded-2xl bg-[#1a1a1a] p-6 text-slate-100 shadow-2xl">
+        <h1 className="text-2xl font-bold text-white mb-4">Manage Shots</h1>
 
-        <div className="space-y-6">
+        <div className="space-y-4">
           {/* Instructions */}
-          <div className="text-sm text-slate-400">
+          <div className="text-xs text-slate-400">
             <p>
-              To add shots, you first need to create an episode and a sequence. Type an episode
-              name at the bottom of the left column, then click "Add" to create a new episode.
-              Select this episode and repeat the same operation for the sequence. Finally, select
-              a sequence and type a shot name in the field at the bottom of the right column.
-              Click the "Add" button below. Your first shot is now created. You can add many
-              more! If it's not a TV show, you can directly create a sequence.
+              To add shots, first create an episode and sequence. If it's not a TV show, you can directly create a sequence.
             </p>
           </div>
 
@@ -81,18 +76,31 @@ export default function CreateShotsModal({ isOpen, onClose, onSubmit }: Props) {
               <h3 className="text-lg font-semibold text-white">Sequences</h3>
               <div className="h-64 rounded-xl bg-[#2a2a2a] p-3 overflow-y-auto">
                 {sequences.map((seq) => (
-                  <button
-                    key={seq}
-                    type="button"
-                    onClick={() => setSelectedSequence(seq)}
-                    className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${
-                      selectedSequence === seq
-                        ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
-                        : "text-slate-400 hover:bg-white/5"
-                    }`}
-                  >
-                    {seq}
-                  </button>
+                  <div key={seq} className="flex items-center justify-between rounded-lg px-3 py-2 text-sm hover:bg-white/5 transition">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedSequence(seq)}
+                      className={`flex-1 text-left transition ${
+                        selectedSequence === seq
+                          ? "text-indigo-300"
+                          : "text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      {seq}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSequences(sequences.filter((s) => s !== seq))}
+                      className="ml-2 flex h-6 w-6 items-center justify-center rounded text-slate-600 hover:text-rose-400 hover:bg-rose-500/10 transition"
+                      aria-label={`Delete sequence ${seq}`}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 6h18"/>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>
+                        <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                      </svg>
+                    </button>
+                  </div>
                 ))}
               </div>
               <div className="flex gap-2">
@@ -118,11 +126,20 @@ export default function CreateShotsModal({ isOpen, onClose, onSubmit }: Props) {
               <h3 className="text-lg font-semibold text-white">Shots</h3>
               <div className="h-64 rounded-xl bg-[#2a2a2a] p-3 overflow-y-auto">
                 {shots.map((shot) => (
-                  <div
-                    key={shot}
-                    className="rounded-lg px-3 py-2 text-sm text-slate-400 hover:bg-white/5"
-                  >
-                    {shot}
+                  <div key={shot} className="flex items-center justify-between rounded-lg px-3 py-2 text-sm text-slate-400 hover:bg-white/5 transition">
+                    <span className="flex-1">{shot}</span>
+                    <button
+                      type="button"
+                      onClick={() => setShots(shots.filter((s) => s !== shot))}
+                      className="ml-2 flex h-6 w-6 items-center justify-center rounded text-slate-600 hover:text-rose-400 hover:bg-rose-500/10 transition"
+                      aria-label={`Delete shot ${shot}`}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 6h18"/>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>
+                        <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                      </svg>
+                    </button>
                   </div>
                 ))}
               </div>
