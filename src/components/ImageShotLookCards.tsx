@@ -149,7 +149,7 @@ function Modal({
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
             onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
-            <div className="kv-panel w-full max-w-sm overflow-hidden rounded-[24px]">
+            <div className="kv-panel w-full max-w-md overflow-hidden rounded-[24px]">
                 <div className={`flex items-center justify-between px-3 py-2 bg-gradient-to-r ${accent}`}>
                     <span className="text-xs font-semibold text-white">{title}</span>
                     <button type="button" onClick={onClose} className="kv-icon-button flex h-6 w-6 items-center justify-center rounded-full text-xs">×</button>
@@ -157,9 +157,9 @@ function Modal({
                 <div className="p-3 space-y-2">{children}</div>
                 <div className="kv-panel-soft flex justify-between px-3 py-2">
                     {hasValues ? (
-                        <button type="button" onClick={onClear} className="kv-icon-button rounded-full px-2 py-1 text-[10px] text-slate-300 transition">Clear</button>
+                        <button type="button" onClick={onClear} className="kv-icon-button rounded-full px-2 py-1 text-[10px] text-slate-300 transition">Reset</button>
                     ) : <div />}
-                    <button type="button" onClick={onClose} className="kv-cta rounded-full px-3 py-1 text-[10px] font-semibold transition hover:opacity-90">Done</button>
+                    <button type="button" onClick={onClose} className="kv-cta rounded-full px-3 py-1 text-[10px] font-semibold transition hover:opacity-90">Apply</button>
                 </div>
             </div>
         </div>,
@@ -180,6 +180,7 @@ type Props = {
 
 export function ImageShotLookCards({ shotSettings, lookSettings, onShotChange, onLookChange, isCinematographerOn, onCinematographerToggle }: Props) {
     const [openModal, setOpenModal] = useState<"cinematographer" | null>(null);
+    const [activeTab, setActiveTab] = useState<"camera" | "lighting" | "style" | "hexcodes">("camera");
 
     const hasSettings =
         shotSettings.angle ||
@@ -255,29 +256,94 @@ export function ImageShotLookCards({ shotSettings, lookSettings, onShotChange, o
             {/* Cinematographer Modal */}
             {openModal === "cinematographer" && (
                 <Modal title="Cinematographer" accent="from-amber-600 to-orange-600" onClose={() => setOpenModal(null)} onClear={() => { onShotChange(DEFAULT_SHOT); onLookChange(DEFAULT_LOOK); }} hasValues={!!hasSettings}>
-                    {/* Shot Section */}
-                    <div className="mb-3">
-                        <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-2">Shot</div>
-                        <div className="grid grid-cols-2 gap-2">
-                            <SelGrouped label="Angle" value={shotSettings.angle} groups={cameraOptions.angle} onChange={(v) => onShotChange({ ...shotSettings, angle: v })} />
-                            <SelGrouped label="Shot" value={shotSettings.shot} groups={cameraOptions.shot} onChange={(v) => onShotChange({ ...shotSettings, shot: v })} />
-                            <SelGrouped label="Focal" value={shotSettings.focalLength} groups={cameraOptions.lens} onChange={(v) => onShotChange({ ...shotSettings, focalLength: v })} />
-                            <SelGrouped label="Aperture" value={shotSettings.aperture} groups={cameraOptions.aperture} onChange={(v) => onShotChange({ ...shotSettings, aperture: v })} />
-                        </div>
+                    {/* Tabs */}
+                    <div className="flex gap-2 mb-3">
+                        {["camera", "lighting", "style", "hexcodes"].map((tab) => (
+                            <button
+                                key={tab}
+                                type="button"
+                                onClick={() => setActiveTab(tab as "camera" | "lighting" | "style" | "hexcodes")}
+                                className={`px-3 py-1 rounded-full text-[10px] font-semibold transition ${activeTab === tab ? "bg-amber-500/20 text-amber-200 border border-amber-500/30" : "text-slate-400 hover:text-white hover:bg-white/5"}`}
+                            >
+                                {tab.toUpperCase()}
+                            </button>
+                        ))}
                     </div>
 
-                    {/* Look Section */}
-                    <div className="mb-3">
-                        <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-2">Look</div>
-                        <Sel label="Style" value={lookSettings.style} options={STYLE_OPTIONS} onChange={(v) => onLookChange({ ...lookSettings, style: v })} />
-                        <div className="grid grid-cols-2 gap-2">
-                            <Sel label="System" value={lookSettings.cameraSystem} options={systemOptions} placeholder="All" onChange={handleSystemChange} />
-                            <Sel label="Body" value={lookSettings.cameraBody} options={bodyOptions} placeholder={lookSettings.cameraSystem ? "Select" : "Pick system"} onChange={(v) => onLookChange({ ...lookSettings, cameraBody: v })} disabled={!lookSettings.cameraSystem} />
-                            <Sel label="Lens" value={lookSettings.lens} options={lensOptions} placeholder={lookSettings.cameraSystem ? "Select" : "Pick system"} onChange={(v) => onLookChange({ ...lookSettings, lens: v })} disabled={!lookSettings.cameraSystem} />
-                            <Sel label="Film Stock" value={lookSettings.filmStock} options={filmStockOptions} onChange={(v) => onLookChange({ ...lookSettings, filmStock: v })} />
+                    {/* Tab Content */}
+                    {activeTab === "camera" && (
+                        <div className="space-y-3">
+                            {/* Shot Section */}
+                            <div>
+                                <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-2">Shot</div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <SelGrouped label="Angle" value={shotSettings.angle} groups={cameraOptions.angle} onChange={(v) => onShotChange({ ...shotSettings, angle: v })} />
+                                    <SelGrouped label="Shot" value={shotSettings.shot} groups={cameraOptions.shot} onChange={(v) => onShotChange({ ...shotSettings, shot: v })} />
+                                    <SelGrouped label="Focal" value={shotSettings.focalLength} groups={cameraOptions.lens} onChange={(v) => onShotChange({ ...shotSettings, focalLength: v })} />
+                                    <SelGrouped label="Aperture" value={shotSettings.aperture} groups={cameraOptions.aperture} onChange={(v) => onShotChange({ ...shotSettings, aperture: v })} />
+                                </div>
+                            </div>
+
+                            {/* Look Section - Camera */}
+                            <div>
+                                <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-2">Camera</div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <Sel label="System" value={lookSettings.cameraSystem} options={systemOptions} placeholder="All" onChange={handleSystemChange} />
+                                    <Sel label="Body" value={lookSettings.cameraBody} options={bodyOptions} placeholder={lookSettings.cameraSystem ? "Select" : "Pick system"} onChange={(v) => onLookChange({ ...lookSettings, cameraBody: v })} disabled={!lookSettings.cameraSystem} />
+                                    <Sel label="Lens" value={lookSettings.lens} options={lensOptions} placeholder={lookSettings.cameraSystem ? "Select" : "Pick system"} onChange={(v) => onLookChange({ ...lookSettings, lens: v })} disabled={!lookSettings.cameraSystem} />
+                                    <Sel label="Film Stock" value={lookSettings.filmStock} options={filmStockOptions} onChange={(v) => onLookChange({ ...lookSettings, filmStock: v })} />
+                                </div>
+                            </div>
                         </div>
-                        <Sel label="Lighting" value={lookSettings.lighting} options={LIGHTING_OPTIONS} onChange={(v) => onLookChange({ ...lookSettings, lighting: v })} />
-                        <Sel label="Inspiration" value={lookSettings.inspiration} options={INSPIRATION_OPTIONS} onChange={(v) => onLookChange({ ...lookSettings, inspiration: v })} />
+                    )}
+
+                    {activeTab === "lighting" && (
+                        <div className="space-y-3">
+                            <div>
+                                <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-2">Lighting</div>
+                                <Sel label="Lighting" value={lookSettings.lighting} options={LIGHTING_OPTIONS} onChange={(v) => onLookChange({ ...lookSettings, lighting: v })} />
+                            </div>
+                            <div>
+                                <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-2">Inspiration</div>
+                                <Sel label="Mood" value={lookSettings.inspiration} options={INSPIRATION_OPTIONS} onChange={(v) => onLookChange({ ...lookSettings, inspiration: v })} />
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === "style" && (
+                        <div className="space-y-3">
+                            <div>
+                                <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-2">Style</div>
+                                <Sel label="Style" value={lookSettings.style} options={STYLE_OPTIONS} onChange={(v) => onLookChange({ ...lookSettings, style: v })} />
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === "hexcodes" && (
+                        <div className="space-y-3">
+                            <div>
+                                <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-2">Hex Codes</div>
+                                <div className="flex gap-2 flex-wrap">
+                                    {["#FF6B00", "#FFB84D", "#FFE66D", "#4ECDC4", "#556270"].map((hex) => (
+                                        <div key={hex} className="flex flex-col items-center gap-1">
+                                            <div className="w-8 h-8 rounded-full" style={{ backgroundColor: hex }}></div>
+                                            <span className="text-[8px] text-slate-400">{hex}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="mt-3 text-[10px] text-slate-500">
+                                    Drag & drop an image to extract colors
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Summary */}
+                    <div className="mt-4 pt-2 border-t border-white/10">
+                        <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-1">Summary</div>
+                        <div className="text-[10px] text-slate-300">
+                            {shotSummary(shotSettings)}, {lookSummary(lookSettings)}
+                        </div>
                     </div>
                 </Modal>
             )}
