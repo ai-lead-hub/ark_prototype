@@ -1096,9 +1096,6 @@ export default function FileBrowser({ disableKeyboardNav, onBack }: FileBrowserP
                 shot={activeShot}
                 isActive={true}
                 onActivate={() => {}}
-                onNavigate={navigateShot}
-                allShots={shots}
-                onSelectShot={setActiveShot}
                 demoQueuePhase={demoQueuePhase}
                 demoQueueProgress={demoQueueProgress}
               />
@@ -1111,9 +1108,6 @@ export default function FileBrowser({ disableKeyboardNav, onBack }: FileBrowserP
                 shot={shot}
                 isActive={false}
                 onActivate={() => setActiveShot(shot.id)}
-                onNavigate={navigateShot}
-                allShots={shots}
-                onSelectShot={setActiveShot}
               />
             ))}
           </div>
