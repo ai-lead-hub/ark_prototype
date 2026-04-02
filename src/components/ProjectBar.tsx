@@ -177,16 +177,6 @@ export default function ProjectBar({ mode = "full" }: ProjectBarProps) {
     <>
       {showLeading && (
         <>
-          <div className="kv-glass flex min-w-0 items-center gap-2 rounded-full px-3 py-1.5">
-            <span
-              className={`h-2.5 w-2.5 shrink-0 rounded-full ${connection ? "bg-amber-400" : "bg-slate-500"}`}
-              aria-hidden="true"
-            />
-            <span className="max-w-[120px] truncate text-xs font-medium text-slate-200">
-              {connectionLabel}
-            </span>
-          </div>
-
           <ElementsButton />
 
           <a
