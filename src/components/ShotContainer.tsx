@@ -8,11 +8,6 @@ type Props = {
   shot: Shot;
   isActive: boolean;
   onActivate: () => void;
-  onNavigate: (dir: "prev" | "next") => void;
-  /** All shots for the dropdown selector */
-  allShots?: Shot[];
-  /** Callback when a shot is selected from the dropdown */
-  onSelectShot?: (id: string) => void;
   /** Element avatars to show next to shot name */
   taggedElements?: { id: string; name: string; thumbnailPath?: string }[];
   demoQueuePhase?: string;
@@ -168,9 +163,6 @@ export default function ShotContainer({
   shot,
   isActive,
   onActivate,
-  onNavigate,
-  allShots = [],
-  onSelectShot,
   taggedElements = [],
   demoQueuePhase,
   demoQueueProgress,
