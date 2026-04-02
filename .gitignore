@@ -6,3 +6,6 @@ dist/
 data/
 debug.log
 .DS_Store
+*.png
+*.jpeg
+*.jpg
